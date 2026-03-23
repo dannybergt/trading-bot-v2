@@ -1,6 +1,16 @@
 # Sitzungslog
 
 - Datum: 2026-03-23
+  Kontext: Die lokale Git-Anbindung des rekonstruierten Projekts soll an das vorhandene GitHub-Repository angeschlossen werden.
+  Erledigt: Lokales Repository unter `/codex/trading-bot-v2` ist vorhanden; `origin` zeigt auf `https://github.com/dannybergt/trading-bot-v2.git`; das Remote-Repository war leer und wurde nun mit dem lokalen Initial-Commit `93cc39c` befuellt; `main` trackt jetzt sauber `origin/main`; der initiale Token ohne Workflow-Berechtigung wurde serverseitig abgewiesen, danach wurde mit einem Token inklusive Workflow-Recht der Push erfolgreich wiederholt; die temporaere Token-Datei `/tmp/github-token` wurde anschliessend wieder entfernt.
+  Offen: Keine unmittelbaren Git-Anbindungsblocker mehr.
+
+- Datum: 2026-03-23
+  Kontext: Arbeitsmodus fuer dieses Repository konkretisiert.
+  Erledigt: Sinnvolle Aenderungen sollen ab jetzt jeweils direkt committed und nach Moeglichkeit sofort nach `origin/main` gepusht werden.
+  Offen: Pushes ueber HTTPS brauchen weiterhin eine verfuegbare GitHub-Authentifizierung auf diesem System.
+
+- Datum: 2026-03-23
   Kontext: Der naechste fachliche Schritt soll den ETF-/Krypto-Providerpfad entlasten, damit Watchlist-Alerts nicht doppelt News/Fundamentals ziehen und ETF-Werte auch ohne sofort verfuegbare Provider-Metadaten sauber in Watchlists klassifiziert werden.
   Erledigt: `src/backend/app/services.py` cached YFinance-Fundamentals und Watchlist-News jetzt mit TTL, ueberspringt Krypto-Fundamentals komplett und erlaubt `get_stock_data(..., include_news=False, include_fundamentals=False)` fuer schlankere Alert-Pfade; `src/backend/app/main.py` nutzt diese entlastete Variante jetzt im Watchlist-Alert-Feed und im Auto-Scanner ohne unnoetige Fundamentals-Last; `src/backend/app/asset_metadata.py` kann ETFs jetzt auch aus expliziten Fallback-/Watchlist-Namen wie `Vanguard S&P 500 ETF` erkennen; neue Unit-Tests in `tests/test_market_data_service.py` pruefen Cache- und Skip-Verhalten, `tests/test_asset_metadata.py` deckt den ETF-Fallback ab, und `tests/run-api-regression.sh` validiert den erweiterten Watchlist-Pfad jetzt auch mit einem ETF-Eintrag; containerisierte Unit-Tests und die isolierte API-Regression gegen den frischen lokalen Build liefen erfolgreich.
   Offen: Der Providerpfad ist jetzt robuster und billiger, aber noch kein echter breiter ETF-/Krypto-Livefeed; naechster Produktschritt bleibt echte Providerabdeckung fuer ETFs/Krypto-News/-Bars statt nur besserer Fallback- und Cache-Strategie.

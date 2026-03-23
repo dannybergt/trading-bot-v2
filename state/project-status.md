@@ -45,6 +45,7 @@
   - `dbergt/trading-bot-backend:2026.03.18-2` -> `sha256:29cb70ebac978e0a90e9f95b605638e7894391d21ad0123d2cd6d46536986f82`
   - `dbergt/trading-bot-frontend:2026.03.18-2` -> `sha256:201169e45e11e6edc2fade078cda4d93dfff509dd65d6a42394b7def31fe7167`
 - vollstaendiges Docker-Hub-Upgrade-/Restore-Rehearsal fuer `2026.03.18-2` lief erfolgreich durch; der Upgrade-Record liegt unter `state/runtime/deployments/deployment-20260318T213234Z.env`
+- GitHub-Repository `https://github.com/dannybergt/trading-bot-v2.git` ist jetzt initial befuellt; lokales `main` trackt `origin/main`
 - der Restore-Blocker im Legacy-Watchlist-Migrationspfad wurde behoben: bei nicht-SQLite-Datenbanken wird der SQLite-Migrationspfad nun sauber uebersprungen statt den Startup zu crashen
 - Backend-Logging fuehrt jetzt pro HTTP-Request eine `X-Request-ID`, schreibt strukturierte Request-Metadaten in JSON-Logs und redigiert identifizierende Audit-Werte wie E-Mail-Adressen und Push-Endpoints auf Fingerprints
 - Suche, Scanner und Analyse liefern jetzt normalisierte Assetmetadaten (`assetClass`, `assetLabel`, `type`, `market`, `exchange`, `isCrypto`)
