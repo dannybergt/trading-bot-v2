@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run build hook
+        run: ./ops/automation/build.sh
+
+      - name: Run test hook
+        run: ./ops/automation/test.sh
+
+      - name: Run API regression hook
+        run: SKIP_BUILD=1 bash tests/run-api-regression.sh
+
+      - name: Run UI regression hook
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          UI_ARTIFACT_DIR: artifacts/ui-regression
+        run: SKIP_BUILD=1 bash tests/run-ui-regression.sh
+
+      - name: Upload UI regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-regression-artifacts
+          path: artifacts/ui-regression
+          if-no-files-found: ignore
+
+      - name: Run security scan hook
+        run: ./ops/automation/scan.sh

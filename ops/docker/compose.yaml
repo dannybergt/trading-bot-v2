@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trading_bot_v2}
+      POSTGRES_USER: ${POSTGRES_USER:-trading}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trading-change-me}
+    volumes:
+      - ${HOST_POSTGRES_DATA_DIR:-../../state/runtime/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trading} -d ${POSTGRES_DB:-trading_bot_v2}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: ops/docker/backend.Dockerfile
+    image: ${BACKEND_IMAGE_REF:-trading-bot-v2-backend:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_DIR: ${DATA_DIR:-/app/data}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://trading:trading-change-me@postgres:5432/trading_bot_v2}
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_MFA_ENABLED: ${INITIAL_ADMIN_MFA_ENABLED:-false}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:18094,http://localhost:18094}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIMS_SUB: ${VAPID_CLAIMS_SUB:-mailto:admin@example.com}
+      BACKUP_DIR: ${BACKUP_DIR:-/app/backups}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-3600}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      ALPACA_PAPER: ${ALPACA_PAPER:-true}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
+    ports:
+      - "${BACKEND_PORT:-18090}:8000"
+    volumes:
+      - ${HOST_DATA_DIR:-../../state/runtime/backend-data}:/app/data
+      - ${HOST_BACKUP_DIR:-../../state/runtime/backups}:/app/backups
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: ops/docker/frontend.Dockerfile
+    image: ${FRONTEND_IMAGE_REF:-trading-bot-v2-frontend:local}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-18094}:80"

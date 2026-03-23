@@ -1,0 +1,23 @@
+# Local secrets
+.env
+.env.local
+.env.*.local
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test and runtime artifacts
+artifacts/
+src/backend/data/
+src/backend/backups/
+
+# Project runtime state that should not be versioned
+state/runtime/
+ops/docker/state/runtime/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

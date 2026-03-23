@@ -1,0 +1,7 @@
+.git
+.github
+.env
+.env.local
+docs
+state
+tests
