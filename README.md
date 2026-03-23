@@ -37,7 +37,9 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 
 - Backend: `dbergt/trading-bot-backend`
 - Frontend: `dbergt/trading-bot-frontend`
-- versionierte Releases sollen ueber explizite Tags verteilt werden, nicht ueber `latest`
+- Pushes nach `main` synchronisieren die beiden Images automatisch ueber GitHub Actions nach Docker Hub und publizieren dabei `latest` sowie einen unveraenderlichen Commit-Tag `sha-<commit>`
+- versionierte Releases bleiben zusaetzlich an explizite Git-Tags `v*` gebunden und werden als gleichlautender Docker-Hub-Tag ohne das fuehrende `v` publiziert
+- produktive Upgrades sollen weiterhin ueber explizite Release-Tags verteilt werden, nicht ueber das bewegliche `latest`
 - `ops/automation/sync-components.sh` publiziert beide Images und schreibt dazu ein lokales Release-Metadatenfile unter `state/releases/<tag>.env`
 - `ops/automation/deploy.sh` deployt oder upgraded denselben Stand spaeter wieder aus Docker Hub und erstellt vorher Sicherungen
 
@@ -60,6 +62,18 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 3. `bash ops/automation/deploy.sh`
 4. der Deploy-Pfad erstellt vor einem Upgrade automatisch einen PostgreSQL-Dump und, wenn das Backend bereits laeuft, einen App-Snapshot in `state/runtime/backups`
 5. der ausgerollte Stand wird unter `state/runtime/deployments/current.env` protokolliert
+
+## GitHub-Automation
+
+- sinnvolle Aenderungen werden lokal committed und nach `origin/main` gepusht
+- der Workflow `.github/workflows/publish.yml` baut, testet und synchronisiert auf jedem Push nach `main` automatisch beide Docker-Hub-Images
+- fuer jeden `main`-Push entstehen:
+  - `docker.io/<namespace>/trading-bot-backend:latest`
+  - `docker.io/<namespace>/trading-bot-frontend:latest`
+  - `docker.io/<namespace>/trading-bot-backend:sha-<commit>`
+  - `docker.io/<namespace>/trading-bot-frontend:sha-<commit>`
+- fuer Release-Tags `v2026.03.18-3` entstehen die versionierten Docker-Hub-Tags `2026.03.18-3`
+- dafuer muessen in GitHub Actions mindestens `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` als Repository-Secrets gesetzt sein; `DOCKERHUB_NAMESPACE` ist optional und faellt sonst auf `.env.example` zurueck
 
 ## Regressionstest
 

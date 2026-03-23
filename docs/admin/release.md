@@ -2,7 +2,7 @@
 
 ## Status
 
-Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade sind technisch angelegt. Der operative Zielpfad ist jetzt ausdruecklich: Docker Hub als einzige Ablage und als Distribution Point.
+Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade sind technisch angelegt. Der operative Zielpfad ist jetzt ausdruecklich: Docker Hub als einzige Ablage und als Distribution Point. Pushes nach `main` synchronisieren die Images zusaetzlich automatisch ueber GitHub Actions nach Docker Hub.
 
 ## Aktuelle Registry-Situation
 
@@ -11,6 +11,8 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `dbergt/trading-bot-backend`
   - `dbergt/trading-bot-frontend`
 - Release-Disziplin:
+  - `main` publiziert automatisch `latest` plus einen unveraenderlichen `sha-<commit>`-Tag fuer Backend und Frontend
+  - Git-Tags `v*` publizieren den gleichlautenden Docker-Hub-Release-Tag ohne fuehrendes `v`
   - keine produktiven Upgrades ueber ein schwebendes `latest`
   - fuer Releases immer explizite Tags verwenden, z. B. `2026.03.18-1`
   - aktuell vollstaendig verifizierter Release: `2026.03.18-2`
@@ -36,6 +38,16 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
 - `ops/automation/scan.sh`
 
 ## Publish
+
+- GitHub-Automation:
+  - `.github/workflows/publish.yml` laeuft automatisch auf Push nach `main` sowie auf Git-Tags `v*`
+  - der Workflow fuehrt vor dem Push `build`, `test`, API-Regression und UI-Regression als Gates aus
+  - `main` erzeugt automatisch `latest` und `sha-<commit>`
+  - `v2026.03.18-3` erzeugt automatisch den Docker-Hub-Tag `2026.03.18-3`
+  - benoetigte Repository-Secrets:
+    - `DOCKERHUB_USERNAME`
+    - `DOCKERHUB_TOKEN`
+    - optional `DOCKERHUB_NAMESPACE`, sonst gilt der Wert aus `.env.example`
 
 - Multi-Image-Sync lokal:
   - `bash ops/automation/sync-components.sh`

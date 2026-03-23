@@ -69,3 +69,8 @@
   Entscheidung: Der Trading-Bot bekommt einen Bootstrap-Superadmin per Umgebungsvariablen statt eines hartcodierten Default-Kontos.
   Begruendung: Es braucht einen sicheren Erstzugang fuer Benutzerverwaltung und Admin-Endpunkte, aber globale Regeln verbieten Demo-Secrets oder fest eingebaute Standardpasswoerter.
   Konsequenzen: `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` muessen fuer den Erstaufbau gesetzt werden; bei `INITIAL_ADMIN_MFA_ENABLED=false` ist der erste Login ohne OTP moeglich; der Seed-Pfad greift nur, wenn noch kein Admin existiert.
+
+- Datum: 2026-03-23
+  Entscheidung: Pushes nach `main` publizieren Docker-Hub-Images automatisch sowohl als `latest` als auch als unveraenderlichen `sha-<commit>`-Tag; Git-Tags `v*` publizieren weiterhin versionierte Release-Tags.
+  Begruendung: Der Nutzer will die Git- und Registry-Synchronisierung ohne manuellen Nachlauf. Gleichzeitig muss der produktive Deploy-Pfad weiter an explizit nachvollziehbare Release-Tags gebunden bleiben.
+  Konsequenzen: GitHub Actions wird zum kontinuierlichen Sync-Pfad fuer Integrationsstaende; `latest` ist nur ein beweglicher Integrationszeiger, produktive Upgrades bleiben bei expliziten Versionstags; fuer den Automatikpfad muessen funktionierende Docker-Hub-Secrets im Repository hinterlegt bleiben.

@@ -4,7 +4,7 @@
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und einen entlasteten ETF-/Krypto-Providerpfad umgesetzt
 - Letzte Aktualisierung: 2026-03-23
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags und Tracked-Asset-Metadaten jetzt auch dann schon an, wenn die langsamere Alert-Berechnung noch laeuft, und der Backend-Pfad cacht News/Fundamentals jetzt providerbewusst statt Krypto/Alerts unnoetig ueber YFinance zu jagen; naechster Fokus ist der weitere fachliche Ausbau echter Live-Daten/Provider fuer ETFs und Krypto sowie spaeter die Ueberfuehrung der Bundle-Patches in echten Frontend-Quellstand
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags und Tracked-Asset-Metadaten jetzt auch dann schon an, wenn die langsamere Alert-Berechnung noch laeuft, der Backend-Pfad cacht News/Fundamentals jetzt providerbewusst statt Krypto/Alerts unnoetig ueber YFinance zu jagen, und Pushes nach `main` sollen nun automatisch sowohl GitHub als auch Docker Hub ohne manuellen Nachlauf synchron halten; naechster Fokus ist der weitere fachliche Ausbau echter Live-Daten/Provider fuer ETFs und Krypto sowie spaeter die Ueberfuehrung der Bundle-Patches in echten Frontend-Quellstand
 
 ## Gesichert verifiziert
 
@@ -39,6 +39,7 @@
 - `ops/automation/deploy.sh` deployt und upgraded jetzt direkt aus Docker Hub, erstellt vor Upgrades Sicherungen und schreibt den aktiven Rollout-Stand nach `state/runtime/deployments/current.env`
 - `ops/automation/sync-components.sh` schreibt fuer getaggte Releases jetzt lokale Release-Metadaten unter `state/releases/<IMAGE_TAG>.env`
 - versionierter Docker-Hub-Release-Dry-Run mit `IMAGE_TAG=2026.03.18-testdeploy` wurde erfolgreich ausgefuehrt
+- Git-Remote `origin` ist lokal per SSH erreichbar; `publish.yml` synchronisiert Pushes nach `main` jetzt fuer Backend und Frontend automatisch nach Docker Hub als `latest` plus `sha-<commit>` und publiziert Git-Tags `v*` als versionierte Release-Tags
 - isolierter Docker-Hub-Deploy-Smoke-Test gegen temporaere Runtime-Pfade und eigene Ports lief erfolgreich durch; Deployment-Record wurde unter `state/runtime/deployments/deployment-20260318T211121Z.env` geschrieben
 - `tests/run-upgrade-rehearsal.sh` prueft jetzt initialen Docker-Hub-Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack
 - Docker-Hub-Release `2026.03.18-2` wurde erfolgreich gepusht:
@@ -80,10 +81,12 @@
 - Persistenz- und Migrationsstrategie ist fuer weiteres Wachstum zu schwach
 - keine belastbare Test-Suite fuer Kernfluesse vorhanden
 - kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
+- der neue automatische GitHub-Actions-Publish-Pfad sollte nach dem naechsten echten `main`-Push einmal live gegen die hinterlegten Docker-Hub-Secrets beobachtet werden
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
+- den naechsten echten `main`-Push in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht

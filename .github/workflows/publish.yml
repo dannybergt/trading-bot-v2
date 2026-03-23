@@ -14,6 +14,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -43,18 +47,21 @@ jobs:
             echo "PUBLISH_DRY_RUN=0" >> "${GITHUB_ENV}"
           fi
 
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "PRIMARY_IMAGE_TAG=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+            echo "SYNC_LATEST=0" >> "${GITHUB_ENV}"
+          else
+            echo "PRIMARY_IMAGE_TAG=sha-${GITHUB_SHA::12}" >> "${GITHUB_ENV}"
+            echo "SYNC_LATEST=1" >> "${GITHUB_ENV}"
+          fi
+
       - name: Prepare env
         run: |
           cp .env.example .env
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            IMAGE_TAG="${GITHUB_REF_NAME#v}"
-          else
-            IMAGE_TAG="sha-${GITHUB_SHA::12}"
-          fi
           {
             echo "BACKEND_IMAGE_NAME=trading-bot-backend"
             echo "FRONTEND_IMAGE_NAME=trading-bot-frontend"
-            echo "IMAGE_TAG=${IMAGE_TAG}"
+            echo "IMAGE_TAG=${PRIMARY_IMAGE_TAG}"
           } >> .env
           if [[ -n "${{ secrets.DOCKERHUB_NAMESPACE }}" ]]; then
             echo "DOCKERHUB_NAMESPACE=${{ secrets.DOCKERHUB_NAMESPACE }}" >> .env
@@ -90,8 +97,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Sync components
+      - name: Sync primary image tag
         env:
           DRY_RUN: ${{ env.PUBLISH_DRY_RUN }}
           SKIP_BUILD: 1
+        run: ./ops/automation/sync-components.sh
+
+      - name: Sync latest image tag
+        if: env.SYNC_LATEST == '1'
+        env:
+          DRY_RUN: ${{ env.PUBLISH_DRY_RUN }}
+          SKIP_BUILD: 1
+          IMAGE_TAG: latest
         run: ./ops/automation/sync-components.sh

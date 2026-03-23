@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-03-23
+  Kontext: Git-Sync und Docker-Hub-Sync sollen kuenftig ohne manuellen Nachlauf passieren.
+  Erledigt: Git-Remote laeuft jetzt lokal ueber SSH; `.github/workflows/publish.yml` publiziert auf jedem Push nach `main` automatisch `latest` plus `sha-<commit>` fuer Backend und Frontend und publiziert auf Git-Tags `v*` weiterhin den entsprechenden Release-Tag; `README.md`, `docs/admin/release.md` und `state/decisions.md` dokumentieren den neuen Automatikpfad und die dafuer benoetigten Docker-Hub-Secrets.
+  Offen: Der neue GitHub-Actions-Pfad sollte nach dem naechsten echten `main`-Push einmal im Runner beobachtet werden, damit der automatische Docker-Hub-Sync mit den hinterlegten Secrets auch live bestaetigt ist.
+
+- Datum: 2026-03-23
   Kontext: Die lokale Git-Anbindung des rekonstruierten Projekts soll an das vorhandene GitHub-Repository angeschlossen werden.
   Erledigt: Lokales Repository unter `/codex/trading-bot-v2` ist vorhanden; `origin` zeigt auf `https://github.com/dannybergt/trading-bot-v2.git`; das Remote-Repository war leer und wurde nun mit dem lokalen Initial-Commit `93cc39c` befuellt; `main` trackt jetzt sauber `origin/main`; der initiale Token ohne Workflow-Berechtigung wurde serverseitig abgewiesen, danach wurde mit einem Token inklusive Workflow-Recht der Push erfolgreich wiederholt; die temporaere Token-Datei `/tmp/github-token` wurde anschliessend wieder entfernt.
   Offen: Keine unmittelbaren Git-Anbindungsblocker mehr.
