@@ -5,6 +5,7 @@ from time import monotonic
 import pandas as pd
 import yfinance as yf
 from app.analysis import calculate_indicators, detect_patterns
+from app.alpha_vantage_service import AlphaVantageService
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
 from app.sentiment import analyze_news
 from app.ml_models import PricePredictor
@@ -15,9 +16,10 @@ TICKER_INFO_TTL_SECONDS = 5 * 60
 NEWS_CACHE_TTL_SECONDS = 60
 
 class MarketDataService:
-    def __init__(self, alpaca_service=None):
+    def __init__(self, alpaca_service=None, alpha_vantage_service=None):
         self.predictor = PricePredictor()
         self.alpaca = alpaca_service
+        self.alpha_vantage = alpha_vantage_service or AlphaVantageService()
         self._ticker_info_cache: dict[str, dict] = {}
         self._news_cache: dict[str, dict] = {}
 
@@ -60,6 +62,31 @@ class MarketDataService:
             ticker_info=ticker_info,
             fallback_name=fallback_name,
         )
+
+    def get_provider_snapshot(
+        self,
+        symbol: str,
+        *,
+        asset_profile: dict | None = None,
+    ) -> dict | None:
+        profile = asset_profile or self.get_asset_profile(symbol)
+        asset_class = profile.get("assetClass")
+        if asset_class not in {"etf", "crypto"}:
+            return None
+        return self.alpha_vantage.get_provider_snapshot(profile["symbol"], asset_class)
+
+    def get_provider_history_df(
+        self,
+        symbol: str,
+        *,
+        asset_profile: dict | None = None,
+        limit: int = 100,
+    ) -> pd.DataFrame:
+        profile = asset_profile or self.get_asset_profile(symbol)
+        asset_class = profile.get("assetClass")
+        if asset_class not in {"etf", "crypto"}:
+            return pd.DataFrame()
+        return self.alpha_vantage.get_history_df(profile["symbol"], asset_class, limit=limit)
 
     def get_ticker_info(
         self,
@@ -107,13 +134,13 @@ class MarketDataService:
         df = pd.DataFrame()
         market_symbol = canonicalize_symbol(symbol)
         asset_profile = self.get_asset_profile(symbol)
+        provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
+        days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
+        limit = days_map.get(period, 130)
         if self.alpaca:
             # map period/interval to alpaca args
             tf_map = {"1d": "1Day", "1h": "1Hour", "15m": "15Min", "5m": "5Min", "1wk": "1Week"}
             timeframe = tf_map.get(interval, "1Day")
-            
-            days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
-            limit = days_map.get(period, 130)
             
             if timeframe == "1Hour": limit = limit * 7
             elif timeframe == "15Min": limit = limit * 28
@@ -121,6 +148,17 @@ class MarketDataService:
             
             df = self.alpaca.get_bars_df(market_symbol, timeframe=timeframe, limit=limit)
         
+        if df.empty and asset_profile.get("assetClass") == "stock":
+            refined_ticker_info = self.get_ticker_info(symbol, asset_profile=asset_profile)
+            if refined_ticker_info:
+                refined_profile = self.get_asset_profile(symbol, ticker_info=refined_ticker_info)
+                if refined_profile.get("assetClass") != asset_profile.get("assetClass"):
+                    asset_profile = refined_profile
+                    provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
+
+        if df.empty:
+            df = self.get_provider_history_df(symbol, asset_profile=asset_profile, limit=limit)
+
         if df.empty:
             logger.warning("market_data_empty_using_mock symbol=%s period=%s interval=%s", symbol, period, interval)
             df = self._generate_mock_data(symbol, period, interval)
@@ -133,12 +171,13 @@ class MarketDataService:
         
         # Fetch News Sentiment
         if include_news:
-            news_data = self.get_market_news(symbol)
+            news_data = self.get_market_news(symbol, asset_profile=asset_profile)
         else:
             news_data = {
                 "items": [],
                 "aggregate_score": 0.0,
                 "aggregate_label": "neutral",
+                "provider": None,
             }
         sentiment_score = news_data['aggregate_score'] if news_data else 0.0
 
@@ -148,6 +187,7 @@ class MarketDataService:
             tickerInfo = self.get_ticker_info(symbol, asset_profile=asset_profile)
             if tickerInfo:
                 asset_profile = self.get_asset_profile(symbol, ticker_info=tickerInfo)
+                provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
         pe_ratio = tickerInfo.get('trailingPE', 0.0)
         forward_pe = tickerInfo.get('forwardPE', 0.0)
         price_to_book = tickerInfo.get('priceToBook', 0.0)
@@ -216,6 +256,7 @@ class MarketDataService:
             'exchange': asset_profile['exchange'],
             'type': asset_profile['type'],
             'isCrypto': asset_profile['isCrypto'],
+            'provider': provider_snapshot,
         }
 
         return {
@@ -224,6 +265,7 @@ class MarketDataService:
             'prediction': prediction,
             'info': info,
             'asset': asset_profile,
+            'provider': provider_snapshot,
         }
 
     def _generate_mock_data(self, symbol, period, interval):
@@ -269,15 +311,36 @@ class MarketDataService:
         df = pd.DataFrame(data, index=dates)
         return df
 
-    def get_market_news(self, symbol: str, limit: int = 15):
+    def get_market_news(
+        self,
+        symbol: str,
+        limit: int = 15,
+        *,
+        asset_profile: dict | None = None,
+    ):
         """
         Fetch news for the symbol from Alpaca and analyze sentiment.
         """
         target_symbol = canonicalize_symbol(symbol)
-        cache_key = f"{target_symbol}|{int(limit)}"
+        profile = asset_profile or self.get_asset_profile(symbol)
+        cache_key = f"{profile.get('assetClass') or 'stock'}|{target_symbol}|{int(limit)}"
         cached = self._get_cached_payload(self._news_cache, cache_key)
         if cached is not None:
             return cached
+
+        if profile.get("assetClass") in {"etf", "crypto"}:
+            provider_payload = self.alpha_vantage.get_news_payload(
+                target_symbol,
+                profile["assetClass"],
+                limit=limit,
+            )
+            if provider_payload and provider_payload.get("items"):
+                return self._set_cached_payload(
+                    self._news_cache,
+                    cache_key,
+                    provider_payload,
+                    NEWS_CACHE_TTL_SECONDS,
+                )
 
         raw_news = []
         if self.alpaca:
@@ -307,6 +370,12 @@ class MarketDataService:
         payload = {
             'items': analyzed_news,
             'aggregate_score': avg_score,
-            'aggregate_label': 'bullish' if avg_score > 0.1 else 'bearish' if avg_score < -0.1 else 'neutral'
+            'aggregate_label': 'bullish' if avg_score > 0.1 else 'bearish' if avg_score < -0.1 else 'neutral',
+            'provider': {
+                'status': 'live' if analyzed_news else 'unavailable',
+                'source': 'Alpaca' if analyzed_news else None,
+                'assetClass': profile.get("assetClass"),
+                'lastUpdated': analyzed_news[0].get('timestamp') if analyzed_news else None,
+            },
         }
         return self._set_cached_payload(self._news_cache, cache_key, payload, NEWS_CACHE_TTL_SECONDS)

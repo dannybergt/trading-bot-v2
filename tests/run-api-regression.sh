@@ -226,6 +226,8 @@ crypto_payload = crypto_analysis.json()
 assert crypto_payload["assetClass"] == "crypto"
 assert crypto_payload["info"]["assetClass"] == "crypto"
 assert crypto_payload["isCrypto"] is True
+assert crypto_payload["provider"]["source"] == "Alpha Vantage"
+assert crypto_payload["provider"]["status"] in {"live", "partial", "unavailable"}
 print("crypto asset metadata ok")
 
 search_crypto = requests.get(
@@ -327,6 +329,10 @@ assert tracked_crypto["tags"] == ["priority", "swing"]
 assert tracked_crypto["assetClass"] == "crypto"
 assert tracked_etf["assetClass"] == "etf"
 assert tracked_etf["tags"] == ["core", "etf"]
+assert tracked_crypto["provider"]["source"] == "Alpha Vantage"
+assert tracked_crypto["provider"]["status"] in {"live", "partial", "unavailable"}
+assert tracked_etf["provider"]["source"] == "Alpha Vantage"
+assert tracked_etf["provider"]["status"] in {"live", "partial", "unavailable"}
 print("watchlist news binding ok")
 
 watchlist_alerts = requests.get(
@@ -344,12 +350,16 @@ tracked_alert_crypto = next(item for item in watchlist_alerts_payload["trackedAs
 tracked_alert_etf = next(item for item in watchlist_alerts_payload["trackedAssets"] if item["symbol"] == "VOO")
 assert tracked_alert_crypto["tags"] == ["priority", "swing"]
 assert tracked_alert_etf["assetClass"] == "etf"
+assert tracked_alert_crypto["provider"]["source"] == "Alpha Vantage"
+assert tracked_alert_etf["provider"]["source"] == "Alpha Vantage"
 crypto_alert_item = next(item for item in watchlist_alerts_payload["items"] if item["symbol"] == "BTC/USD")
 etf_alert_item = next(item for item in watchlist_alerts_payload["items"] if item["symbol"] == "VOO")
 assert crypto_alert_item["assetClass"] == "crypto"
 assert crypto_alert_item["tags"] == ["priority", "swing"]
 assert etf_alert_item["assetClass"] == "etf"
 assert etf_alert_item["tags"] == ["core", "etf"]
+assert crypto_alert_item["provider"]["source"] == "Alpha Vantage"
+assert etf_alert_item["provider"]["source"] == "Alpha Vantage"
 for alert_item in (crypto_alert_item, etf_alert_item):
     assert alert_item["priorityLabel"] in {"low", "medium", "high"}
     assert alert_item["alertType"] in {"signal", "news", "watchlist", "watch"}

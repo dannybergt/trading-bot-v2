@@ -37,6 +37,74 @@ class _FakeAlpaca:
         return pd.DataFrame()
 
 
+class _FakeAlphaVantage:
+    def __init__(self):
+        self.news_calls = []
+        self.history_calls = []
+
+    def get_news_payload(self, symbol, asset_class, limit=15):
+        self.news_calls.append((symbol, asset_class, limit))
+        return {
+            "items": [
+                {
+                    "title": "Bitcoin demand builds",
+                    "summary": "Provider-backed crypto flow remains constructive.",
+                    "score": 0.55,
+                    "label": "bullish",
+                    "timestamp": "2026-03-26T12:00:00Z",
+                    "url": "https://example.com/provider/bitcoin-demand",
+                    "source": "Alpha Vantage",
+                }
+            ],
+            "aggregate_score": 0.55,
+            "aggregate_label": "bullish",
+            "provider": {
+                "status": "live",
+                "source": "Alpha Vantage",
+                "assetClass": asset_class,
+                "lastUpdated": "2026-03-26T12:00:00Z",
+            },
+        }
+
+    def get_provider_snapshot(self, symbol, asset_class):
+        return {
+            "status": "live",
+            "source": "Alpha Vantage",
+            "assetClass": asset_class,
+            "reason": None,
+            "lastUpdated": "2026-03-26T12:00:00Z",
+            "quote": {
+                "price": 510.12 if asset_class == "etf" else 71234.5,
+                "change": 2.13,
+                "changePercent": 0.42,
+                "currency": "USD",
+                "history": [{"close": 500.0}, {"close": 510.12}],
+            },
+            "research": {
+                "expenseRatio": 0.18 if asset_class == "etf" else None,
+                "dividendYield": 0.49 if asset_class == "etf" else None,
+                "netAssets": 395000000000.0 if asset_class == "etf" else None,
+                "inceptionDate": "1999-03-10" if asset_class == "etf" else None,
+                "topHoldings": [{"symbol": "NVDA", "name": "NVIDIA", "weightPercent": 8.67}] if asset_class == "etf" else [],
+                "topSectors": [{"sector": "INFORMATION TECHNOLOGY", "weightPercent": 48.9}] if asset_class == "etf" else [],
+            },
+        }
+
+    def get_history_df(self, symbol, asset_class, limit=100):
+        self.history_calls.append((symbol, asset_class, limit))
+        closes = [500.0 + index for index in range(20)]
+        return pd.DataFrame(
+            {
+                "Open": closes,
+                "High": [value + 1.0 for value in closes],
+                "Low": [value - 1.0 for value in closes],
+                "Close": closes,
+                "Volume": [1000.0 + index * 10 for index in range(20)],
+            },
+            index=pd.date_range("2026-03-01", periods=20, freq="D"),
+        )
+
+
 class MarketDataServiceTests(unittest.TestCase):
     def test_get_ticker_info_skips_yfinance_for_crypto(self):
         service = MarketDataService()
@@ -85,6 +153,21 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertEqual(second["items"][0]["title"], "ETF inflows rise")
         self.assertEqual(second["aggregate_label"], "bullish")
 
+    def test_get_market_news_prefers_alpha_vantage_for_crypto(self):
+        alpha_vantage = _FakeAlphaVantage()
+        alpaca = _FakeAlpaca()
+        service = MarketDataService(alpaca, alpha_vantage_service=alpha_vantage)
+
+        payload = service.get_market_news(
+            "BTC/USD",
+            asset_profile={"symbol": "BTC/USD", "assetClass": "crypto", "isCrypto": True},
+        )
+
+        self.assertEqual(alpha_vantage.news_calls, [("BTC/USD", "crypto", 15)])
+        self.assertEqual(alpaca.news_calls, [])
+        self.assertEqual(payload["provider"]["source"], "Alpha Vantage")
+        self.assertEqual(payload["aggregate_label"], "bullish")
+
     def test_get_stock_data_can_skip_news_and_fundamentals(self):
         service = MarketDataService()
         service.predictor = _FakePredictor()
@@ -107,6 +190,30 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertEqual(payload["asset"]["assetClass"], "crypto")
         self.assertEqual(payload["info"]["trailingPE"], 0.0)
         self.assertEqual(payload["info"]["assetClass"], "crypto")
+
+    def test_get_stock_data_uses_alpha_vantage_history_for_etf(self):
+        alpha_vantage = _FakeAlphaVantage()
+        service = MarketDataService(alpha_vantage_service=alpha_vantage)
+        service.predictor = _FakePredictor()
+
+        with patch.object(service, "_generate_mock_data") as mock_data, patch.object(
+            service,
+            "get_ticker_info",
+            return_value={"quoteType": "ETF", "shortName": "Vanguard S&P 500 ETF"},
+        ):
+            payload = service.get_stock_data(
+                "VOO",
+                period="1mo",
+                interval="1d",
+                include_news=False,
+                include_fundamentals=False,
+            )
+
+        mock_data.assert_not_called()
+        self.assertEqual(alpha_vantage.history_calls, [("VOO", "etf", 22)])
+        self.assertEqual(payload["asset"]["assetClass"], "etf")
+        self.assertEqual(payload["provider"]["source"], "Alpha Vantage")
+        self.assertEqual(payload["provider"]["quote"]["price"], 510.12)
 
 
 if __name__ == "__main__":

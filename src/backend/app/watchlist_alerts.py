@@ -11,6 +11,7 @@ ALERT_ASSET_FIELDS = (
     "exchange",
     "type",
     "isCrypto",
+    "provider",
 )
 TAG_PRIORITY_WEIGHTS = {
     "priority": 16,

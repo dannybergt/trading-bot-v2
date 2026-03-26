@@ -158,6 +158,13 @@ def serialize_watchlist_item(record: WatchlistItemRecord) -> "WatchlistItem":
         isCrypto=asset_profile["isCrypto"],
     )
 
+
+def serialize_tracked_watchlist_item(record: WatchlistItemRecord) -> dict:
+    payload = serialize_watchlist_item(record).model_dump()
+    payload["provider"] = service.get_provider_snapshot(record.symbol, asset_profile=payload)
+    return payload
+
+
 DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -535,11 +542,11 @@ def get_watchlist_news(
     db: Session = Depends(get_db),
 ):
     record = get_watchlist_record_or_404(db, current_user, id)
-    tracked_assets = [serialize_watchlist_item(item).model_dump() for item in sorted(record.items, key=lambda current: current.id or 0)]
+    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
 
     news_items: list[dict] = []
     for tracked in tracked_assets:
-        news_payload = service.get_market_news(tracked["symbol"])
+        news_payload = service.get_market_news(tracked["symbol"], asset_profile=tracked)
         for news_item in news_payload.get("items", [])[:limit_per_symbol]:
             news_items.append(
                 {
@@ -583,7 +590,7 @@ def get_watchlist_alerts(
     db: Session = Depends(get_db),
 ):
     record = get_watchlist_record_or_404(db, current_user, id)
-    tracked_assets = [serialize_watchlist_item(item).model_dump() for item in sorted(record.items, key=lambda current: current.id or 0)]
+    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
 
     alert_items: list[dict] = []
     for tracked in tracked_assets:
@@ -606,7 +613,7 @@ def get_watchlist_alerts(
             analysis_result = {}
 
         try:
-            news_payload = service.get_market_news(symbol)
+            news_payload = service.get_market_news(symbol, asset_profile=tracked)
         except Exception:
             logger.exception(
                 "watchlist_alert_news_failed symbol=%s user_id=%s",
@@ -671,18 +678,34 @@ def get_scanner_data(
         sym = item.symbol
         market_symbol = canonicalize_symbol(sym)
         asset_profile = service.get_asset_profile(sym, fallback_name=item.name)
+        provider_snapshot = service.get_provider_snapshot(sym, asset_profile=asset_profile)
         try:
             # History for 5 days to calculate change using Alpaca
             hist = alpaca.get_bars_df(market_symbol, timeframe='1Day', limit=5)
 
             if hist.empty:
+                provider_quote = (provider_snapshot or {}).get("quote") or {}
+                if provider_quote.get("price") is None:
+                    results.append({
+                        'symbol': sym,
+                        'name': asset_profile['name'],
+                        'price': 0,
+                        'change': 0,
+                        'changePercent': 0,
+                        'history': [],
+                        'provider': provider_snapshot,
+                        **asset_response_fields(asset_profile),
+                    })
+                    continue
+
                 results.append({
                     'symbol': sym,
                     'name': asset_profile['name'],
-                    'price': 0,
-                    'change': 0,
-                    'changePercent': 0,
-                    'history': [],
+                    'price': round(float(provider_quote.get("price") or 0), 2),
+                    'change': round(float(provider_quote.get("change") or 0), 2),
+                    'changePercent': round(float(provider_quote.get("changePercent") or 0), 2),
+                    'history': provider_quote.get("history") or [],
+                    'provider': provider_snapshot,
                     **asset_response_fields(asset_profile),
                 })
                 continue
@@ -705,6 +728,7 @@ def get_scanner_data(
                 'change': round(change, 2),
                 'changePercent': round(change_pct, 2),
                 'history': sparkline,
+                'provider': provider_snapshot,
                 **asset_response_fields(asset_profile),
             })
         except Exception:
@@ -716,6 +740,7 @@ def get_scanner_data(
                 'change': 0,
                 'changePercent': 0,
                 'history': [],
+                'provider': provider_snapshot,
                 **asset_response_fields(asset_profile),
             })
 
@@ -788,6 +813,7 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
         'symbol': symbol,
         **asset_response_fields(result['asset']),
         'info': result['info'],
+        'provider': result.get('provider'),
         'chart_data': chart_data,
         'patterns': result['patterns'],
         'prediction': prediction

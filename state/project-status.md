@@ -2,9 +2,9 @@
 
 ## Stand
 
-- Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und einen entlasteten ETF-/Krypto-Providerpfad umgesetzt
-- Letzte Aktualisierung: 2026-03-23
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags und Tracked-Asset-Metadaten jetzt auch dann schon an, wenn die langsamere Alert-Berechnung noch laeuft, der Backend-Pfad cacht News/Fundamentals jetzt providerbewusst statt Krypto/Alerts unnoetig ueber YFinance zu jagen, und Pushes nach `main` sollen nun automatisch sowohl GitHub als auch Docker Hub ohne manuellen Nachlauf synchron halten; naechster Fokus ist der weitere fachliche Ausbau echter Live-Daten/Provider fuer ETFs und Krypto sowie spaeter die Ueberfuehrung der Bundle-Patches in echten Frontend-Quellstand
+- Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
+- Letzte Aktualisierung: 2026-03-26
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und jetzt auch providergebundene ETF-/Krypto-Snapshots an; der naechste Fokus ist die Live-Beobachtung des naechsten echten `publish`-Runs nach dem Push und spaeter die Ueberfuehrung der Bundle-Patches in echten Frontend-Quellstand
 
 ## Gesichert verifiziert
 
@@ -68,6 +68,12 @@
 - CI und Publish fuehren das UI-Regressionsskript jetzt als Gate vor weiterem Build/Push aus
 - `ops/automation/sync-components.sh` unterstuetzt jetzt lokalen Dry-Run und Wiederverwendung vorhandener Images fuer einen technischen Publish-Vorabtest ohne Registry-Push
 - `publish.yml` unterstuetzt nun auch einen manuellen `workflow_dispatch`-Dry-Run ohne Docker-Hub-Login/Pushausfuehrung und vermeidet doppelte Builds im Sync-Schritt
+- letzter beobachteter GitHub-Actions-`publish`-Run `#3` auf `main` (`13f5c1d`, 2026-03-23 22:11:49 UTC) scheiterte sofort im Step `Run build hook`; Ursache war kein fachlicher Testfehler, sondern fehlende Exec-Bits auf den direkt im Workflow aufgerufenen Shellskripten
+- Shellskripte unter `ops/automation/*.sh` und `tests/*.sh`, die im Workflow direkt ausgefuehrt werden, sind jetzt im Git-Stand als executable markiert, damit der naechste echte `publish`-Run nicht erneut am Build-Hook stoppt
+- neuer Backend-Pfad `src/backend/app/alpha_vantage_service.py` liefert optional Alpha-Vantage-basierte ETF-Profile/Holdings, ETF-/Krypto-Tageshistorien und providergebundene ETF-/Krypto-News; `MarketDataService` nutzt diese Daten jetzt fuer Watchlists, Alerts, Analyse-Fallbacks und Scanner-Snapshots
+- Watchlist-`trackedAssets`, Alert-Items und `/api/stock/{symbol}` tragen fuer ETFs/Krypto jetzt normalisierte Providerdaten (`provider.status/source/quote/research`), sodass die UI den Unterschied zwischen aktivem Livepfad und fehlender Provider-Konfiguration sichtbar machen kann
+- das rekonstruierte Frontend zeigt im Dashboard jetzt auch Alpha-Vantage-gebundene ETF-/Krypto-Metadaten direkt auf den `Tracked Assets`- und Alert-Karten; `tests/run-ui-regression.mjs` seedet dafuer jetzt explizit `VOO` und `BTC/USD` und validiert die Provider-Bindung sichtbar
+- containerisierte Unit-Tests plus isolierte API- und UI-Regression gegen den frischen lokalen Build liefen am 2026-03-26 mit dem neuen ETF-/Krypto-Providerpfad erfolgreich durch
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -82,11 +88,13 @@
 - keine belastbare Test-Suite fuer Kernfluesse vorhanden
 - kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der neue automatische GitHub-Actions-Publish-Pfad sollte nach dem naechsten echten `main`-Push einmal live gegen die hinterlegten Docker-Hub-Secrets beobachtet werden
+- lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
 - den naechsten echten `main`-Push in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
+- in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad gegen reale Providerantworten beobachten und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht

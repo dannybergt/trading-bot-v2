@@ -332,6 +332,32 @@ async function run() {
           throw new Error("Failed to update watchlist tags for UI regression: " + updateResponse.status);
         }
 
+        const extraItems = [
+          {
+            symbol: "VOO",
+            name: "Vanguard S&P 500 ETF",
+            tags: ["core", "provider"],
+          },
+          {
+            symbol: "BTC/USD",
+            name: "Bitcoin Core",
+            tags: ["crypto", "provider"],
+          },
+        ];
+
+        for (const extraItem of extraItems) {
+          const addResponse = await fetch("/api/watchlists/" + encodeURIComponent(primaryWatchlist.id) + "/items", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(extraItem),
+          });
+          if (!addResponse.ok) {
+            throw new Error(
+              "Failed to add UI regression provider asset " + extraItem.symbol + ": " + addResponse.status,
+            );
+          }
+        }
+
         window.__uiPatchSeededSymbol = primaryItem.symbol;
         return primaryItem.symbol;
       })()
@@ -374,10 +400,18 @@ async function run() {
     await waitForCondition(
       client,
       "watchlist metadata asset class",
-      "!!document.getElementById('ui-patch-watchlist-map') && document.getElementById('ui-patch-watchlist-map').textContent.includes('Stock') && document.querySelectorAll('#ui-patch-watchlist-assets [data-symbol]').length >= 1",
+      "!!document.getElementById('ui-patch-watchlist-map') && ['Stock','ETF','Crypto'].every((label) => document.getElementById('ui-patch-watchlist-map').textContent.includes(label)) && document.querySelectorAll('#ui-patch-watchlist-assets [data-symbol]').length >= 3",
       15000,
     );
     console.log("ui_watchlist_metadata ok");
+
+    await waitForCondition(
+      client,
+      "watchlist provider metadata",
+      "!!document.getElementById('ui-patch-watchlist-assets') && document.getElementById('ui-patch-watchlist-assets').textContent.includes('Alpha Vantage') && document.getElementById('ui-patch-watchlist-assets').textContent.includes('VOO') && document.getElementById('ui-patch-watchlist-assets').textContent.includes('BTC/USD')",
+      15000,
+    );
+    console.log("ui_watchlist_provider_metadata ok");
 
     const isAdmin = await client.evaluate(`
       (async () => {

@@ -373,6 +373,100 @@
     return assetClass.charAt(0).toUpperCase() + assetClass.slice(1);
   }
 
+  function formatCompactCurrency(value, currency) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) {
+      return null;
+    }
+
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency || "USD",
+        notation: Math.abs(amount) >= 1000000 ? "compact" : "standard",
+        maximumFractionDigits: Math.abs(amount) >= 1000 ? 1 : 2,
+      }).format(amount);
+    } catch {
+      return (currency || "USD") + " " + amount.toFixed(2);
+    }
+  }
+
+  function formatPercentValue(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) {
+      return null;
+    }
+    return (amount > 0 ? "+" : amount < 0 ? "" : "") + amount.toFixed(2) + "%";
+  }
+
+  function getProviderStatusPill(provider) {
+    if (!provider || !provider.source) {
+      return null;
+    }
+
+    if (provider.status === "live") {
+      return buildPill(
+        provider.source,
+        "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      );
+    }
+    if (provider.status === "partial") {
+      return buildPill(
+        provider.source + " partial",
+        "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      );
+    }
+    return buildPill(
+      provider.source + " pending",
+      "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-300",
+    );
+  }
+
+  function buildProviderDetailLine(provider) {
+    if (!provider || !provider.source) {
+      return null;
+    }
+
+    const quote = provider.quote || {};
+    const research = provider.research || {};
+    const parts = [];
+    const priceLabel = formatCompactCurrency(quote.price, quote.currency || "USD");
+    const changeLabel = formatPercentValue(quote.changePercent);
+    const netAssetsLabel = formatCompactCurrency(research.netAssets, "USD");
+    const firstHolding = research.topHoldings && research.topHoldings[0];
+
+    if (priceLabel) {
+      parts.push("Price " + priceLabel);
+    }
+    if (changeLabel) {
+      parts.push("Move " + changeLabel);
+    }
+    if (research.expenseRatio !== null && research.expenseRatio !== undefined) {
+      parts.push("Expense ratio " + research.expenseRatio + "%");
+    }
+    if (netAssetsLabel) {
+      parts.push("Net assets " + netAssetsLabel);
+    }
+    if (firstHolding && firstHolding.symbol && firstHolding.weightPercent !== null && firstHolding.weightPercent !== undefined) {
+      parts.push("Top holding " + firstHolding.symbol + " " + firstHolding.weightPercent + "%");
+    }
+    if (provider.lastUpdated) {
+      parts.push("Updated " + formatRelativeTime(provider.lastUpdated));
+    }
+    if (provider.status === "unavailable") {
+      parts.push("Set ALPHA_VANTAGE_API_KEY to activate live ETF/Crypto enrichment");
+    }
+
+    if (parts.length === 0) {
+      return null;
+    }
+    return createNode(
+      "div",
+      "mt-3 text-xs text-slate-500 dark:text-slate-400",
+      parts.join(" | "),
+    );
+  }
+
   function getTrackedAssets(alerts, news) {
     if (alerts && Array.isArray(alerts.trackedAssets) && alerts.trackedAssets.length > 0) {
       return alerts.trackedAssets;
@@ -454,6 +548,12 @@
     const pillRow = createNode("div", "flex flex-wrap items-center gap-2");
     pillRow.appendChild(getPriorityPill(item.priorityLabel));
     pillRow.appendChild(getAlertTypePill(item.alertType));
+    if (item.provider && item.provider.source) {
+      const providerPill = getProviderStatusPill(item.provider);
+      if (providerPill) {
+        pillRow.appendChild(providerPill);
+      }
+    }
     pillRow.appendChild(
       buildPill(
         getSignalSummary(item.signal || {}),
@@ -474,6 +574,11 @@
       metrics.appendChild(createNode("span", "", "Required " + item.signal.requiredYieldPct + "%"));
     }
     row.appendChild(metrics);
+
+    const providerMeta = buildProviderDetailLine(item.provider);
+    if (providerMeta) {
+      row.appendChild(providerMeta);
+    }
 
     if (item.tags && item.tags.length > 0) {
       const tagRow = createNode("div", "mt-3 flex flex-wrap items-center gap-2");
@@ -573,6 +678,12 @@
     if (item.market) {
       overview.appendChild(buildMetaPill(item.market));
     }
+    if (item.provider && item.provider.source) {
+      const providerPill = getProviderStatusPill(item.provider);
+      if (providerPill) {
+        overview.appendChild(providerPill);
+      }
+    }
     if (item.isCrypto) {
       overview.appendChild(
         buildPill(
@@ -598,6 +709,11 @@
         );
       }
       row.appendChild(tagRow);
+    }
+
+    const providerMeta = buildProviderDetailLine(item.provider);
+    if (providerMeta) {
+      row.appendChild(providerMeta);
     }
 
     if (relatedAlert && relatedAlert.signal) {
@@ -782,6 +898,19 @@
       trackedAssets.length,
       trackedSummary.assetClasses[0] ? trackedSummary.assetClasses[0][0] + ":" + trackedSummary.assetClasses[0][1] : "",
       trackedSummary.tags[0] ? trackedSummary.tags[0][0] + ":" + trackedSummary.tags[0][1] : "",
+      trackedAssets
+        .slice(0, 3)
+        .map(function (asset) {
+          const provider = asset && asset.provider ? asset.provider : null;
+          const quote = provider && provider.quote ? provider.quote : null;
+          return [
+            asset && asset.symbol ? asset.symbol : "",
+            provider && provider.status ? provider.status : "",
+            provider && provider.source ? provider.source : "",
+            quote && quote.price !== null && quote.price !== undefined ? quote.price : "",
+          ].join(":");
+        })
+        .join(","),
       alerts && alerts.items && alerts.items[0] ? alerts.items[0].symbol : "",
       entry && entry.error ? entry.error : "",
     ];
