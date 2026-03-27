@@ -90,6 +90,21 @@ jobs:
           path: artifacts/ui-regression
           if-no-files-found: ignore
 
+      - name: Validate Docker Hub secrets
+        if: env.PUBLISH_DRY_RUN != '1'
+        run: |
+          missing=()
+          if [[ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]]; then
+            missing+=("DOCKERHUB_USERNAME")
+          fi
+          if [[ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]]; then
+            missing+=("DOCKERHUB_TOKEN")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing Docker Hub secrets::Missing required repository secrets: ${missing[*]}. Configure them in GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Log in to Docker Hub
         if: env.PUBLISH_DRY_RUN != '1'
         uses: docker/login-action@v3

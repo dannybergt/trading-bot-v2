@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-03-27
+  Kontext: Resume-Handover wurde ausgefuehrt; der externe Publish-Blocker sollte auf den neuesten GitHub-Actions-Stand gezogen und im Workflow klarer benannt werden.
+  Erledigt: Oeffentliches GitHub-API/HTML fuer die `publish`-Runs `#4` und `#5` wurde geprueft. Der aktuellste Run `#5` auf `main` (`87e4196`, Start `2026-03-27 09:05:13 UTC`, Ende `2026-03-27 09:07:36 UTC`) lief erneut durch Build, Test, API-Regression und UI-Regression und scheiterte weiter nur bei `Log in to Docker Hub`; die sichtbare Fehlermeldung lautet `Username and password required`, was auf fehlende oder leere Repository-Secrets `DOCKERHUB_USERNAME` und/oder `DOCKERHUB_TOKEN` hindeutet. `.github/workflows/publish.yml` validiert fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`; `docs/admin/release.md`, `state/current-focus.md` und `state/project-status.md` wurden auf den neuen Stand gebracht.
+  Offen: GitHub-Repository-Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` im Repo-UI setzen oder rotieren, optional `DOCKERHUB_NAMESPACE` abgleichen, danach echten `publish`-Run erneut beobachten.
+
+- Datum: 2026-03-27
   Kontext: Der Nutzer will nach Rechner-Neustarts mit einem Minimalprompt nahtlos fortsetzen, und der zuletzt angestossene `publish`-Run soll als echter Wiedereinstiegspunkt dokumentiert werden.
   Erledigt: Neues Resume-Protokoll in `state/current-focus.md` angelegt; kuenftiger Minimalprompt ist `resume trading-bot-v2`, worauf zuerst `state/current-focus.md`, `state/project-status.md` und `state/chat/session-log.md` gelesen werden sollen. Der zuletzt gepruefte GitHub-Actions-`publish`-Run `#4` fuer Commit `4233762` wurde nachgezogen: Build, Test, API-Regression und UI-Regression liefen im Runner erfolgreich durch; der Fehlschlag lag erst im Step `Log in to Docker Hub`.
   Offen: Naechster fachlicher Blocker ist nicht mehr der Codepfad, sondern die Docker-Hub-Anmeldung in GitHub Actions; beim Wiedereinstieg zuerst Repository-Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` pruefen und danach den `publish`-Run erneut beobachten.

@@ -48,6 +48,7 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
     - `DOCKERHUB_USERNAME`
     - `DOCKERHUB_TOKEN`
     - optional `DOCKERHUB_NAMESPACE`, sonst gilt der Wert aus `.env.example`
+  - wenn der Step `Log in to Docker Hub` bzw. die neue Secret-Pruefung mit `Username and password required` oder `Missing Docker Hub secrets` fehlschlaegt, sind `DOCKERHUB_USERNAME` und/oder `DOCKERHUB_TOKEN` im GitHub-Repository fehlend oder leer; in `Settings -> Secrets and variables -> Actions` setzen oder rotieren und danach den `publish`-Run erneut starten
 
 - Multi-Image-Sync lokal:
   - `bash ops/automation/sync-components.sh`

@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-03-26
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und jetzt auch providergebundene ETF-/Krypto-Snapshots an; der naechste Fokus ist die Live-Beobachtung des naechsten echten `publish`-Runs nach dem Push und spaeter die Ueberfuehrung der Bundle-Patches in echten Frontend-Quellstand
+- Letzte Aktualisierung: 2026-03-27
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und jetzt auch providergebundene ETF-/Krypto-Snapshots an; der aktuelle Fokus ist nicht mehr die Codepipeline, sondern das Setzen oder Rotieren der GitHub-Repository-Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` sowie danach die erneute Beobachtung des `publish`-Runs
 
 ## Gesichert verifiziert
 
@@ -75,6 +75,8 @@
 - das rekonstruierte Frontend zeigt im Dashboard jetzt auch Alpha-Vantage-gebundene ETF-/Krypto-Metadaten direkt auf den `Tracked Assets`- und Alert-Karten; `tests/run-ui-regression.mjs` seedet dafuer jetzt explizit `VOO` und `BTC/USD` und validiert die Provider-Bindung sichtbar
 - containerisierte Unit-Tests plus isolierte API- und UI-Regression gegen den frischen lokalen Build liefen am 2026-03-26 mit dem neuen ETF-/Krypto-Providerpfad erfolgreich durch
 - der nachfolgende GitHub-Actions-`publish`-Run `#4` auf `main` (`4233762`, Start 2026-03-26 21:11:17 UTC, Ende 2026-03-26 21:13:42 UTC) lief bereits durch Build, Test, API-Regression und UI-Regression sauber durch und scheiterte erst im Step `Log in to Docker Hub`
+- der aktuellste beobachtete GitHub-Actions-`publish`-Run `#5` auf `main` (`87e4196`, Start 2026-03-27 09:05:13 UTC, Ende 2026-03-27 09:07:36 UTC) bestaetigte denselben Stand erneut: alle Gates gruen, danach Fehler `Username and password required` im Docker-Hub-Login
+- `.github/workflows/publish.yml` prueft fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`, damit kuenftige Fehlstarts im Runner eindeutiger benannt werden
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -90,13 +92,13 @@
 - kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der neue automatische GitHub-Actions-Publish-Pfad sollte nach dem naechsten echten `main`-Push einmal live gegen die hinterlegten Docker-Hub-Secrets beobachtet werden
 - lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
-- die Docker-Hub-Secrets oder die Docker-Hub-Anmeldung im Repository sind aktuell nicht lauffaehig; das ist jetzt der konkrete externe Blocker fuer den automatischen Publish
+- die GitHub-Repository-Secrets `DOCKERHUB_USERNAME` und/oder `DOCKERHUB_TOKEN` sind aktuell fehlend oder leer; die sichtbare Runner-Meldung lautet `Username and password required`, und das ist jetzt der konkrete externe Blocker fuer den automatischen Publish
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- den naechsten echten `main`-Push in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
-- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` und ggf. `DOCKERHUB_NAMESPACE` im GitHub-Repository pruefen und den `publish`-Run danach erneut beobachten
+- `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` im GitHub-Repository unter `Settings -> Secrets and variables -> Actions` setzen oder rotieren, optional `DOCKERHUB_NAMESPACE` gegen den erwarteten Namespace pruefen
+- danach den naechsten echten `publish`-Run in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
 - in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad gegen reale Providerantworten beobachten und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
