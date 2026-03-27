@@ -74,6 +74,7 @@
 - Watchlist-`trackedAssets`, Alert-Items und `/api/stock/{symbol}` tragen fuer ETFs/Krypto jetzt normalisierte Providerdaten (`provider.status/source/quote/research`), sodass die UI den Unterschied zwischen aktivem Livepfad und fehlender Provider-Konfiguration sichtbar machen kann
 - das rekonstruierte Frontend zeigt im Dashboard jetzt auch Alpha-Vantage-gebundene ETF-/Krypto-Metadaten direkt auf den `Tracked Assets`- und Alert-Karten; `tests/run-ui-regression.mjs` seedet dafuer jetzt explizit `VOO` und `BTC/USD` und validiert die Provider-Bindung sichtbar
 - containerisierte Unit-Tests plus isolierte API- und UI-Regression gegen den frischen lokalen Build liefen am 2026-03-26 mit dem neuen ETF-/Krypto-Providerpfad erfolgreich durch
+- der nachfolgende GitHub-Actions-`publish`-Run `#4` auf `main` (`4233762`, Start 2026-03-26 21:11:17 UTC, Ende 2026-03-26 21:13:42 UTC) lief bereits durch Build, Test, API-Regression und UI-Regression sauber durch und scheiterte erst im Step `Log in to Docker Hub`
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -89,11 +90,13 @@
 - kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der neue automatische GitHub-Actions-Publish-Pfad sollte nach dem naechsten echten `main`-Push einmal live gegen die hinterlegten Docker-Hub-Secrets beobachtet werden
 - lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
+- die Docker-Hub-Secrets oder die Docker-Hub-Anmeldung im Repository sind aktuell nicht lauffaehig; das ist jetzt der konkrete externe Blocker fuer den automatischen Publish
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
 - den naechsten echten `main`-Push in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
+- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` und ggf. `DOCKERHUB_NAMESPACE` im GitHub-Repository pruefen und den `publish`-Run danach erneut beobachten
 - in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad gegen reale Providerantworten beobachten und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
