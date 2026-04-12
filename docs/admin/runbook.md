@@ -57,6 +57,8 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
   - `bash tests/run-ui-regression.sh`
 - reproduzierbare Upgrade-/Restore-Laufzeitprobe ueber Docker Hub:
   - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
+- reproduzierbare Alpha-Vantage-Liveprobe fuer ETF-/Krypto-Providerdaten:
+  - `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh`
 - Low-Level-Browserprobe gegen bereits laufenden Stack:
   - `node tests/run-ui-regression.mjs`
 - gepruefte Pfade:
@@ -69,6 +71,7 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
   - Export
   - Import
   - Backup-Restore
+  - Alpha-Vantage-Live-Snapshots fuer `VOO` und `BTC/USD`, wenn ein echter Provider-Key gesetzt ist
   - geplanter Scheduler-Backup mit Schreibprobe
   - SPA-Routen `/login` und `/register`
   - UI-Registrierung

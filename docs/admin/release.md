@@ -30,6 +30,8 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `bash tests/run-password-reset-email-smoke.sh`
   - `bash tests/run-ui-regression.sh`
   - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
+  - optional mit echtem Provider-Key:
+    `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh`
   - optional `node tests/run-ui-regression.mjs` gegen bereits laufenden Stack
   - optional manuell `docker compose -f ops/docker/compose.yaml up --build`
 
@@ -79,6 +81,8 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
   - aktuell erfolgreich verifiziert:
     `IMAGE_TAG=2026.03.18-2 bash tests/run-upgrade-rehearsal.sh`
+  - aktueller Actions-Publish-Stand erfolgreich verifiziert:
+    `IMAGE_TAG=sha-d4939da591ec bash tests/run-upgrade-rehearsal.sh`
 - Verhalten des Deploy-Skripts:
   - zieht Backend- und Frontend-Images aus Docker Hub
   - erstellt vor einem Upgrade einen PostgreSQL-Dump

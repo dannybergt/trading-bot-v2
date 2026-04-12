@@ -81,7 +81,10 @@
 - Docker-Hub-Image-Pulls fuer den Actions-Publish-Stand wurden am 2026-04-12 lokal bestaetigt:
   - `dbergt/trading-bot-backend:sha-d4939da591ec` -> `sha256:4650bcd75afbd953471bd10144a085cedeb30bc90324677a6ba3d98cb6d6d377`
   - `dbergt/trading-bot-frontend:sha-d4939da591ec` -> `sha256:4c6d0ccfa13717d1f2effeabad32106f3eedc298396c3602e550b38f37cc289e`
+- vollstaendiges Docker-Hub-Upgrade-/Restore-Rehearsal fuer `sha-d4939da591ec` lief am 2026-04-12 erfolgreich durch; geprueft wurden initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack
+- der zugehoerige Upgrade-Record liegt unter `state/runtime/deployments/deployment-20260412T155353Z.env`
 - die SMTP-/Passwort-Reset-Variablen aus `.env.example` werden nun auch im Compose-Backend-Service durchgereicht, damit `PASSWORD_RESET_BASE_URL`, `SMTP_*` und `ENABLE_INSECURE_DEBUG_RESET_TOKENS` im lokalen Compose-Lauf wirksam werden
+- `tests/run-alpha-vantage-live-smoke.sh` prueft bei gesetztem `ALPHA_VANTAGE_API_KEY` echte Alpha-Vantage-Snapshots fuer `VOO` und `BTC/USD` sowie deren Durchreichung ueber `MarketDataService`
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -94,17 +97,18 @@
 - Originaler Frontend-Quellstand fehlt
 - Persistenz- und Migrationsstrategie ist fuer weiteres Wachstum zu schwach
 - keine belastbare Test-Suite fuer Kernfluesse vorhanden
-- kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
+- kuenftige Release-Tags muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
 - lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
+- die neue Alpha-Vantage-Liveprobe ist vorbereitet, konnte aber lokal mangels `ALPHA_VANTAGE_API_KEY` noch nicht gegen echte Providerantworten laufen
 - das Backend-Docker-Hub-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar; zur Verifikation daher `docker pull` mit lokaler Authentifizierung oder GitHub-Actions-Logs nutzen
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- fuer den aktuellen `main`-Stand bei Bedarf einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Tag fahren
+- fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Tag fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
-- in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad gegen reale Providerantworten beobachten und ggf. auf weitere UI-Flaechen ausrollen
+- in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad per `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh` gegen reale Providerantworten pruefen und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht
