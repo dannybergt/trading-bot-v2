@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-04-12
+  Kontext: Der Nutzer hat Alpaca-Key/Secret und danach den Alpha-Vantage-Key in die aktive `.env` eingetragen; der Live-Smoke sollte weiterlaufen, wurde dann aber fuer spaeter unterbrochen.
+  Erledigt: Die fruehere echte `.env` wurde nach `/root/trading-bot-v2-work/.env` kopiert, Modus `600` gesetzt und als durch `.gitignore` ignoriert bestaetigt. `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` und `ALPHA_VANTAGE_API_KEY` sind in der aktiven `.env` vorhanden, ohne Werte auszugeben. `tests/run-alpha-vantage-live-smoke.sh` wurde korrigiert, damit Shell-Overrides wie `IMAGE_TAG=sha-d4939da591ec` Vorrang vor `.env` haben, Alpha-Vantage-Requests Free-Tier-freundlich gepaced werden und die MarketDataService-Pruefung den Provider-Helper statt den YFinance-Fallback nutzt. Der Live-Test erreichte Alpha Vantage; `VOO` kam bis History/ETF-Profil durch, `BTC/USD` scheiterte mit `BTC/USD returned too little Alpha Vantage history`.
+  Offen: Ein gezielter Inspect der `DIGITAL_CURRENCY_DAILY`-Antwortstruktur fuer `BTC/USD` wurde vom Nutzer bewusst abgebrochen und ist der naechste Resume-Punkt. Dabei keinen API-Key ausgeben; nur HTTP-Status, Top-Level-Keys, Warn-/Fehlermeldungen und Serienanzahl protokollieren.
+
+- Datum: 2026-04-12
   Kontext: Nach Klaerung der Phase sollte exakt mit dem empfohlenen Pfad fortgesetzt werden: zuerst Rehearsal des veroeffentlichten SHA-Stands, danach Phase-1-Liveprovider.
   Erledigt: `IMAGE_TAG=sha-d4939da591ec bash /root/trading-bot-v2-work/tests/run-upgrade-rehearsal.sh` lief erfolgreich durch. Geprueft wurden Docker-Hub-Pull der Backend-/Frontend-Images, initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack. Upgrade-Record: `state/runtime/deployments/deployment-20260412T155353Z.env`. `tests/run-alpha-vantage-live-smoke.sh` wurde als wiederholbare Liveprobe fuer `VOO` und `BTC/USD` angelegt, in Runbook/Release-Doku verlinkt und mit `bash -n` sowie bewusstem Missing-Key-Abbruch geprueft.
   Offen: Lokal ist weiter kein `ALPHA_VANTAGE_API_KEY` gesetzt. Sobald ein echter Key in `.env` oder der Umgebung liegt, `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh` ausfuehren und die realen Providerantworten bewerten.

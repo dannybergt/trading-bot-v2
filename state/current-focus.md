@@ -47,3 +47,18 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - `.github/workflows/publish.yml` meldet fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`; beim letzten echten Lauf waren die benoetigten Secrets gesetzt und gueltig.
 - Die Docker-Hub-Frontend-Tags sind ueber die oeffentliche API sichtbar. Das Backend-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar, aber der Pull mit lokaler Docker-Authentifizierung funktioniert.
 - Die Resume-Formel ist absichtlich kurz; ein nacktes Codewort ohne Dateipfad ist nicht robust genug, weil Sitzungen nicht verlaesslich fortleben.
+
+## Aktueller Unterbrechungspunkt 2026-04-12
+
+- Die alte echte Env-Datei wurde nach `/root/trading-bot-v2-work/.env` kopiert, auf Modus `600` gesetzt und ist ueber `.gitignore` ignoriert.
+- `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` und `ALPHA_VANTAGE_API_KEY` sind in der aktiven `.env` gesetzt; Werte wurden nicht ausgegeben.
+- `tests/run-alpha-vantage-live-smoke.sh` wurde nachgebessert:
+  - Shell-Overrides wie `IMAGE_TAG=sha-d4939da591ec` gewinnen jetzt gegen Werte aus `.env`
+  - Alpha-Vantage-Requests werden fuer den Free-Tier gepaced
+  - die MarketDataService-Pruefung nutzt Provider-Helper mit explizitem Asset-Profil statt den YFinance-Fallback-Pfad
+- Letzter Live-Test:
+  - Befehl: `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh`
+  - `VOO` kam bis einschliesslich Alpha-Vantage-History und ETF-Profil durch
+  - `BTC/USD` scheiterte mit `BTC/USD returned too little Alpha Vantage history`
+- Direkt danach wurde ein gezielter Inspect der Alpha-Vantage-BTC-Antwortstruktur gestartet, aber vom Nutzer bewusst abgebrochen; dessen Ergebnis ist noch offen.
+- Beim naechsten Resume zuerst die BTC-Antwortstruktur fuer `DIGITAL_CURRENCY_DAILY` ohne Ausgabe des API-Keys pruefen und danach entscheiden, ob Symbol/Endpoint, Rate-Limit/Quota oder Provider-Fallback angepasst werden muss.

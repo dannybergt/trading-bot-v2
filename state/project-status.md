@@ -101,6 +101,7 @@
 - der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
 - lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
 - die neue Alpha-Vantage-Liveprobe ist vorbereitet, konnte aber lokal mangels `ALPHA_VANTAGE_API_KEY` noch nicht gegen echte Providerantworten laufen
+- Nachtrag 2026-04-12: In der aktiven lokalen `.env` ist nun ein `ALPHA_VANTAGE_API_KEY` gesetzt. Der Live-Smoke erreicht Alpha Vantage; `VOO` kam durch, `BTC/USD` liefert im aktuellen Test aber zu wenig History. Die gezielte Analyse der BTC-Antwortstruktur wurde durch Nutzerunterbrechung noch nicht abgeschlossen.
 - das Backend-Docker-Hub-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar; zur Verifikation daher `docker pull` mit lokaler Authentifizierung oder GitHub-Actions-Logs nutzen
 
 ## Naechste Schritte
@@ -108,7 +109,8 @@
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
 - fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Tag fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
-- in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad per `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh` gegen reale Providerantworten pruefen und ggf. auf weitere UI-Flaechen ausrollen
+- Alpha-Vantage-BTC-Antwortstruktur fuer `DIGITAL_CURRENCY_DAILY` ohne Key-Ausgabe pruefen, weil `BTC/USD` im Live-Smoke aktuell zu wenig History liefert
+- danach den eingebauten ETF-/Krypto-Livepfad per `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh` erneut pruefen und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht
