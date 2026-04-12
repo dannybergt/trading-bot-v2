@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-03-27
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und jetzt auch providergebundene ETF-/Krypto-Snapshots an; der aktuelle Fokus ist nicht mehr die Codepipeline, sondern das Setzen oder Rotieren der GitHub-Repository-Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` sowie danach die erneute Beobachtung des `publish`-Runs
+- Letzte Aktualisierung: 2026-04-12
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und providergebundene ETF-/Krypto-Snapshots an; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, sodass der Fokus wieder auf explizite Release-/Upgrade-Rehearsals oder weiteren Phase-1-Produktschnitt wechseln kann
 
 ## Gesichert verifiziert
 
@@ -77,6 +77,11 @@
 - der nachfolgende GitHub-Actions-`publish`-Run `#4` auf `main` (`4233762`, Start 2026-03-26 21:11:17 UTC, Ende 2026-03-26 21:13:42 UTC) lief bereits durch Build, Test, API-Regression und UI-Regression sauber durch und scheiterte erst im Step `Log in to Docker Hub`
 - der aktuellste beobachtete GitHub-Actions-`publish`-Run `#5` auf `main` (`87e4196`, Start 2026-03-27 09:05:13 UTC, Ende 2026-03-27 09:07:36 UTC) bestaetigte denselben Stand erneut: alle Gates gruen, danach Fehler `Username and password required` im Docker-Hub-Login
 - `.github/workflows/publish.yml` prueft fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`, damit kuenftige Fehlstarts im Runner eindeutiger benannt werden
+- der nachfolgende GitHub-Actions-`publish`-Run `#6` auf `main` (`d4939da`, Start 2026-03-27 11:16:30 UTC, Ende 2026-03-27 11:19:43 UTC) lief vollstaendig erfolgreich durch: Build, Test, API-Regression, UI-Regression, Docker-Hub-Secret-Pruefung, Docker-Hub-Login, `sha-d4939da591ec`-Sync und `latest`-Sync
+- Docker-Hub-Image-Pulls fuer den Actions-Publish-Stand wurden am 2026-04-12 lokal bestaetigt:
+  - `dbergt/trading-bot-backend:sha-d4939da591ec` -> `sha256:4650bcd75afbd953471bd10144a085cedeb30bc90324677a6ba3d98cb6d6d377`
+  - `dbergt/trading-bot-frontend:sha-d4939da591ec` -> `sha256:4c6d0ccfa13717d1f2effeabad32106f3eedc298396c3602e550b38f37cc289e`
+- die SMTP-/Passwort-Reset-Variablen aus `.env.example` werden nun auch im Compose-Backend-Service durchgereicht, damit `PASSWORD_RESET_BASE_URL`, `SMTP_*` und `ENABLE_INSECURE_DEBUG_RESET_TOKENS` im lokalen Compose-Lauf wirksam werden
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -90,15 +95,15 @@
 - Persistenz- und Migrationsstrategie ist fuer weiteres Wachstum zu schwach
 - keine belastbare Test-Suite fuer Kernfluesse vorhanden
 - kuenftige Releases muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
-- der neue automatische GitHub-Actions-Publish-Pfad sollte nach dem naechsten echten `main`-Push einmal live gegen die hinterlegten Docker-Hub-Secrets beobachtet werden
+- der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
 - lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
-- die GitHub-Repository-Secrets `DOCKERHUB_USERNAME` und/oder `DOCKERHUB_TOKEN` sind aktuell fehlend oder leer; die sichtbare Runner-Meldung lautet `Username and password required`, und das ist jetzt der konkrete externe Blocker fuer den automatischen Publish
+- das Backend-Docker-Hub-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar; zur Verifikation daher `docker pull` mit lokaler Authentifizierung oder GitHub-Actions-Logs nutzen
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` im GitHub-Repository unter `Settings -> Secrets and variables -> Actions` setzen oder rotieren, optional `DOCKERHUB_NAMESPACE` gegen den erwarteten Namespace pruefen
-- danach den naechsten echten `publish`-Run in GitHub Actions beobachten und bestaetigen, dass `latest` sowie `sha-<commit>` fuer beide Images sauber in Docker Hub landen
+- fuer den aktuellen `main`-Stand bei Bedarf einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Tag fahren
+- GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
 - in einer Zielumgebung mit echtem `ALPHA_VANTAGE_API_KEY` den jetzt eingebauten ETF-/Krypto-Livepfad gegen reale Providerantworten beobachten und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
