@@ -16,12 +16,17 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
    Fuer einen Bootstrap-Superadmin `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
    Optional fuer den Erstaufbau: `INITIAL_ADMIN_MFA_ENABLED=false`, damit sich der Bootstrap-Admin ohne OTP anmelden und weitere Konten anlegen kann.
    Fuer produktive Passwort-Reset-Mails zusaetzlich `PASSWORD_RESET_BASE_URL`, `SMTP_HOST`, `SMTP_PORT` und `SMTP_FROM_EMAIL` konfigurieren.
-2. Vor dem Compose-Start `ops/automation/build.sh` ausfuehren.
-   Das Skript bereitet die beschreibbaren Bind-Mount-Verzeichnisse unter `state/runtime` vor.
-3. Im Projektordner `docker compose -f ops/docker/compose.yaml up --build -d` ausfuehren.
-4. Health pruefen:
-   - Backend: `/api/health`
-   - Frontend: Root-Seite liefert `index.html`
+2. aktuellen Docker-Hub-Stand starten:
+   - `bash ops/automation/start.sh`
+3. Health pruefen:
+   - Backend ueber Frontend-Proxy: `http://127.0.0.1:18094/api/health`
+   - Backend direkt: `http://127.0.0.1:18090/api/health`
+   - Frontend: `http://127.0.0.1:18094/login`
+
+`start.sh` setzt ohne weitere Angabe `IMAGE_TAG=latest`, zieht Backend und Frontend frisch von Docker Hub und ruft danach den normalen Deploy-/Upgrade-Pfad auf. Fuer einen festen Stand:
+
+- `IMAGE_TAG=sha-92cefb3138e6 bash ops/automation/start.sh`
+- `IMAGE_TAG=2026.03.18-2 bash ops/automation/start.sh`
 
 ## Docker-Hub-Deploy
 
@@ -39,13 +44,15 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
 
 ## Stop
 
-- `docker compose -f ops/docker/compose.yaml down`
+- `bash ops/automation/stop.sh`
+
+Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente Daten unter `state/runtime` bleiben erhalten.
 
 ## Logs
 
-- `docker compose -f ops/docker/compose.yaml logs -f backend`
-- `docker compose -f ops/docker/compose.yaml logs -f frontend`
-- `docker compose -f ops/docker/compose.yaml logs -f postgres`
+- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f backend`
+- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f frontend`
+- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f postgres`
 
 ## Regression
 

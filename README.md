@@ -49,11 +49,19 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
    Fuer einen initialen Verwaltungszugang zusaetzlich `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
    `INITIAL_ADMIN_MFA_ENABLED=false` erlaubt den Erstlogin des Bootstrap-Admins ohne MFA.
    Fuer produktive Passwort-Reset-Mails muessen zusaetzlich `PASSWORD_RESET_BASE_URL`, `SMTP_HOST` und `SMTP_FROM_EMAIL` gesetzt sein.
-2. `ops/automation/build.sh` ausfuehren.
-   Das Skript bereitet auch die beschreibbaren Runtime-Verzeichnisse unter `state/runtime` fuer Bind-Mounts vor.
-3. `docker compose -f ops/docker/compose.yaml up --build` starten.
-4. Backend-Health pruefen: `http://127.0.0.1:${BACKEND_PORT:-18090}/api/health`
-5. Frontend im Browser oeffnen: `http://127.0.0.1:${FRONTEND_PORT:-18094}`
+2. aktuellen Docker-Hub-Stand starten:
+   - `bash ops/automation/start.sh`
+3. Frontend im Browser oeffnen:
+   - `http://127.0.0.1:18094/login`
+4. Backend-Health ueber den Frontend-Proxy pruefen:
+   - `http://127.0.0.1:18094/api/health`
+5. Stack stoppen, ohne Runtime-Daten zu loeschen:
+   - `bash ops/automation/stop.sh`
+
+`start.sh` nutzt standardmaessig Docker Hub `latest`. Ein expliziter Stand bleibt moeglich:
+
+- `IMAGE_TAG=sha-92cefb3138e6 bash ops/automation/start.sh`
+- `IMAGE_TAG=2026.03.18-2 bash ops/automation/start.sh`
 
 ## Docker-Hub-Deploy
 

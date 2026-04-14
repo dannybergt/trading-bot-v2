@@ -75,6 +75,10 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
 
 ## Deploy und Upgrade
 
+- aktuellen Main-Stand fuer den normalen Betrieb starten:
+  - `bash ops/automation/start.sh`
+- normalen Stack stoppen, ohne Runtime-Daten zu loeschen:
+  - `bash ops/automation/stop.sh`
 - aus Docker Hub deployen oder upgraden:
   - `IMAGE_TAG=2026.03.18-1 bash ops/automation/deploy.sh`
 - kompletter Upgrade-/Restore-Probelauf:
