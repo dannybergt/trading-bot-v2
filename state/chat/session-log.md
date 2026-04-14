@@ -176,3 +176,8 @@
   Kontext: Den naechsten Betriebscheck als vollstaendiges Upgrade-/Restore-Rehearsal gegen einen echten Docker-Hub-Release fahren.
   Erledigt: explizite Releases `2026.03.18-1` und danach der Fix-Release `2026.03.18-2` wurden nach Docker Hub gepusht; `tests/run-upgrade-rehearsal.sh` wurde fuer initialen Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-Dump, App-Snapshot und Dump-Restore gebaut; der Restore-Blocker im Legacy-Watchlist-Migrationspfad wurde behoben; das vollstaendige Rehearsal lief fuer `2026.03.18-2` erfolgreich durch.
   Offen: denselben Rehearsal-Pfad kuenftig fuer jeden neuen Release-Tag erneut fahren; Frontend-Quellstand und weitere Produktarbeit bleiben offen.
+
+- Datum: 2026-04-14
+  Kontext: Resume `trading-bot-v2`; offenen Alpha-Vantage-BTC-Live-Smoke-Blocker abschliessen.
+  Erledigt: `DIGITAL_CURRENCY_DAILY` fuer `BTC/USD` ohne API-Key-Ausgabe inspiziert; Live-Antwort nutzt generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys. `AlphaVantageService` akzeptiert jetzt beide Formen, und `tests/test_alpha_vantage_service.py` deckt die generische BTC-Form ab. Focus-Test, lokaler Backend-Image-Build, `BACKEND_IMAGE=trading-bot-v2-backend:local bash tests/run-alpha-vantage-live-smoke.sh` und `bash ops/automation/test.sh` liefen erfolgreich.
+  Offen: Fix committen, nach `main` pushen, GitHub-Actions-Publish fuer den neuen `sha-<commit>`-Stand beobachten und danach den Upgrade-/Restore-Rehearsal-Pfad fuer diesen Stand fahren.

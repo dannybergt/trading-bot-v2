@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-04-12
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und providergebundene ETF-/Krypto-Snapshots an; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, sodass der Fokus wieder auf explizite Release-/Upgrade-Rehearsals oder weiteren Phase-1-Produktschnitt wechseln kann
+- Letzte Aktualisierung: 2026-04-14
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und providergebundene ETF-/Krypto-Snapshots an; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` ist lokal gegen den gepatchten Backend-Container gruen, sodass der naechste Fokus Commit/Push plus Release-/Upgrade-Rehearsal fuer den neuen Stand ist
 
 ## Gesichert verifiziert
 
@@ -85,6 +85,8 @@
 - der zugehoerige Upgrade-Record liegt unter `state/runtime/deployments/deployment-20260412T155353Z.env`
 - die SMTP-/Passwort-Reset-Variablen aus `.env.example` werden nun auch im Compose-Backend-Service durchgereicht, damit `PASSWORD_RESET_BASE_URL`, `SMTP_*` und `ENABLE_INSECURE_DEBUG_RESET_TOKENS` im lokalen Compose-Lauf wirksam werden
 - `tests/run-alpha-vantage-live-smoke.sh` prueft bei gesetztem `ALPHA_VANTAGE_API_KEY` echte Alpha-Vantage-Snapshots fuer `VOO` und `BTC/USD` sowie deren Durchreichung ueber `MarketDataService`
+- die Alpha-Vantage-BTC-Antwortstruktur wurde am 2026-04-14 ohne API-Key-Ausgabe geprueft; `DIGITAL_CURRENCY_DAILY` liefert aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`), und der Backend-Parser akzeptiert jetzt diese Form sowie die alten waehrungsspezifischen `1a./1b.`-Keys
+- der Alpha-Vantage-Live-Smoke lief am 2026-04-14 gegen `trading-bot-v2-backend:local` erfolgreich durch: `VOO` History/ETF-Profil live, `BTC/USD` 30 History-Zeilen live, `MarketDataService` liefert fuer beide Symbole `status=live`
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -99,18 +101,16 @@
 - keine belastbare Test-Suite fuer Kernfluesse vorhanden
 - kuenftige Release-Tags muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
-- lokal ist kein `ALPHA_VANTAGE_API_KEY` gesetzt; der neue Providerpfad ist damit verifiziert, faellt hier aber bewusst auf `provider.status=unavailable` fuer ETF/Krypto zurueck
-- die neue Alpha-Vantage-Liveprobe ist vorbereitet, konnte aber lokal mangels `ALPHA_VANTAGE_API_KEY` noch nicht gegen echte Providerantworten laufen
-- Nachtrag 2026-04-12: In der aktiven lokalen `.env` ist nun ein `ALPHA_VANTAGE_API_KEY` gesetzt. Der Live-Smoke erreicht Alpha Vantage; `VOO` kam durch, `BTC/USD` liefert im aktuellen Test aber zu wenig History. Die gezielte Analyse der BTC-Antwortstruktur wurde durch Nutzerunterbrechung noch nicht abgeschlossen.
+- der alte Docker-Hub-Stand `sha-d4939da591ec` enthaelt den BTC-Parserfix noch nicht; der Fix muss erst committed, gepusht und als neuer `sha-<commit>`-Stand durch den Release-/Upgrade-Rehearsal-Pfad validiert werden
 - das Backend-Docker-Hub-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar; zur Verifikation daher `docker pull` mit lokaler Authentifizierung oder GitHub-Actions-Logs nutzen
 
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Tag fahren
+- Parserfix und Handoff-Doku committen, nach `main` pushen und den GitHub-Actions-`publish`-Lauf fuer den neuen `sha-<commit>`-Tag beobachten
+- fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen oder den neuen `sha-<commit>`-Stand verwenden und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Stand fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
-- Alpha-Vantage-BTC-Antwortstruktur fuer `DIGITAL_CURRENCY_DAILY` ohne Key-Ausgabe pruefen, weil `BTC/USD` im Live-Smoke aktuell zu wenig History liefert
-- danach den eingebauten ETF-/Krypto-Livepfad per `IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh` erneut pruefen und ggf. auf weitere UI-Flaechen ausrollen
+- den eingebauten ETF-/Krypto-Livepfad nach dem Push per neuem `IMAGE_TAG=sha-<commit> bash tests/run-alpha-vantage-live-smoke.sh` erneut pruefen und ggf. auf weitere UI-Flaechen ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht

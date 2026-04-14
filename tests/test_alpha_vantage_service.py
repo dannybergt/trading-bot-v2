@@ -112,6 +112,40 @@ class AlphaVantageServiceTests(unittest.TestCase):
         self.assertEqual(payload["quote"]["changePercent"], 0.85)
         self.assertEqual(len(payload["quote"]["history"]), 2)
 
+    def test_get_provider_snapshot_parses_crypto_history_with_generic_ohlc_keys(self):
+        session = _FakeSession(
+            {
+                "DIGITAL_CURRENCY_DAILY": {
+                    "Time Series (Digital Currency Daily)": {
+                        "2026-04-13": {
+                            "1. open": "73000.00",
+                            "2. high": "74100.00",
+                            "3. low": "72800.00",
+                            "4. close": "74000.00",
+                            "5. volume": "240.00",
+                        },
+                        "2026-04-14": {
+                            "1. open": "74448.00",
+                            "2. high": "74552.01",
+                            "3. low": "74200.36",
+                            "4. close": "74264.02",
+                            "5. volume": "241.00",
+                        },
+                    }
+                }
+            }
+        )
+        service = AlphaVantageService(api_key="test-key", session=session)
+
+        payload = service.get_provider_snapshot("BTC/USD", "crypto")
+
+        self.assertEqual(payload["status"], "live")
+        self.assertEqual(payload["quote"]["currency"], "USD")
+        self.assertEqual(payload["quote"]["price"], 74264.02)
+        self.assertEqual(payload["quote"]["change"], 264.02)
+        self.assertEqual(payload["quote"]["changePercent"], 0.36)
+        self.assertEqual(len(payload["quote"]["history"]), 2)
+
     def test_get_news_payload_parses_feed(self):
         session = _FakeSession(
             {

@@ -29,6 +29,14 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def _first_safe_float(values: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        numeric = _safe_float(values.get(key))
+        if numeric is not None:
+            return numeric
+    return None
+
+
 def _normalize_percent(value: Any) -> float | None:
     numeric = _safe_float(value)
     if numeric is None:
@@ -271,20 +279,35 @@ class AlphaVantageService:
             if not rows:
                 return pd.DataFrame()
 
-            open_key = f"1a. open ({market})"
-            high_key = f"2a. high ({market})"
-            low_key = f"3a. low ({market})"
-            close_key = f"4a. close ({market})"
-
             records = []
             for timestamp, values in rows:
                 records.append(
                     {
                         "timestamp": pd.Timestamp(timestamp),
-                        "Open": _safe_float(values.get(open_key)),
-                        "High": _safe_float(values.get(high_key)),
-                        "Low": _safe_float(values.get(low_key)),
-                        "Close": _safe_float(values.get(close_key)),
+                        "Open": _first_safe_float(
+                            values,
+                            f"1a. open ({market})",
+                            f"1b. open ({market})",
+                            "1. open",
+                        ),
+                        "High": _first_safe_float(
+                            values,
+                            f"2a. high ({market})",
+                            f"2b. high ({market})",
+                            "2. high",
+                        ),
+                        "Low": _first_safe_float(
+                            values,
+                            f"3a. low ({market})",
+                            f"3b. low ({market})",
+                            "3. low",
+                        ),
+                        "Close": _first_safe_float(
+                            values,
+                            f"4a. close ({market})",
+                            f"4b. close ({market})",
+                            "4. close",
+                        ),
                         "Volume": _safe_float(values.get("5. volume")) or 0.0,
                     }
                 )
