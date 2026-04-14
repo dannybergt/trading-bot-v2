@@ -120,6 +120,9 @@ compose_for_stack() {
   HOST_DATA_DIR="${host_data_dir}" \
   HOST_BACKUP_DIR="${host_backup_dir}" \
   HOST_POSTGRES_DATA_DIR="${host_postgres_dir}" \
+  INITIAL_ADMIN_EMAIL="" \
+  INITIAL_ADMIN_PASSWORD="" \
+  INITIAL_ADMIN_MFA_ENABLED=false \
   BACKEND_IMAGE_REF="${BACKEND_IMAGE_REF}" \
   FRONTEND_IMAGE_REF="${FRONTEND_IMAGE_REF}" \
   docker compose \
@@ -154,6 +157,9 @@ deploy_stack() {
   HOST_DATA_DIR="${host_data_dir}" \
   HOST_BACKUP_DIR="${host_backup_dir}" \
   HOST_POSTGRES_DATA_DIR="${host_postgres_dir}" \
+  INITIAL_ADMIN_EMAIL="" \
+  INITIAL_ADMIN_PASSWORD="" \
+  INITIAL_ADMIN_MFA_ENABLED=false \
   IMAGE_TAG="${IMAGE_TAG}" \
   BACKEND_IMAGE_REF="${BACKEND_IMAGE_REF}" \
   FRONTEND_IMAGE_REF="${FRONTEND_IMAGE_REF}" \

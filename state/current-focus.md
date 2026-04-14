@@ -32,13 +32,13 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 - Nicht mehr am Build-Hook, an den Regressionen oder am Docker-Hub-Login arbeiten; diese Huerden sind fuer den aktuellen Stand genommen.
 - Der automatische GitHub-Actions-Publish-Pfad ist mit echten Secrets live bestaetigt.
-- Der veroeffentlichte `sha-d4939da591ec`-Stand ist durch ein Upgrade-/Restore-Rehearsal als deploybar bestaetigt.
-- Der Alpha-Vantage-BTC-Liveblocker ist lokal behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
-- Naechster sinnvoller Schritt ist den Fix in einen neuen unveraenderlichen Stand ueberfuehren:
-  - Commit fuer Parserfix und Handoff-Doku erstellen
-  - Push nach `main` beobachten, bis GitHub Actions den neuen `sha-<commit>`-Stand nach Docker Hub synchronisiert
-  - danach `IMAGE_TAG=sha-<commit> bash tests/run-upgrade-rehearsal.sh` fuer den neuen Stand fahren
-  - anschliessend ETF-/Krypto-News, Bars und Research-Daten breiter in Alerts/Dashboard ausrollen
+- Der veroeffentlichte `sha-d4939da591ec`-Stand ist durch ein Upgrade-/Restore-Rehearsal als deploybar bestaetigt; der neuere Parserfix-Stand `sha-f826304a7850` ist ebenfalls live-smoke- und upgrade-/restore-validiert.
+- Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
+- Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
+- Naechster sinnvoller Schritt ist:
+  - den kleinen Rehearsal-Env-Fix committen und nach `main` pushen
+  - GitHub Actions fuer diesen Script-/Doku-Follow-up beobachten
+  - danach ETF-/Krypto-News, Bars und Research-Daten breiter in Alerts/Dashboard ausrollen
 
 ## Wichtiger Kontext
 
@@ -46,6 +46,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - In `/root/trading-bot-v2-work/.env` ist ein `ALPHA_VANTAGE_API_KEY` gesetzt; Werte wurden nicht ausgegeben und duerfen auch kuenftig nicht geloggt werden.
 - `tests/run-alpha-vantage-live-smoke.sh` bricht ohne gesetzten Key bewusst ab, ohne den Key-Wert auszugeben.
 - Der bereits veroeffentlichte Docker-Hub-Stand `sha-d4939da591ec` enthaelt den BTC-Parserfix noch nicht; Live-Smokes fuer diesen alten Stand koennen bei `BTC/USD` weiter am History-Parsing scheitern.
+- Der Docker-Hub-Stand `sha-f826304a7850` enthaelt den BTC-Parserfix und wurde erfolgreich live-smoke- und upgrade-/restore-validiert.
 - `.github/workflows/publish.yml` meldet fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`; beim letzten echten Lauf waren die benoetigten Secrets gesetzt und gueltig.
 - Die Docker-Hub-Frontend-Tags sind ueber die oeffentliche API sichtbar. Das Backend-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar, aber der Pull mit lokaler Docker-Authentifizierung funktioniert.
 - Die Resume-Formel ist absichtlich kurz; ein nacktes Codewort ohne Dateipfad ist nicht robust genug, weil Sitzungen nicht verlaesslich fortleben.
@@ -77,4 +78,9 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
   - `docker build -f ops/docker/backend.Dockerfile -t trading-bot-v2-backend:local .` -> erfolgreich
   - `BACKEND_IMAGE=trading-bot-v2-backend:local bash tests/run-alpha-vantage-live-smoke.sh` -> erfolgreich; `VOO` und `BTC/USD` live, BTC 30 History-Zeilen, `MarketDataService` live
   - `bash ops/automation/test.sh` -> 23 Tests OK
-- Beim naechsten Resume nicht mehr die BTC-Struktur untersuchen; naechster sinnvoller Schritt ist Commit/Push und danach Release-/Upgrade-Rehearsal fuer den neuen `sha-<commit>`-Stand.
+- Commit `f826304` wurde nach `main` gepusht; GitHub Actions `ci`, `publish` und `codeql` liefen erfolgreich.
+- `IMAGE_TAG=sha-f826304a7850 bash tests/run-alpha-vantage-live-smoke.sh` lief gegen das veroeffentlichte Docker-Hub-Backend erfolgreich; Backend-Digest `sha256:8c7c741f1f2ede35046b640b1044ab6cd3f16f216a509c831138a0e23622ff5d`.
+- Das erste Upgrade-Rehearsal fuer `sha-f826304a7850` scheiterte beim Seeding mit `403 Admin privileges required`, weil die aktive `.env` einen Bootstrap-Admin setzte und der Test-Register-User dadurch kein erster Admin mehr war.
+- `ops/automation/deploy.sh` respektiert jetzt Shell-Overrides fuer `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` und `INITIAL_ADMIN_MFA_ENABLED`; `tests/run-upgrade-rehearsal.sh` setzt diese Variablen fuer seine isolierten Stacks leer/false.
+- Das wiederholte `IMAGE_TAG=sha-f826304a7850 bash tests/run-upgrade-rehearsal.sh` lief erfolgreich durch; Upgrade-Record `state/runtime/deployments/deployment-20260414T192521Z.env`.
+- Beim naechsten Resume nicht mehr die BTC-Struktur untersuchen und nicht erneut den Rehearsal-Admin-Seed debuggen; naechster sinnvoller Schritt ist der Script-/Doku-Follow-up-Push und danach weiterer Phase-1-Produktschnitt.

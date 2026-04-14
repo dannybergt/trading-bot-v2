@@ -181,3 +181,8 @@
   Kontext: Resume `trading-bot-v2`; offenen Alpha-Vantage-BTC-Live-Smoke-Blocker abschliessen.
   Erledigt: `DIGITAL_CURRENCY_DAILY` fuer `BTC/USD` ohne API-Key-Ausgabe inspiziert; Live-Antwort nutzt generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys. `AlphaVantageService` akzeptiert jetzt beide Formen, und `tests/test_alpha_vantage_service.py` deckt die generische BTC-Form ab. Focus-Test, lokaler Backend-Image-Build, `BACKEND_IMAGE=trading-bot-v2-backend:local bash tests/run-alpha-vantage-live-smoke.sh` und `bash ops/automation/test.sh` liefen erfolgreich.
   Offen: Fix committen, nach `main` pushen, GitHub-Actions-Publish fuer den neuen `sha-<commit>`-Stand beobachten und danach den Upgrade-/Restore-Rehearsal-Pfad fuer diesen Stand fahren.
+
+- Datum: 2026-04-14
+  Kontext: Parserfix veroeffentlichen und Rehearsal fuer den neuen Docker-Hub-Stand fahren.
+  Erledigt: Commit `f826304` wurde nach `main` gepusht; GitHub Actions `ci`, `publish` und `codeql` liefen erfolgreich. `IMAGE_TAG=sha-f826304a7850 bash tests/run-alpha-vantage-live-smoke.sh` lief gegen das veroeffentlichte Backend-Image erfolgreich. Das erste Upgrade-Rehearsal scheiterte wegen gesetzter `INITIAL_ADMIN_*`-Werte in der lokalen `.env`; `ops/automation/deploy.sh` und `tests/run-upgrade-rehearsal.sh` wurden daraufhin so gehaertet, dass isolierte Rehearsal-Stacks den Bootstrap-Admin deaktivieren. Der zweite Lauf `IMAGE_TAG=sha-f826304a7850 bash tests/run-upgrade-rehearsal.sh` lief erfolgreich durch; Upgrade-Record `state/runtime/deployments/deployment-20260414T192521Z.env`.
+  Offen: Script-/Doku-Follow-up committen und pushen; danach wieder Phase-1-Produktschnitt fuer ETF-/Krypto-Daten weiterziehen.
