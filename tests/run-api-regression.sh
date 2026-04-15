@@ -346,6 +346,9 @@ watchlist_alerts_payload = watchlist_alerts.json()
 assert watchlist_alerts_payload["watchlist"]["id"] == watchlist_id
 assert watchlist_alerts_payload["summary"]["trackedSymbols"] == 2
 assert watchlist_alerts_payload["summary"]["alertItems"] == 2
+assert "providerLive" in watchlist_alerts_payload["summary"]
+assert "providerResearch" in watchlist_alerts_payload["summary"]
+assert "providerMovers" in watchlist_alerts_payload["summary"]
 tracked_alert_crypto = next(item for item in watchlist_alerts_payload["trackedAssets"] if item["symbol"] == "BTC/USD")
 tracked_alert_etf = next(item for item in watchlist_alerts_payload["trackedAssets"] if item["symbol"] == "VOO")
 assert tracked_alert_crypto["tags"] == ["priority", "swing"]
@@ -360,11 +363,15 @@ assert etf_alert_item["assetClass"] == "etf"
 assert etf_alert_item["tags"] == ["core", "etf"]
 assert crypto_alert_item["provider"]["source"] == "Alpha Vantage"
 assert etf_alert_item["provider"]["source"] == "Alpha Vantage"
+assert crypto_alert_item["providerContext"]["source"] == "Alpha Vantage"
+assert etf_alert_item["providerContext"]["source"] == "Alpha Vantage"
 for alert_item in (crypto_alert_item, etf_alert_item):
     assert alert_item["priorityLabel"] in {"low", "medium", "high"}
     assert alert_item["alertType"] in {"signal", "news", "watchlist", "watch"}
     assert alert_item["signal"]["direction"] in {"UP", "DOWN", "HOLD"}
     assert alert_item["news"]["aggregateLabel"] in {"bullish", "bearish", "neutral"}
+    assert alert_item["providerContext"]["status"] in {"live", "partial", "unavailable"}
+    assert "researchAvailable" in alert_item["providerContext"]
 print("watchlist alerts priority feed ok")
 
 watchlist_remove_etf_item = requests.delete(

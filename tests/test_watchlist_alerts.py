@@ -30,6 +30,19 @@ class WatchlistAlertTests(unittest.TestCase):
             "exchange": "CRYPTO",
             "type": "CRYPTO",
             "isCrypto": True,
+            "provider": {
+                "status": "live",
+                "source": "Alpha Vantage",
+                "assetClass": "crypto",
+                "lastUpdated": "2026-03-26T12:00:00Z",
+                "quote": {
+                    "price": 71234.5,
+                    "changePercent": 2.4,
+                    "currency": "USD",
+                    "history": [{"close": 70000.0}, {"close": 71234.5}],
+                },
+                "research": {},
+            },
         }
         analysis_result = {
             "prediction": {
@@ -66,10 +79,15 @@ class WatchlistAlertTests(unittest.TestCase):
         self.assertIn("buy-signal", alert["matches"])
         self.assertIn("news-support", alert["matches"])
         self.assertIn("tag:priority", alert["matches"])
+        self.assertIn("provider-live", alert["matches"])
+        self.assertIn("provider-move", alert["matches"])
         self.assertEqual(alert["signal"]["expectedYieldPct"], 12.4)
         self.assertEqual(alert["signal"]["requiredYieldPct"], 4.1)
         self.assertEqual(alert["news"]["itemCount"], 1)
         self.assertEqual(len(alert["news"]["headlines"]), 1)
+        self.assertEqual(alert["providerContext"]["source"], "Alpha Vantage")
+        self.assertEqual(alert["providerContext"]["status"], "live")
+        self.assertEqual(alert["providerContext"]["changePercent"], 2.4)
 
     def test_summarize_watchlist_alerts_counts_priority_and_signal_types(self):
         items = [
@@ -77,16 +95,34 @@ class WatchlistAlertTests(unittest.TestCase):
                 "priorityLabel": "high",
                 "alertType": "signal",
                 "signal": {"direction": "UP"},
+                "providerContext": {
+                    "status": "live",
+                    "source": "Alpha Vantage",
+                    "researchAvailable": True,
+                    "changePercent": 1.2,
+                },
             },
             {
                 "priorityLabel": "medium",
                 "alertType": "news",
                 "signal": {"direction": "DOWN"},
+                "providerContext": {
+                    "status": "partial",
+                    "source": "Alpha Vantage",
+                    "researchAvailable": False,
+                    "changePercent": 0.2,
+                },
             },
             {
                 "priorityLabel": "low",
                 "alertType": "watchlist",
                 "signal": {"direction": "HOLD"},
+                "providerContext": {
+                    "status": "unavailable",
+                    "source": "Alpha Vantage",
+                    "researchAvailable": False,
+                    "changePercent": None,
+                },
             },
         ]
 
@@ -100,6 +136,11 @@ class WatchlistAlertTests(unittest.TestCase):
         self.assertEqual(summary["newsAlerts"], 1)
         self.assertEqual(summary["buySignals"], 1)
         self.assertEqual(summary["sellSignals"], 1)
+        self.assertEqual(summary["providerLive"], 1)
+        self.assertEqual(summary["providerPartial"], 1)
+        self.assertEqual(summary["providerUnavailable"], 1)
+        self.assertEqual(summary["providerResearch"], 1)
+        self.assertEqual(summary["providerMovers"], 1)
 
 
 if __name__ == "__main__":

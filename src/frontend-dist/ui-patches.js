@@ -504,6 +504,185 @@
     };
   }
 
+  function summarizeProviderCoverage(trackedAssets) {
+    const summary = {
+      live: 0,
+      partial: 0,
+      unavailable: 0,
+      research: 0,
+      movers: 0,
+      highlights: [],
+    };
+
+    for (const item of trackedAssets) {
+      const provider = item && item.provider ? item.provider : null;
+      if (!provider || !provider.source) {
+        continue;
+      }
+
+      const status = provider.status || "unavailable";
+      if (status === "live") {
+        summary.live += 1;
+      } else if (status === "partial") {
+        summary.partial += 1;
+      } else {
+        summary.unavailable += 1;
+      }
+
+      const quote = provider.quote || {};
+      const research = provider.research || {};
+      const changePercent = Number(quote.changePercent);
+      if (Number.isFinite(changePercent) && Math.abs(changePercent) >= 1) {
+        summary.movers += 1;
+      }
+
+      const topHolding = research.topHoldings && research.topHoldings[0] ? research.topHoldings[0] : null;
+      const topSector = research.topSectors && research.topSectors[0] ? research.topSectors[0] : null;
+      const hasResearch = Boolean(
+        topHolding ||
+          topSector ||
+          research.expenseRatio !== null && research.expenseRatio !== undefined ||
+          research.dividendYield !== null && research.dividendYield !== undefined ||
+          research.netAssets !== null && research.netAssets !== undefined,
+      );
+      if (hasResearch) {
+        summary.research += 1;
+      }
+
+      if (summary.highlights.length < 4) {
+        summary.highlights.push({
+          symbol: item.symbol || "Asset",
+          source: provider.source,
+          status,
+          price: quote.price,
+          changePercent: quote.changePercent,
+          currency: quote.currency || "USD",
+          topHolding,
+          topSector,
+          expenseRatio: research.expenseRatio,
+        });
+      }
+    }
+
+    return summary;
+  }
+
+  function buildProviderCoverageSection(providerSummary) {
+    const total =
+      providerSummary.live + providerSummary.partial + providerSummary.unavailable;
+    const section = createNode(
+      "section",
+      "mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4",
+    );
+    section.id = "ui-patch-provider-coverage";
+
+    const header = createNode("div", "flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between");
+    const copy = createNode("div");
+    copy.appendChild(createNode("h5", "text-sm font-bold text-slate-900 dark:text-white", "Provider Coverage"));
+    copy.appendChild(
+      createNode(
+        "p",
+        "mt-1 text-sm text-slate-500 dark:text-slate-400",
+        total
+          ? "Live quotes, research and provider-backed context for ETF and crypto watchlist items."
+          : "ETF and crypto provider context will appear here after Alpha Vantage is configured.",
+      ),
+    );
+    header.appendChild(copy);
+
+    const pills = createNode("div", "flex flex-wrap items-center gap-2");
+    pills.appendChild(
+      buildPill(
+        providerSummary.live + " live",
+        "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      ),
+    );
+    pills.appendChild(
+      buildPill(
+        providerSummary.partial + " partial",
+        "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      ),
+    );
+    pills.appendChild(
+      buildPill(
+        providerSummary.research + " research",
+        "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+      ),
+    );
+    pills.appendChild(
+      buildPill(
+        providerSummary.movers + " movers",
+        "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
+      ),
+    );
+    header.appendChild(pills);
+    section.appendChild(header);
+
+    if (providerSummary.highlights.length > 0) {
+      const grid = createNode("div", "mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2");
+      for (const highlight of providerSummary.highlights) {
+        const card = createNode(
+          "div",
+          "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-3 py-3",
+        );
+        const title = createNode("div", "flex flex-wrap items-center gap-2");
+        title.appendChild(createNode("span", "text-sm font-bold text-slate-900 dark:text-white", highlight.symbol));
+        title.appendChild(
+          buildPill(
+            highlight.status === "live"
+              ? highlight.source
+              : highlight.source + " " + (highlight.status === "partial" ? "partial" : "pending"),
+            highlight.status === "live"
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-300",
+          ),
+        );
+        card.appendChild(title);
+
+        const details = [];
+        const priceLabel = formatCompactCurrency(highlight.price, highlight.currency || "USD");
+        const moveLabel = formatPercentValue(highlight.changePercent);
+        if (priceLabel) {
+          details.push("Price " + priceLabel);
+        }
+        if (moveLabel) {
+          details.push("Move " + moveLabel);
+        }
+        if (highlight.topHolding && (highlight.topHolding.symbol || highlight.topHolding.name)) {
+          details.push(
+            "Top holding " +
+              (highlight.topHolding.symbol || highlight.topHolding.name) +
+              (highlight.topHolding.weightPercent !== null && highlight.topHolding.weightPercent !== undefined
+                ? " " + highlight.topHolding.weightPercent + "%"
+                : ""),
+          );
+        }
+        if (highlight.topSector && highlight.topSector.sector) {
+          details.push(
+            "Top sector " +
+              highlight.topSector.sector +
+              (highlight.topSector.weightPercent !== null && highlight.topSector.weightPercent !== undefined
+                ? " " + highlight.topSector.weightPercent + "%"
+                : ""),
+          );
+        }
+        if (highlight.expenseRatio !== null && highlight.expenseRatio !== undefined) {
+          details.push("Expense ratio " + highlight.expenseRatio + "%");
+        }
+        if (details.length === 0) {
+          details.push(highlight.source + " provider context is pending.");
+        }
+        card.appendChild(
+          createNode("p", "mt-2 text-xs text-slate-500 dark:text-slate-400", details.join(" | ")),
+        );
+        grid.appendChild(card);
+      }
+      section.appendChild(grid);
+    }
+
+    return section;
+  }
+
   function buildMetaPill(label) {
     return buildPill(
       label,
@@ -882,6 +1061,7 @@
     const news = entry && entry.news ? entry.news : null;
     const trackedAssets = getTrackedAssets(alerts, news);
     const trackedSummary = summarizeTrackedAssets(trackedAssets);
+    const providerSummary = summarizeProviderCoverage(trackedAssets);
     const watchlistName =
       (alerts && alerts.watchlist && alerts.watchlist.name) ||
       (news && news.watchlist && news.watchlist.name) ||
@@ -898,6 +1078,15 @@
       trackedAssets.length,
       trackedSummary.assetClasses[0] ? trackedSummary.assetClasses[0][0] + ":" + trackedSummary.assetClasses[0][1] : "",
       trackedSummary.tags[0] ? trackedSummary.tags[0][0] + ":" + trackedSummary.tags[0][1] : "",
+      providerSummary.live + ":" + providerSummary.partial + ":" + providerSummary.research + ":" + providerSummary.movers,
+      providerSummary.highlights[0]
+        ? [
+            providerSummary.highlights[0].symbol,
+            providerSummary.highlights[0].status,
+            providerSummary.highlights[0].price,
+            providerSummary.highlights[0].changePercent,
+          ].join(":")
+        : "",
       trackedAssets
         .slice(0, 3)
         .map(function (asset) {
@@ -975,6 +1164,12 @@
         buildPill(
           (news && news.summary ? news.summary.newsItems : 0) + " headlines",
           "border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-300",
+        ),
+      );
+      summaryRow.appendChild(
+        buildPill(
+          (alerts.summary.providerLive !== undefined ? alerts.summary.providerLive : providerSummary.live) + " provider live",
+          "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
         ),
       );
     }
@@ -1098,6 +1293,7 @@
       }
       tagSection.appendChild(tagRow);
       assetSection.appendChild(tagSection);
+      assetSection.appendChild(buildProviderCoverageSection(providerSummary));
 
       const alertBySymbol = new Map();
       for (const item of alerts && alerts.items ? alerts.items : []) {

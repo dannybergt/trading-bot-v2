@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-04-14
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News und einen priorisierten Alert-Feed fuer Watchlists, das Dashboard zeigt Asset-Mix, Top-Tags, Tracked-Asset-Metadaten und providergebundene ETF-/Krypto-Snapshots an; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` sowie das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` sind gruen, sodass der naechste Fokus wieder Phase-1-Produktschnitt statt Infrastruktur-Blockern ist
+- Letzte Aktualisierung: 2026-04-15
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, einen priorisierten Alert-Feed fuer Watchlists und einen ersten Provider-Coverage-Dashboard-Schnitt; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` sowie das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` sind gruen, und der neueste Start-/Stop-Follow-up `9c2f2b` ist durch `publish`/`ci`/`codeql` bestaetigt; naechster Fokus ist Commit/Push des lokalen Provider-Coverage-Produktschnitts
 
 ## Gesichert verifiziert
 
@@ -73,6 +73,10 @@
 - neuer Backend-Pfad `src/backend/app/alpha_vantage_service.py` liefert optional Alpha-Vantage-basierte ETF-Profile/Holdings, ETF-/Krypto-Tageshistorien und providergebundene ETF-/Krypto-News; `MarketDataService` nutzt diese Daten jetzt fuer Watchlists, Alerts, Analyse-Fallbacks und Scanner-Snapshots
 - Watchlist-`trackedAssets`, Alert-Items und `/api/stock/{symbol}` tragen fuer ETFs/Krypto jetzt normalisierte Providerdaten (`provider.status/source/quote/research`), sodass die UI den Unterschied zwischen aktivem Livepfad und fehlender Provider-Konfiguration sichtbar machen kann
 - das rekonstruierte Frontend zeigt im Dashboard jetzt auch Alpha-Vantage-gebundene ETF-/Krypto-Metadaten direkt auf den `Tracked Assets`- und Alert-Karten; `tests/run-ui-regression.mjs` seedet dafuer jetzt explizit `VOO` und `BTC/USD` und validiert die Provider-Bindung sichtbar
+- Watchlist-Alert-Items tragen jetzt zusaetzlich einen normalisierten `providerContext`; das Ranking beruecksichtigt Provider-Live-Status, staerkere Provider-Moves, Research-Verfuegbarkeit und History-Abdeckung
+- Alert-Summaries melden jetzt Provider-Coverage-Kennzahlen (`providerLive`, `providerPartial`, `providerUnavailable`, `providerResearch`, `providerMovers`)
+- das Dashboard zeigt im Watchlist-Bereich jetzt eine `Provider Coverage`-Sektion mit Live-/Partial-/Research-/Mover-Zahlen und Alpha-Vantage-Highlights fuer ETF-/Krypto-Werte
+- `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh` und `bash tests/run-ui-regression.sh` liefen am 2026-04-15 mit dem Provider-Coverage-Schnitt erfolgreich durch
 - containerisierte Unit-Tests plus isolierte API- und UI-Regression gegen den frischen lokalen Build liefen am 2026-03-26 mit dem neuen ETF-/Krypto-Providerpfad erfolgreich durch
 - der nachfolgende GitHub-Actions-`publish`-Run `#4` auf `main` (`4233762`, Start 2026-03-26 21:11:17 UTC, Ende 2026-03-26 21:13:42 UTC) lief bereits durch Build, Test, API-Regression und UI-Regression sauber durch und scheiterte erst im Step `Log in to Docker Hub`
 - der aktuellste beobachtete GitHub-Actions-`publish`-Run `#5` auf `main` (`87e4196`, Start 2026-03-27 09:05:13 UTC, Ende 2026-03-27 09:07:36 UTC) bestaetigte denselben Stand erneut: alle Gates gruen, danach Fehler `Username and password required` im Docker-Hub-Login
@@ -90,6 +94,7 @@
 - GitHub Actions fuer Commit `f826304` liefen erfolgreich durch (`ci`, `publish`, `codeql`); der Docker-Hub-Backend-Tag `sha-f826304a7850` wurde lokal gepullt und live-smoke-validiert
 - das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` lief nach Haertung der Rehearsal-Env erfolgreich durch; Upgrade-Record `state/runtime/deployments/deployment-20260414T192521Z.env`
 - `tests/run-upgrade-rehearsal.sh` deaktiviert fuer seine isolierten Stacks explizit Bootstrap-Admin-Werte aus `.env`, und `ops/automation/deploy.sh` respektiert diese Shell-Overrides, damit echte Zielumgebungs-Admins lokale Wegwerf-Rehearsals nicht beeinflussen
+- GitHub Actions fuer Commit `9c2f2b` liefen erfolgreich durch: `publish` run `24423017757`, `ci` run `24423017764`, `codeql` run `24423017762`; der Publish-Run synchronisierte `sha-9c2f2b08fa76` und `latest`
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -110,10 +115,10 @@
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- Script-/Doku-Follow-up committen, nach `main` pushen und den GitHub-Actions-`publish`-Lauf beobachten
+- Provider-Coverage-Produktschnitt committen, nach `main` pushen und den GitHub-Actions-`publish`-Lauf beobachten
 - fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Stand fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
-- den eingebauten ETF-/Krypto-Livepfad auf weitere UI-Flaechen ausrollen
+- den eingebauten ETF-/Krypto-Livepfad auf weitere Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht

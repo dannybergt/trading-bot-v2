@@ -16,17 +16,13 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
-- Letzter relevanter Commit auf `main`: `d4939da` (`Clarify Docker Hub secret failure path`)
-- Letzter gepruefter GitHub-Actions-`publish`-Run: `#6`
-- Run-Link: `https://github.com/dannybergt/trading-bot-v2/actions/runs/23643694566`
-- Run-Zeitpunkt: Start `2026-03-27 11:16:30 UTC`, Ende `2026-03-27 11:19:43 UTC`
+- Letzter Commit auf `main`/`origin/main`: `9c2f2b` (`Add latest start and stop commands`)
+- Letzter gepruefter GitHub-Actions-`publish`-Run: `#9`
+- Run-Link: `https://github.com/dannybergt/trading-bot-v2/actions/runs/24423017757`
+- Run-Zeitpunkt: Start `2026-04-14 21:08:06 UTC`, Ende `2026-04-14 21:11:18 UTC`
 - Ergebnis: Build/Test/API/UI, `Validate Docker Hub secrets`, `Log in to Docker Hub`, `Sync primary image tag` und `Sync latest image tag` liefen erfolgreich durch
-- Docker-Hub-Nachweis:
-  - `docker pull dbergt/trading-bot-backend:sha-d4939da591ec` erfolgreich, Digest `sha256:4650bcd75afbd953471bd10144a085cedeb30bc90324677a6ba3d98cb6d6d377`
-  - `docker pull dbergt/trading-bot-frontend:sha-d4939da591ec` erfolgreich, Digest `sha256:4c6d0ccfa13717d1f2effeabad32106f3eedc298396c3602e550b38f37cc289e`
-- Upgrade-/Restore-Rehearsal fuer `IMAGE_TAG=sha-d4939da591ec` lief am `2026-04-12` erfolgreich durch:
-  - initialer Docker-Hub-Deploy, Datenanlage, Upgrade ueber Bestand, PostgreSQL-Dump, App-Snapshot und Dump-Restore in frischem Stack
-  - Deployment-Record: `state/runtime/deployments/deployment-20260412T155353Z.env`
+- Ebenfalls fuer `9c2f2b` erfolgreich: `ci` run `24423017764`, `codeql` run `24423017762`
+- Der Parserfix-Stand `sha-f826304a7850` wurde live-smoke- und upgrade-/restore-validiert; der nachfolgende Script-/Doku-Follow-up ist gepusht und durch Actions bestaetigt.
 
 ## Aktueller Fokus
 
@@ -36,9 +32,9 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - den kleinen Rehearsal-Env-Fix committen und nach `main` pushen
-  - GitHub Actions fuer diesen Script-/Doku-Follow-up beobachten
-  - danach ETF-/Krypto-News, Bars und Research-Daten breiter in Alerts/Dashboard ausrollen
+  - den lokalen Provider-Coverage-Produktschnitt committen und nach `main` pushen
+  - GitHub Actions fuer diesen Produkt-Follow-up beobachten
+  - danach den ETF-/Krypto-Livepfad weiter in Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
 
 ## Wichtiger Kontext
 
@@ -47,6 +43,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - `tests/run-alpha-vantage-live-smoke.sh` bricht ohne gesetzten Key bewusst ab, ohne den Key-Wert auszugeben.
 - Der bereits veroeffentlichte Docker-Hub-Stand `sha-d4939da591ec` enthaelt den BTC-Parserfix noch nicht; Live-Smokes fuer diesen alten Stand koennen bei `BTC/USD` weiter am History-Parsing scheitern.
 - Der Docker-Hub-Stand `sha-f826304a7850` enthaelt den BTC-Parserfix und wurde erfolgreich live-smoke- und upgrade-/restore-validiert.
+- Der Docker-Hub-Stand `sha-9c2f2b08fa76` enthaelt die Start-/Stop-Kommandos und wurde durch den Actions-Publish-Pfad erfolgreich synchronisiert.
 - `.github/workflows/publish.yml` meldet fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`; beim letzten echten Lauf waren die benoetigten Secrets gesetzt und gueltig.
 - Die Docker-Hub-Frontend-Tags sind ueber die oeffentliche API sichtbar. Das Backend-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar, aber der Pull mit lokaler Docker-Authentifizierung funktioniert.
 - Die Resume-Formel ist absichtlich kurz; ein nacktes Codewort ohne Dateipfad ist nicht robust genug, weil Sitzungen nicht verlaesslich fortleben.
@@ -84,3 +81,22 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - `ops/automation/deploy.sh` respektiert jetzt Shell-Overrides fuer `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` und `INITIAL_ADMIN_MFA_ENABLED`; `tests/run-upgrade-rehearsal.sh` setzt diese Variablen fuer seine isolierten Stacks leer/false.
 - Das wiederholte `IMAGE_TAG=sha-f826304a7850 bash tests/run-upgrade-rehearsal.sh` lief erfolgreich durch; Upgrade-Record `state/runtime/deployments/deployment-20260414T192521Z.env`.
 - Beim naechsten Resume nicht mehr die BTC-Struktur untersuchen und nicht erneut den Rehearsal-Admin-Seed debuggen; naechster sinnvoller Schritt ist der Script-/Doku-Follow-up-Push und danach weiterer Phase-1-Produktschnitt.
+
+## Aktueller Unterbrechungspunkt 2026-04-15
+
+- GitHub Actions fuer den bereits gepushten Start-/Stop-Commit `9c2f2b` wurden geprueft:
+  - `publish` run `24423017757` erfolgreich, inklusive Docker-Hub-Login, primaerem `sha-9c2f2b08fa76`-Sync und `latest`-Sync
+  - `ci` run `24423017764` erfolgreich
+  - `codeql` run `24423017762` erfolgreich
+- Danach wurde der Phase-1-Produktschnitt fuer ETF-/Krypto-Providerdaten lokal umgesetzt:
+  - `src/backend/app/watchlist_alerts.py` baut aus Alpha-Vantage-Snapshots jetzt `providerContext` fuer Alert-Items
+  - Alert-Ranking beruecksichtigt Provider-Live-Status, staerkere Provider-Moves, Research-Verfuegbarkeit und History-Abdeckung
+  - Alert-Summary enthaelt `providerLive`, `providerPartial`, `providerUnavailable`, `providerResearch` und `providerMovers`
+  - `src/frontend-dist/ui-patches.js` zeigt im Dashboard eine neue `Provider Coverage`-Sektion fuer ETF-/Krypto-Watchlistwerte mit Live-/Partial-/Research-/Mover-Zahlen und Provider-Highlights
+  - API- und UI-Regressionen pruefen den neuen Provider-Kontext und die neue Dashboard-Sektion
+- Verifikation:
+  - `docker build -f ops/docker/backend.Dockerfile -t trading-bot-v2-backend:local .` -> erfolgreich
+  - `bash ops/automation/test.sh` -> 23 Tests OK
+  - `SKIP_BUILD=1 bash tests/run-api-regression.sh` -> erfolgreich
+  - `bash tests/run-ui-regression.sh` -> erfolgreich; Browserprobe bestaetigte `ui_watchlist_provider_coverage ok`
+- Beim naechsten Resume nicht erneut den `9c2f2b`-Actions-Stand beobachten; naechster sinnvoller Schritt ist Commit/Push des Provider-Coverage-Produktschnitts und danach Actions beobachten.

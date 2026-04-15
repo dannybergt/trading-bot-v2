@@ -413,6 +413,14 @@ async function run() {
     );
     console.log("ui_watchlist_provider_metadata ok");
 
+    await waitForCondition(
+      client,
+      "watchlist provider coverage",
+      "!!document.getElementById('ui-patch-provider-coverage') && document.getElementById('ui-patch-provider-coverage').textContent.includes('Provider Coverage') && document.getElementById('ui-patch-provider-coverage').textContent.includes('Alpha Vantage')",
+      15000,
+    );
+    console.log("ui_watchlist_provider_coverage ok");
+
     const isAdmin = await client.evaluate(`
       (async () => {
         const token = localStorage.getItem("access_token");
