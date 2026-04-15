@@ -16,13 +16,13 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
-- Letzter Commit auf `main`/`origin/main`: `9c2f2b` (`Add latest start and stop commands`)
-- Letzter gepruefter GitHub-Actions-`publish`-Run: `#9`
-- Run-Link: `https://github.com/dannybergt/trading-bot-v2/actions/runs/24423017757`
-- Run-Zeitpunkt: Start `2026-04-14 21:08:06 UTC`, Ende `2026-04-14 21:11:18 UTC`
+- Aktueller Produkt-Commit auf `main`: `df6f0fa` (`Surface provider coverage in watchlist alerts`)
+- Letzter gepruefter GitHub-Actions-`publish`-Run: `#10`
+- Run-Link: `https://github.com/dannybergt/trading-bot-v2/actions/runs/24461808225`
+- Run-Zeitpunkt: Start `2026-04-15 14:59:28 UTC`, Ende `2026-04-15 15:02:40 UTC`
 - Ergebnis: Build/Test/API/UI, `Validate Docker Hub secrets`, `Log in to Docker Hub`, `Sync primary image tag` und `Sync latest image tag` liefen erfolgreich durch
-- Ebenfalls fuer `9c2f2b` erfolgreich: `ci` run `24423017764`, `codeql` run `24423017762`
-- Der Parserfix-Stand `sha-f826304a7850` wurde live-smoke- und upgrade-/restore-validiert; der nachfolgende Script-/Doku-Follow-up ist gepusht und durch Actions bestaetigt.
+- Ebenfalls fuer `df6f0fa` erfolgreich: `ci` run `24461808223`, `codeql` run `24461808224`
+- Der Parserfix-Stand `sha-f826304a7850` wurde live-smoke- und upgrade-/restore-validiert; der nachfolgende Script-/Doku-Follow-up und der Provider-Coverage-Produktschnitt sind gepusht und durch Actions bestaetigt.
 
 ## Aktueller Fokus
 
@@ -32,9 +32,8 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - den lokalen Provider-Coverage-Produktschnitt committen und nach `main` pushen
-  - GitHub Actions fuer diesen Produkt-Follow-up beobachten
-  - danach den ETF-/Krypto-Livepfad weiter in Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
+  - den ETF-/Krypto-Livepfad weiter in Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
+  - fuer den naechsten expliziten Release-Tag wieder den Upgrade-/Restore-Rehearsal-Pfad fahren
 
 ## Wichtiger Kontext
 
@@ -44,6 +43,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der bereits veroeffentlichte Docker-Hub-Stand `sha-d4939da591ec` enthaelt den BTC-Parserfix noch nicht; Live-Smokes fuer diesen alten Stand koennen bei `BTC/USD` weiter am History-Parsing scheitern.
 - Der Docker-Hub-Stand `sha-f826304a7850` enthaelt den BTC-Parserfix und wurde erfolgreich live-smoke- und upgrade-/restore-validiert.
 - Der Docker-Hub-Stand `sha-9c2f2b08fa76` enthaelt die Start-/Stop-Kommandos und wurde durch den Actions-Publish-Pfad erfolgreich synchronisiert.
+- Der Docker-Hub-Stand `sha-df6f0fa13a5d` enthaelt den Provider-Coverage-Produktschnitt und wurde durch den Actions-Publish-Pfad erfolgreich synchronisiert.
 - `.github/workflows/publish.yml` meldet fehlende Docker-Hub-Secrets jetzt explizit vor `docker/login-action`; beim letzten echten Lauf waren die benoetigten Secrets gesetzt und gueltig.
 - Die Docker-Hub-Frontend-Tags sind ueber die oeffentliche API sichtbar. Das Backend-Repo ist ueber die unauthentifizierte Docker-Hub-API nicht sichtbar, aber der Pull mit lokaler Docker-Authentifizierung funktioniert.
 - Die Resume-Formel ist absichtlich kurz; ein nacktes Codewort ohne Dateipfad ist nicht robust genug, weil Sitzungen nicht verlaesslich fortleben.
@@ -99,4 +99,8 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
   - `bash ops/automation/test.sh` -> 23 Tests OK
   - `SKIP_BUILD=1 bash tests/run-api-regression.sh` -> erfolgreich
   - `bash tests/run-ui-regression.sh` -> erfolgreich; Browserprobe bestaetigte `ui_watchlist_provider_coverage ok`
-- Beim naechsten Resume nicht erneut den `9c2f2b`-Actions-Stand beobachten; naechster sinnvoller Schritt ist Commit/Push des Provider-Coverage-Produktschnitts und danach Actions beobachten.
+- Commit `df6f0fa` wurde nach `main` gepusht; GitHub Actions liefen erfolgreich:
+  - `publish` run `24461808225` erfolgreich, inklusive Docker-Hub-Login, primaerem `sha-df6f0fa13a5d`-Sync und `latest`-Sync
+  - `ci` run `24461808223` erfolgreich
+  - `codeql` run `24461808224` erfolgreich
+- Beim naechsten Resume nicht erneut den `9c2f2b`- oder `df6f0fa`-Actions-Stand beobachten; naechster sinnvoller Schritt ist weiterer Phase-1-Produktschnitt oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal.

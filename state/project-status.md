@@ -4,7 +4,7 @@
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
 - Letzte Aktualisierung: 2026-04-15
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, einen priorisierten Alert-Feed fuer Watchlists und einen ersten Provider-Coverage-Dashboard-Schnitt; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` sowie das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` sind gruen, und der neueste Start-/Stop-Follow-up `9c2f2b` ist durch `publish`/`ci`/`codeql` bestaetigt; naechster Fokus ist Commit/Push des lokalen Provider-Coverage-Produktschnitts
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, einen priorisierten Alert-Feed fuer Watchlists und einen ersten Provider-Coverage-Dashboard-Schnitt; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` sowie das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` sind gruen, und die Follow-ups `9c2f2b` sowie `df6f0fa` sind durch `publish`/`ci`/`codeql` bestaetigt; naechster Fokus ist weiterer Phase-1-Produktschnitt oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal
 
 ## Gesichert verifiziert
 
@@ -95,6 +95,7 @@
 - das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` lief nach Haertung der Rehearsal-Env erfolgreich durch; Upgrade-Record `state/runtime/deployments/deployment-20260414T192521Z.env`
 - `tests/run-upgrade-rehearsal.sh` deaktiviert fuer seine isolierten Stacks explizit Bootstrap-Admin-Werte aus `.env`, und `ops/automation/deploy.sh` respektiert diese Shell-Overrides, damit echte Zielumgebungs-Admins lokale Wegwerf-Rehearsals nicht beeinflussen
 - GitHub Actions fuer Commit `9c2f2b` liefen erfolgreich durch: `publish` run `24423017757`, `ci` run `24423017764`, `codeql` run `24423017762`; der Publish-Run synchronisierte `sha-9c2f2b08fa76` und `latest`
+- GitHub Actions fuer Commit `df6f0fa` liefen erfolgreich durch: `publish` run `24461808225`, `ci` run `24461808223`, `codeql` run `24461808224`; der Publish-Run synchronisierte `sha-df6f0fa13a5d` und `latest`
 - Passwort-Reset kann jetzt ueber SMTP an einen konfigurierbaren Frontend-Reset-Link zugestellt werden
 - SMTP-Reset-Zustellung wurde lokal erfolgreich gegen einen Testserver inklusive Link-Extraktion, Confirm und Re-Login verifiziert
 - Docker-Hub-Publish wurde lokal erfolgreich ausgefuehrt:
@@ -115,7 +116,6 @@
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- Provider-Coverage-Produktschnitt committen, nach `main` pushen und den GitHub-Actions-`publish`-Lauf beobachten
 - fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Stand fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
 - den eingebauten ETF-/Krypto-Livepfad auf weitere Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
