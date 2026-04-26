@@ -45,17 +45,20 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 
 ## Schnellstart
 
-1. `.env.example` nach `.env` kopieren und Secrets setzen.
-   Fuer einen initialen Verwaltungszugang zusaetzlich `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
+1. `.env.example` nach `.env` kopieren.
+   Diese Datei bleibt die Basis-Konfiguration fuer Ports, Image-Tags und lokale Pfade.
+2. Fuer dauerhafte private Keys und persoenliche Zugangsdaten optional `.env.local.example` nach `.env.local` kopieren und dort nur die benoetigten Zeilen entkommentieren bzw. sensible Overrides setzen.
+   Die Ops-Skripte laden immer erst `.env` und danach `.env.local`; dadurch ueberlebt dein privater Key-Satz auch dann, wenn `.env` spaeter neu aus `.env.example` erzeugt oder bereinigt wird.
+   Fuer einen initialen Verwaltungszugang `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
    `INITIAL_ADMIN_MFA_ENABLED=false` erlaubt den Erstlogin des Bootstrap-Admins ohne MFA.
    Fuer produktive Passwort-Reset-Mails muessen zusaetzlich `PASSWORD_RESET_BASE_URL`, `SMTP_HOST` und `SMTP_FROM_EMAIL` gesetzt sein.
-2. aktuellen Docker-Hub-Stand starten:
+3. aktuellen Docker-Hub-Stand starten:
    - `bash ops/automation/start.sh`
-3. Frontend im Browser oeffnen:
+4. Frontend im Browser oeffnen:
    - `http://127.0.0.1:18094/login`
-4. Backend-Health ueber den Frontend-Proxy pruefen:
+5. Backend-Health ueber den Frontend-Proxy pruefen:
    - `http://127.0.0.1:18094/api/health`
-5. Stack stoppen, ohne Runtime-Daten zu loeschen:
+6. Stack stoppen, ohne Runtime-Daten zu loeschen:
    - `bash ops/automation/stop.sh`
 
 `start.sh` nutzt standardmaessig Docker Hub `latest`. Ein expliziter Stand bleibt moeglich:
@@ -95,6 +98,17 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
   - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
 - Low-Level-Browserprobe gegen bereits laufenden Stack:
   - `node tests/run-ui-regression.mjs`
+
+## Lokaler Betrieb
+
+- Stack starten:
+  - `bash ops/automation/start.sh`
+- Stack stoppen:
+  - `bash ops/automation/stop.sh`
+- Live-Logs ansehen:
+  - `bash ops/automation/logs.sh backend`
+  - `bash ops/automation/logs.sh frontend`
+  - `bash ops/automation/logs.sh postgres`
 
 ## Prioritaeten
 

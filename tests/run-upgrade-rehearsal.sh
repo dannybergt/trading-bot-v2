@@ -3,7 +3,6 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-${PROJECT_ROOT}/.env}"
-EXAMPLE_ENV_FILE="${PROJECT_ROOT}/.env.example"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)-$$}"
 TEST_ROOT="${TEST_ROOT:-/tmp/trading-bot-v2-upgrade-rehearsal-${RUN_ID}}"
 PRIMARY_ROOT="${TEST_ROOT}/primary"
@@ -16,18 +15,8 @@ RESTORE_BACKEND_PORT="${RESTORE_BACKEND_PORT:-18160}"
 RESTORE_FRONTEND_PORT="${RESTORE_FRONTEND_PORT:-18164}"
 DEPLOYMENTS_DIR="${PROJECT_ROOT}/state/runtime/deployments"
 OVERRIDE_VARS=()
-
-load_env() {
-  local candidate="$1"
-  if [[ ! -f "${candidate}" ]]; then
-    return 1
-  fi
-
-  set -a
-  # shellcheck disable=SC1090
-  source "${candidate}"
-  set +a
-}
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/ops/automation/env.sh"
 
 capture_overrides() {
   local name backup_name
@@ -127,7 +116,6 @@ compose_for_stack() {
   FRONTEND_IMAGE_REF="${FRONTEND_IMAGE_REF}" \
   docker compose \
     --project-directory "${PROJECT_ROOT}" \
-    --env-file "${LOADED_ENV_FILE}" \
     -f "${PROJECT_ROOT}/ops/docker/compose.yaml" \
     "$@"
 }
@@ -335,14 +323,9 @@ latest_deployment_record_after() {
 }
 
 capture_overrides
-if load_env "${ENV_FILE}"; then
-  LOADED_ENV_FILE="${ENV_FILE}"
-elif load_env "${EXAMPLE_ENV_FILE}"; then
-  LOADED_ENV_FILE="${EXAMPLE_ENV_FILE}"
-else
-  echo "Missing .env or .env.example in ${PROJECT_ROOT}" >&2
-  exit 1
-fi
+LOADED_ENV_FILE=""
+LOADED_ENV_LOCAL_FILE=""
+load_project_env "${PROJECT_ROOT}"
 restore_overrides
 
 require_command docker

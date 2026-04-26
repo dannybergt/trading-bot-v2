@@ -21,6 +21,7 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
 
 - lokal beide Komponenten bauen:
   - `ops/automation/build.sh`
+  - oder fuer den alltaeglichen lokalen Start direkt `bash ops/automation/start.sh`
 
 ## Test
 
@@ -33,7 +34,7 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - optional mit echtem Provider-Key:
     `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh`
   - optional `node tests/run-ui-regression.mjs` gegen bereits laufenden Stack
-  - optional manuell `docker compose -f ops/docker/compose.yaml up --build`
+  - optional manuell `bash ops/automation/start.sh`
 
 ## Scan
 

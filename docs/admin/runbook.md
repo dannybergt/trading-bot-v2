@@ -12,13 +12,16 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
 
 ## Start
 
-1. `.env` aus `.env.example` erzeugen und Secrets setzen.
-   Fuer einen Bootstrap-Superadmin `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
+1. `.env` aus `.env.example` erzeugen.
+   Diese Datei bleibt die Basis fuer Ports, Image-Tags und Host-Pfade.
+2. Fuer private und langlebige Zugangsdaten optional `.env.local.example` nach `.env.local` kopieren, nur die benoetigten Zeilen entkommentieren und dort Secrets wie `ALPACA_*`, `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `SMTP_*` oder `INITIAL_ADMIN_*` hinterlegen.
+   Die Ops-Skripte laden immer erst `.env` und danach `.env.local`.
+3. Fuer einen Bootstrap-Superadmin `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` setzen.
    Optional fuer den Erstaufbau: `INITIAL_ADMIN_MFA_ENABLED=false`, damit sich der Bootstrap-Admin ohne OTP anmelden und weitere Konten anlegen kann.
    Fuer produktive Passwort-Reset-Mails zusaetzlich `PASSWORD_RESET_BASE_URL`, `SMTP_HOST`, `SMTP_PORT` und `SMTP_FROM_EMAIL` konfigurieren.
-2. aktuellen Docker-Hub-Stand starten:
+4. aktuellen Docker-Hub-Stand starten:
    - `bash ops/automation/start.sh`
-3. Health pruefen:
+5. Health pruefen:
    - Backend ueber Frontend-Proxy: `http://127.0.0.1:18094/api/health`
    - Backend direkt: `http://127.0.0.1:18090/api/health`
    - Frontend: `http://127.0.0.1:18094/login`
@@ -50,9 +53,9 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
 
 ## Logs
 
-- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f backend`
-- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f frontend`
-- `docker compose --env-file .env -f ops/docker/compose.yaml logs -f postgres`
+- `bash ops/automation/logs.sh backend`
+- `bash ops/automation/logs.sh frontend`
+- `bash ops/automation/logs.sh postgres`
 
 ## Regression
 

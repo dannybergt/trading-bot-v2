@@ -10,10 +10,7 @@ source "${PROJECT_ROOT}/ops/automation/env.sh"
 load_project_env "${PROJECT_ROOT}"
 export_runtime_paths "${PROJECT_ROOT}"
 
-echo "Stopping Trading Bot V2 stack: ${COMPOSE_PROJECT_NAME:-trading-bot-v2}"
 docker compose \
   --project-directory "${PROJECT_ROOT}" \
   -f "${COMPOSE_FILE}" \
-  down --remove-orphans "$@"
-
-echo "Stopped. Runtime data under state/runtime was kept."
+  logs -f "$@"

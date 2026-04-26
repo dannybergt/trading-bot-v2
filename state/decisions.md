@@ -1,5 +1,10 @@
 # Entscheidungen
 
+- Datum: 2026-04-26
+  Entscheidung: Dauerhafte private lokale Secrets und persoenliche Zugangsdaten werden in einer gitignorierten `.env.local` gepflegt, die von den Ops-Skripten immer nach `.env` geladen wird.
+  Begruendung: Der bisherige Betriebsweg war fehleranfaellig, weil `docker compose -f ops/docker/compose.yaml ...` die Root-`.env` nicht verlaesslich als Projektkontext behandelt und Nutzer dadurch Keys bei Wiedereinstiegen wiederholt neu eintragen mussten.
+  Konsequenzen: `start.sh`, `stop.sh` und `logs.sh` kapseln den Compose-Zugriff; `.env` bleibt Basis-Konfiguration, `.env.local` gewinnt fuer private Overrides; Deploy- und Rehearsal-Skripte verwenden denselben Ladepfad.
+
 - Datum: 2026-03-18
   Entscheidung: Lokalen Projektordner als `trading-bot-v2` angelegt.
   Begruendung: Dieser Name ist in beiden Images als Compose-/Projektname verankert und beschreibt das Gesamtprodukt besser als die getrennten Image-Namen.

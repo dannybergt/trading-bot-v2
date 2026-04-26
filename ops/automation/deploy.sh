@@ -3,25 +3,14 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-${PROJECT_ROOT}/.env}"
-EXAMPLE_ENV_FILE="${PROJECT_ROOT}/.env.example"
 COMPOSE_FILE="${COMPOSE_FILE:-${PROJECT_ROOT}/ops/docker/compose.yaml}"
 DEPLOY_STATE_DIR="${PROJECT_ROOT}/state/runtime/deployments"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 AUTO_ROLLBACK="${AUTO_ROLLBACK:-1}"
 TRACK_CURRENT_DEPLOYMENT="${TRACK_CURRENT_DEPLOYMENT:-1}"
 OVERRIDE_VARS=()
-
-load_env() {
-  local candidate="$1"
-  if [[ ! -f "${candidate}" ]]; then
-    return 1
-  fi
-
-  set -a
-  # shellcheck disable=SC1090
-  source "${candidate}"
-  set +a
-}
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/ops/automation/env.sh"
 
 capture_overrides() {
   local name backup_name
@@ -102,7 +91,6 @@ wait_for_http() {
 compose() {
   docker compose \
     --project-directory "${PROJECT_ROOT}" \
-    --env-file "${LOADED_ENV_FILE}" \
     -f "${COMPOSE_FILE}" \
     "$@"
 }
@@ -178,15 +166,9 @@ EOF
 }
 
 LOADED_ENV_FILE=""
+LOADED_ENV_LOCAL_FILE=""
 capture_overrides
-if load_env "${ENV_FILE}"; then
-  LOADED_ENV_FILE="${ENV_FILE}"
-elif load_env "${EXAMPLE_ENV_FILE}"; then
-  LOADED_ENV_FILE="${EXAMPLE_ENV_FILE}"
-else
-  echo "Missing .env or .env.example in ${PROJECT_ROOT}" >&2
-  exit 1
-fi
+load_project_env "${PROJECT_ROOT}"
 restore_overrides
 
 require_command docker

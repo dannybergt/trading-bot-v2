@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-04-15
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert jetzt normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, einen priorisierten Alert-Feed fuer Watchlists und einen ersten Provider-Coverage-Dashboard-Schnitt; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt; der Alpha-Vantage-Live-Smoke fuer `VOO` und `BTC/USD` sowie das Upgrade-/Restore-Rehearsal fuer `sha-f826304a7850` sind gruen, und die Follow-ups `9c2f2b` sowie `df6f0fa` sind durch `publish`/`ci`/`codeql` bestaetigt; naechster Fokus ist weiterer Phase-1-Produktschnitt oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal
+- Letzte Aktualisierung: 2026-04-26
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, priorisierte Watchlist-Alerts, Provider-Coverage im Dashboard und einen optionalen Alpha-Vantage-Livepfad fuer ETFs und Krypto; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, der lokale Betriebsweg laedt fuer wiederkehrende Sitzungen eine persistente `.env.local` als private Override-Datei fuer Keys und persoenliche Zugangsdaten; naechster Fokus ist weiterer Phase-1-Produktschnitt oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal
 
 ## Gesichert verifiziert
 
@@ -38,6 +38,7 @@
 - Compose nutzt fuer persistente Backend-Runtime-Daten jetzt standardmaessig `state/runtime/backend-data` statt eines Pfads im Quellbaum
 - `ops/automation/deploy.sh` deployt und upgraded jetzt direkt aus Docker Hub, erstellt vor Upgrades Sicherungen und schreibt den aktiven Rollout-Stand nach `state/runtime/deployments/current.env`
 - `ops/automation/sync-components.sh` schreibt fuer getaggte Releases jetzt lokale Release-Metadaten unter `state/releases/<IMAGE_TAG>.env`
+- `ops/automation/env.sh` laedt fuer lokale Betriebswege jetzt `.env` plus die gitignorierte Override-Datei `.env.local`; `start.sh`, `stop.sh` und `logs.sh` kapseln den Compose-Zugriff mit korrekt gesetztem Projektkontext
 - versionierter Docker-Hub-Release-Dry-Run mit `IMAGE_TAG=2026.03.18-testdeploy` wurde erfolgreich ausgefuehrt
 - Git-Remote `origin` ist lokal per SSH erreichbar; `publish.yml` synchronisiert Pushes nach `main` jetzt fuer Backend und Frontend automatisch nach Docker Hub als `latest` plus `sha-<commit>` und publiziert Git-Tags `v*` als versionierte Release-Tags
 - isolierter Docker-Hub-Deploy-Smoke-Test gegen temporaere Runtime-Pfade und eigene Ports lief erfolgreich durch; Deployment-Record wurde unter `state/runtime/deployments/deployment-20260318T211121Z.env` geschrieben
