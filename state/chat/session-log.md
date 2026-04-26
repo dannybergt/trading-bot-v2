@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-04-26
+  Kontext: Phase 1 soll wie besprochen weitergezogen werden: der ETF-/Krypto-Providerpfad soll aus Watchlist/Alerts in eine echte Symbol-Research-Flaeche wandern.
+  Erledigt: Neuer Endpunkt `/api/research/{symbol}` liefert normalisierte Assetdaten, Providerstatus, Quote, Provider-Research, Fundamentals und News; fuer beobachtete Symbole nutzt der Endpunkt Watchlist-Namen als Klassifizierungsfallback, damit ETFs wie `VOO` auch ohne sofort verfuegbare externe Metadaten korrekt als ETF laufen. `src/frontend-dist/ui-patches.js` rendert auf `/analysis/<symbol>` jetzt ein `Provider Research`-Panel mit Providerstatus, Kurs/Move, History-Abdeckung, ETF-Research, Top-Holdings, Headlines und Stock-Fundamentals. API-Regression prueft Crypto- und ETF-Research-Kontext; UI-Regression bestaetigt `ui_symbol_research ok`.
+  Offen: Nach Push den GitHub-Actions-Publish-Lauf beobachten; danach als naechster Phase-1-Schnitt echte Nutzer-Alerts/Popup-Alert-Management aus dem vorhandenen Watchlist-Alert-Feed bauen oder einen expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren.
+
+- Datum: 2026-04-26
   Kontext: Lokale API-Keys und private Zugangsdaten muessen beim Wiedereinstieg nicht jedes Mal erneut zusammengesucht und eingetragen werden.
   Erledigt: `ops/automation/env.sh` fuehrt jetzt einen einheitlichen Ladevorgang fuer `.env` plus die gitignorierte Override-Datei `.env.local` ein; `ops/automation/deploy.sh`, `ops/automation/start.sh`, `ops/automation/stop.sh`, `ops/automation/logs.sh` und das Upgrade-Rehearsal laden dieselben lokalen Overrides; der Wrapper normalisiert Runtime-Pfade auf absolute Projektpfade und adoptiert bei Bedarf einen alten PostgreSQL-Datenstand aus `ops/docker/state/runtime/postgres`, damit der Wechsel vom alten Raw-Compose-Pfad keinen Restart-Fehler erzeugt; `README.md` und `docs/admin/runbook.md` dokumentieren `.env.local.example` als dauerhafte Ablage fuer private Keys.
   Offen: Die echten Live-Secrets muessen nur noch einmalig in `.env.local` hinterlegt werden; danach soll der lokale Betriebsweg ohne erneute Neueingabe funktionieren.

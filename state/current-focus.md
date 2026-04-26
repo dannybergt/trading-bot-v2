@@ -16,6 +16,11 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
+- Aktueller lokaler Produkt-Stand: Symbol-Research-Schnitt fuer `/api/research/{symbol}` plus UI-Panel `Provider Research` auf `/analysis/<symbol>` umgesetzt und lokal verifiziert
+- Verifikation: `bash ops/automation/test.sh`, `bash ops/automation/build.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`, `SKIP_BUILD=1 bash tests/run-ui-regression.sh`
+- Die API-Regression prueft jetzt Crypto- und ETF-Research-Kontext; die UI-Regression bestaetigt `ui_symbol_research ok`
+- Naechster Schritt nach Push/Actions: entweder GitHub-Actions-Lauf fuer diesen Commit beobachten oder als naechsten Produktschnitt echte Nutzer-Alerts/Popup-Alert-Management aus dem vorhandenen Watchlist-Alert-Feed bauen
+
 - Aktueller Produkt-Commit auf `main`: `df6f0fa` (`Surface provider coverage in watchlist alerts`)
 - Letzter gepruefter GitHub-Actions-`publish`-Run: `#10`
 - Run-Link: `https://github.com/dannybergt/trading-bot-v2/actions/runs/24461808225`
@@ -32,7 +37,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - den ETF-/Krypto-Livepfad weiter in Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
+  - den ETF-/Krypto-Livepfad nach dem neuen Symbol-Research-Schnitt spaeter in echte Nutzer-Alerts/Popup-Alert-Management ausrollen
   - fuer den naechsten expliziten Release-Tag wieder den Upgrade-/Restore-Rehearsal-Pfad fahren
 
 ## Wichtiger Kontext

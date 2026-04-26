@@ -421,6 +421,17 @@ async function run() {
     );
     console.log("ui_watchlist_provider_coverage ok");
 
+    await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
+    await waitForCondition(
+      client,
+      "symbol research panel",
+      "!!document.getElementById('ui-patch-symbol-research') && document.getElementById('ui-patch-symbol-research').textContent.includes('Provider Research') && document.getElementById('ui-patch-symbol-research').textContent.includes('Alpha Vantage') && document.getElementById('ui-patch-symbol-research').textContent.includes('Top Holdings')",
+      30000,
+    );
+    console.log("ui_symbol_research ok");
+
+    await navigate(client, `${FRONTEND_URL}/`);
+
     const isAdmin = await client.evaluate(`
       (async () => {
         const token = localStorage.getItem("access_token");

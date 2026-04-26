@@ -4,7 +4,7 @@
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
 - Letzte Aktualisierung: 2026-04-26
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, priorisierte Watchlist-Alerts, Provider-Coverage im Dashboard und einen optionalen Alpha-Vantage-Livepfad fuer ETFs und Krypto; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, der lokale Betriebsweg laedt fuer wiederkehrende Sitzungen eine persistente `.env.local` als private Override-Datei fuer Keys und persoenliche Zugangsdaten; naechster Fokus ist weiterer Phase-1-Produktschnitt oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, priorisierte Watchlist-Alerts, Provider-Coverage im Dashboard, einen optionalen Alpha-Vantage-Livepfad fuer ETFs und Krypto sowie jetzt einen Symbol-Research-Schnitt auf `/api/research/{symbol}` mit sichtbarem `Provider Research`-Panel auf `/analysis/<symbol>`; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, der lokale Betriebsweg laedt fuer wiederkehrende Sitzungen eine persistente `.env.local` als private Override-Datei fuer Keys und persoenliche Zugangsdaten; naechster Fokus ist echte Nutzer-Alerts/Popup-Alert-Management aus dem vorhandenen Watchlist-Alert-Feed oder ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal
 
 ## Gesichert verifiziert
 
@@ -77,6 +77,9 @@
 - Watchlist-Alert-Items tragen jetzt zusaetzlich einen normalisierten `providerContext`; das Ranking beruecksichtigt Provider-Live-Status, staerkere Provider-Moves, Research-Verfuegbarkeit und History-Abdeckung
 - Alert-Summaries melden jetzt Provider-Coverage-Kennzahlen (`providerLive`, `providerPartial`, `providerUnavailable`, `providerResearch`, `providerMovers`)
 - das Dashboard zeigt im Watchlist-Bereich jetzt eine `Provider Coverage`-Sektion mit Live-/Partial-/Research-/Mover-Zahlen und Alpha-Vantage-Highlights fuer ETF-/Krypto-Werte
+- neuer Endpunkt `/api/research/{symbol}` liefert Symbol-Research fuer Analyse-Seiten mit Assetprofil, Providerstatus, Quote, ETF-Research, Fundamentals und News; fuer beobachtete Symbole nutzt er Watchlist-Namen als ETF-/Krypto-Klassifizierungsfallback
+- das rekonstruierte Frontend rendert auf `/analysis/<symbol>` ein `Provider Research`-Panel mit Providerstatus, Kurs/Move, History-Abdeckung, ETF-Research, Top-Holdings, Headlines und Stock-Fundamentals
+- API-Regression prueft den neuen Crypto- und ETF-Research-Kontext; UI-Regression bestaetigt das neue Analyse-Panel mit `ui_symbol_research ok`
 - `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh` und `bash tests/run-ui-regression.sh` liefen am 2026-04-15 mit dem Provider-Coverage-Schnitt erfolgreich durch
 - containerisierte Unit-Tests plus isolierte API- und UI-Regression gegen den frischen lokalen Build liefen am 2026-03-26 mit dem neuen ETF-/Krypto-Providerpfad erfolgreich durch
 - der nachfolgende GitHub-Actions-`publish`-Run `#4` auf `main` (`4233762`, Start 2026-03-26 21:11:17 UTC, Ende 2026-03-26 21:13:42 UTC) lief bereits durch Build, Test, API-Regression und UI-Regression sauber durch und scheiterte erst im Step `Log in to Docker Hub`
@@ -119,7 +122,7 @@
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
 - fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Stand fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
-- den eingebauten ETF-/Krypto-Livepfad auf weitere Research-/Dashboard-Flaechen und spaeter echte Nutzer-Alerts ausrollen
+- den eingebauten ETF-/Krypto-Livepfad nach dem neuen Symbol-Research-Schnitt spaeter in echte Nutzer-Alerts/Popup-Alert-Management ausrollen
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - die rekonstruierte Bundle-Patch-Schicht bei kuenftigen Frontend-Image-Updates mitpruefen, damit der nachgeruestete Settings-/Admin-Navigationsfix nicht verloren geht

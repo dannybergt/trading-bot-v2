@@ -36,7 +36,7 @@ from app.migrate_watchlists import migrate as migrate_watchlists
 from app.models import User, Watchlist as WatchlistRecord, WatchlistItem as WatchlistItemRecord, WatchlistItemTag
 from app.push_service import PushService
 from app.services import MarketDataService
-from app.watchlist_alerts import build_watchlist_alert, summarize_watchlist_alerts
+from app.watchlist_alerts import build_provider_context, build_watchlist_alert, summarize_watchlist_alerts
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -163,6 +163,20 @@ def serialize_tracked_watchlist_item(record: WatchlistItemRecord) -> dict:
     payload = serialize_watchlist_item(record).model_dump()
     payload["provider"] = service.get_provider_snapshot(record.symbol, asset_profile=payload)
     return payload
+
+
+def get_user_watchlist_symbol_name(db: Session, user: User, symbol: str) -> str | None:
+    canonical_symbol = canonicalize_symbol(symbol)
+    record = (
+        db.query(WatchlistItemRecord)
+        .join(WatchlistRecord, WatchlistRecord.id == WatchlistItemRecord.watchlist_id)
+        .filter(WatchlistRecord.user_id == user.id)
+        .all()
+    )
+    for item in record:
+        if canonicalize_symbol(item.symbol) == canonical_symbol and item.name:
+            return item.name
+    return None
 
 
 DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).parent.parent / "data"))
@@ -817,6 +831,60 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
         'chart_data': chart_data,
         'patterns': result['patterns'],
         'prediction': prediction
+    }
+
+
+@app.get("/api/research/{symbol:path}")
+def get_symbol_research(
+    symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
+    asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
+    provider_snapshot = service.get_provider_snapshot(symbol, asset_profile=asset_profile)
+    provider_context = build_provider_context(provider_snapshot)
+
+    news_payload = service.get_market_news(symbol, limit=5, asset_profile=asset_profile)
+    ticker_info = {} if asset_profile.get("isCrypto") else service.get_ticker_info(symbol, asset_profile=asset_profile)
+    if ticker_info:
+        asset_profile = service.get_asset_profile(symbol, ticker_info=ticker_info, fallback_name=fallback_name)
+        provider_snapshot = service.get_provider_snapshot(symbol, asset_profile=asset_profile)
+        provider_context = build_provider_context(provider_snapshot)
+
+    provider_research = {}
+    provider_quote = {}
+    if isinstance(provider_snapshot, dict):
+        provider_research = provider_snapshot.get("research") if isinstance(provider_snapshot.get("research"), dict) else {}
+        provider_quote = provider_snapshot.get("quote") if isinstance(provider_snapshot.get("quote"), dict) else {}
+
+    fundamentals = {
+        "sector": ticker_info.get("sector"),
+        "industry": ticker_info.get("industry"),
+        "marketCap": ticker_info.get("marketCap"),
+        "dividendYield": ticker_info.get("dividendYield"),
+        "fiftyTwoWeekHigh": ticker_info.get("fiftyTwoWeekHigh"),
+        "fiftyTwoWeekLow": ticker_info.get("fiftyTwoWeekLow"),
+        "trailingPE": ticker_info.get("trailingPE"),
+        "forwardPE": ticker_info.get("forwardPE"),
+        "priceToBook": ticker_info.get("priceToBook"),
+    }
+
+    return {
+        "symbol": asset_profile["symbol"],
+        "name": asset_profile["name"],
+        **asset_response_fields(asset_profile),
+        "provider": provider_snapshot,
+        "providerContext": provider_context,
+        "quote": provider_quote,
+        "research": provider_research,
+        "fundamentals": fundamentals,
+        "news": {
+            "items": (news_payload or {}).get("items", [])[:5],
+            "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),
+            "aggregateLabel": (news_payload or {}).get("aggregate_label", "neutral"),
+            "provider": (news_payload or {}).get("provider"),
+        },
     }
 
 

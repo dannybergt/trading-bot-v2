@@ -35,6 +35,10 @@
     primedWatchlists: new Set(),
     toastIds: new Set(),
   };
+  const RESEARCH_STATE = {
+    cache: new Map(),
+    inflight: new Map(),
+  };
 
   function setButtonLabel(button, title) {
     button.setAttribute("title", title);
@@ -263,6 +267,74 @@
       });
 
     WATCHLIST_STATE.inflight.set(watchlistMeta.id, request);
+  }
+
+  function getAnalysisRouteSymbol() {
+    const match = window.location.pathname.match(/^\/analysis\/(.+)$/);
+    if (!match) {
+      return null;
+    }
+    try {
+      return decodeURIComponent(match[1]).trim();
+    } catch {
+      return match[1].trim();
+    }
+  }
+
+  function getCachedResearch(symbol) {
+    const key = String(symbol || "").toUpperCase();
+    const entry = RESEARCH_STATE.cache.get(key);
+    if (!entry) {
+      return null;
+    }
+    const maxAge = entry.status === "error" ? ERROR_TTL_MS : CACHE_TTL_MS;
+    if (Date.now() - entry.fetchedAt > maxAge) {
+      RESEARCH_STATE.cache.delete(key);
+      return null;
+    }
+    return entry;
+  }
+
+  function ensureSymbolResearch(symbol) {
+    if (!symbol || !getAccessToken()) {
+      return;
+    }
+    const key = String(symbol).toUpperCase();
+    if (getCachedResearch(symbol) || RESEARCH_STATE.inflight.has(key)) {
+      return;
+    }
+
+    RESEARCH_STATE.cache.set(key, {
+      status: "loading",
+      fetchedAt: Date.now(),
+      payload: null,
+      error: "",
+    });
+    schedulePatches();
+
+    const request = fetchJson("/api/research/" + encodeURIComponent(symbol))
+      .then(function (payload) {
+        RESEARCH_STATE.cache.set(key, {
+          status: "ready",
+          fetchedAt: Date.now(),
+          payload,
+          error: "",
+        });
+      })
+      .catch(function (error) {
+        RESEARCH_STATE.cache.set(key, {
+          status: "error",
+          fetchedAt: Date.now(),
+          payload: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(function () {
+        RESEARCH_STATE.inflight.delete(key);
+        schedulePatches();
+      });
+
+    RESEARCH_STATE.inflight.set(key, request);
   }
 
   function createNode(tagName, className, text) {
@@ -681,6 +753,246 @@
     }
 
     return section;
+  }
+
+  function buildResearchMetric(label, value, toneClass) {
+    const metric = createNode(
+      "div",
+      "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-3 py-3",
+    );
+    metric.appendChild(
+      createNode("div", "text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400", label),
+    );
+    metric.appendChild(
+      createNode(
+        "div",
+        "mt-1 text-lg font-bold " + (toneClass || "text-slate-900 dark:text-white"),
+        value || "N/A",
+      ),
+    );
+    return metric;
+  }
+
+  function buildSymbolResearchPanel(symbol, entry) {
+    const status = entry ? entry.status : "loading";
+    const payload = entry && entry.payload ? entry.payload : null;
+    const provider = payload && payload.provider ? payload.provider : null;
+    const providerContext = payload && payload.providerContext ? payload.providerContext : {};
+    const research = payload && payload.research ? payload.research : {};
+    const quote = payload && payload.quote ? payload.quote : {};
+    const fundamentals = payload && payload.fundamentals ? payload.fundamentals : {};
+    const news = payload && payload.news ? payload.news : {};
+
+    const panel = createNode(
+      "section",
+      "mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg overflow-hidden",
+    );
+    panel.id = "ui-patch-symbol-research";
+    panel.dataset.symbol = symbol || "";
+
+    const inner = createNode("div", "p-5 sm:p-6");
+    const header = createNode("div", "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between");
+    const copy = createNode("div", "min-w-0");
+    copy.appendChild(createNode("h3", "text-lg font-bold text-slate-900 dark:text-white", "Provider Research"));
+    copy.appendChild(
+      createNode(
+        "p",
+        "mt-1 text-sm text-slate-500 dark:text-slate-400",
+        payload
+          ? (payload.symbol || symbol) + " research context from live provider, fundamentals and watchlist news feeds."
+          : "Loading provider-backed research context for " + symbol + ".",
+      ),
+    );
+    header.appendChild(copy);
+
+    const pills = createNode("div", "flex flex-wrap items-center gap-2");
+    if (payload) {
+      pills.appendChild(buildMetaPill(formatAssetLabel(payload)));
+      if (provider && provider.source) {
+        const providerPill = getProviderStatusPill(provider);
+        if (providerPill) {
+          pills.appendChild(providerPill);
+        }
+      }
+      if (providerContext.researchAvailable) {
+        pills.appendChild(
+          buildPill(
+            "Research available",
+            "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+          ),
+        );
+      }
+      if (news.aggregateLabel) {
+        pills.appendChild(
+          buildPill(
+            "News " + String(news.aggregateLabel).toUpperCase(),
+            "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+          ),
+        );
+      }
+    }
+    header.appendChild(pills);
+    inner.appendChild(header);
+
+    if (status === "loading") {
+      inner.appendChild(
+        createNode(
+          "p",
+          "mt-4 text-sm text-slate-500 dark:text-slate-400",
+          "Loading ETF, crypto and fundamentals context...",
+        ),
+      );
+      panel.appendChild(inner);
+      return panel;
+    }
+
+    if (status === "error") {
+      inner.appendChild(
+        createNode(
+          "p",
+          "mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-600 dark:text-rose-300",
+          "Research context is temporarily unavailable. " + ((entry && entry.error) || "Please retry shortly."),
+        ),
+      );
+      panel.appendChild(inner);
+      return panel;
+    }
+
+    const metricGrid = createNode("div", "mt-5 grid grid-cols-1 gap-3 md:grid-cols-4");
+    const priceLabel = formatCompactCurrency(quote.price, quote.currency || "USD");
+    const moveLabel = formatPercentValue(quote.changePercent);
+    const netAssetsLabel = formatCompactCurrency(research.netAssets, "USD");
+    metricGrid.appendChild(buildResearchMetric("Last Price", priceLabel));
+    metricGrid.appendChild(
+      buildResearchMetric(
+        "Provider Move",
+        moveLabel,
+        Number(quote.changePercent) > 0
+          ? "text-emerald-600 dark:text-emerald-300"
+          : Number(quote.changePercent) < 0
+            ? "text-rose-600 dark:text-rose-300"
+            : "text-slate-900 dark:text-white",
+      ),
+    );
+    metricGrid.appendChild(buildResearchMetric("Net Assets", netAssetsLabel));
+    metricGrid.appendChild(
+      buildResearchMetric(
+        "History Points",
+        providerContext.historyPoints !== undefined ? String(providerContext.historyPoints || 0) : "0",
+      ),
+    );
+    inner.appendChild(metricGrid);
+
+    const detailGrid = createNode("div", "mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3");
+    const providerCard = createNode(
+      "div",
+      "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-4 py-4",
+    );
+    providerCard.appendChild(createNode("h4", "text-sm font-bold text-slate-900 dark:text-white", "Provider Snapshot"));
+    const providerLines = [];
+    providerLines.push("Status " + String(providerContext.status || "unavailable").toUpperCase());
+    if (providerContext.lastUpdated) {
+      providerLines.push("Updated " + formatRelativeTime(providerContext.lastUpdated));
+    }
+    if (research.expenseRatio !== null && research.expenseRatio !== undefined) {
+      providerLines.push("Expense ratio " + research.expenseRatio + "%");
+    }
+    if (research.dividendYield !== null && research.dividendYield !== undefined) {
+      providerLines.push("Dividend yield " + research.dividendYield + "%");
+    }
+    if (research.inceptionDate) {
+      providerLines.push("Inception " + research.inceptionDate);
+    }
+    if (provider && provider.reason) {
+      providerLines.push("Reason " + provider.reason);
+    }
+    providerCard.appendChild(
+      createNode("p", "mt-3 text-sm text-slate-500 dark:text-slate-400", providerLines.join(" | ")),
+    );
+    detailGrid.appendChild(providerCard);
+
+    const holdingsCard = createNode(
+      "div",
+      "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-4 py-4",
+    );
+    holdingsCard.appendChild(createNode("h4", "text-sm font-bold text-slate-900 dark:text-white", "Top Holdings"));
+    const holdings = Array.isArray(research.topHoldings) ? research.topHoldings.slice(0, 4) : [];
+    if (holdings.length === 0) {
+      holdingsCard.appendChild(
+        createNode("p", "mt-3 text-sm text-slate-500 dark:text-slate-400", "No provider holdings available for this symbol yet."),
+      );
+    } else {
+      const list = createNode("div", "mt-3 flex flex-col gap-2");
+      for (const holding of holdings) {
+        list.appendChild(
+          createNode(
+            "div",
+            "flex items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-300",
+            (holding.symbol || holding.name || "Holding") +
+              (holding.weightPercent !== null && holding.weightPercent !== undefined
+                ? " " + holding.weightPercent + "%"
+                : ""),
+          ),
+        );
+      }
+      holdingsCard.appendChild(list);
+    }
+    detailGrid.appendChild(holdingsCard);
+
+    const newsCard = createNode(
+      "div",
+      "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-4 py-4",
+    );
+    newsCard.appendChild(createNode("h4", "text-sm font-bold text-slate-900 dark:text-white", "Research Headlines"));
+    const headlines = Array.isArray(news.items) ? news.items.slice(0, 3) : [];
+    if (headlines.length === 0) {
+      newsCard.appendChild(
+        createNode("p", "mt-3 text-sm text-slate-500 dark:text-slate-400", "No provider headlines available right now."),
+      );
+    } else {
+      const list = createNode("div", "mt-3 flex flex-col gap-3");
+      for (const headline of headlines) {
+        const item = createNode("div", "text-sm");
+        item.appendChild(createNode("div", "font-semibold text-slate-800 dark:text-slate-100", headline.title || "Market update"));
+        item.appendChild(
+          createNode(
+            "div",
+            "mt-1 text-xs text-slate-500 dark:text-slate-400",
+            (headline.source || "Market feed") + " " + formatRelativeTime(headline.timestamp),
+          ),
+        );
+        list.appendChild(item);
+      }
+      newsCard.appendChild(list);
+    }
+    detailGrid.appendChild(newsCard);
+    inner.appendChild(detailGrid);
+
+    const stockFundamentals = [];
+    if (fundamentals.sector) {
+      stockFundamentals.push("Sector " + fundamentals.sector);
+    }
+    if (fundamentals.industry) {
+      stockFundamentals.push("Industry " + fundamentals.industry);
+    }
+    if (fundamentals.marketCap) {
+      stockFundamentals.push("Market cap " + formatCompactCurrency(fundamentals.marketCap, "USD"));
+    }
+    if (fundamentals.trailingPE) {
+      stockFundamentals.push("Trailing P/E " + Number(fundamentals.trailingPE).toFixed(2));
+    }
+    if (stockFundamentals.length > 0) {
+      inner.appendChild(
+        createNode(
+          "p",
+          "mt-4 text-xs text-slate-500 dark:text-slate-400",
+          stockFundamentals.join(" | "),
+        ),
+      );
+    }
+
+    panel.appendChild(inner);
+    return panel;
   }
 
   function buildMetaPill(label) {
@@ -1358,6 +1670,64 @@
     return title ? title.parentElement : null;
   }
 
+  function findAnalysisContentRoot() {
+    const preferred =
+      document.querySelector("main .max-w-7xl") ||
+      document.querySelector("main .max-w-6xl") ||
+      document.querySelector("main .max-w-5xl") ||
+      document.querySelector("main");
+    if (preferred) {
+      return preferred;
+    }
+
+    const title = Array.from(document.querySelectorAll("h1,h2")).find(function (element) {
+      const text = element.textContent || "";
+      return text.includes("Analysis") || text.includes("Analyse");
+    });
+    return title ? title.parentElement : null;
+  }
+
+  function patchSymbolResearch() {
+    const symbol = getAnalysisRouteSymbol();
+    const existing = document.getElementById("ui-patch-symbol-research");
+    if (!symbol) {
+      if (existing) {
+        existing.remove();
+      }
+      return;
+    }
+
+    ensureSymbolResearch(symbol);
+    const root = findAnalysisContentRoot();
+    if (!root) {
+      return;
+    }
+
+    const entry = getCachedResearch(symbol);
+    const payload = entry && entry.payload ? entry.payload : null;
+    const providerContext = payload && payload.providerContext ? payload.providerContext : {};
+    const renderKey = [
+      symbol,
+      entry ? entry.status : "loading",
+      payload && payload.symbol ? payload.symbol : "",
+      providerContext.status || "",
+      providerContext.price !== null && providerContext.price !== undefined ? providerContext.price : "",
+      providerContext.historyPoints !== undefined ? providerContext.historyPoints : "",
+      payload && payload.news ? payload.news.aggregateLabel : "",
+      entry && entry.error ? entry.error : "",
+    ].join("|");
+    if (existing && existing.dataset.renderKey === renderKey) {
+      return;
+    }
+    const panel = buildSymbolResearchPanel(symbol, entry);
+    panel.dataset.renderKey = renderKey;
+    if (existing) {
+      existing.replaceWith(panel);
+      return;
+    }
+    root.insertBefore(panel, root.firstChild || null);
+  }
+
   function patchWatchlistInsightsPanel(watchlistMeta) {
     const dashboardRoot = findDashboardContentRoot();
     const existing = document.getElementById("ui-patch-watchlist-alerts");
@@ -1501,6 +1871,7 @@
     scheduled = false;
     patchDashboardShortcuts();
     patchSettingsBackButton();
+    patchSymbolResearch();
     patchWatchlistInsights();
   }
 

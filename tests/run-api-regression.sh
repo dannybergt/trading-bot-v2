@@ -230,6 +230,21 @@ assert crypto_payload["provider"]["source"] == "Alpha Vantage"
 assert crypto_payload["provider"]["status"] in {"live", "partial", "unavailable"}
 print("crypto asset metadata ok")
 
+crypto_research = requests.get(
+    f"{base}/api/research/BTC/USD",
+    headers=headers,
+    timeout=30,
+)
+crypto_research.raise_for_status()
+crypto_research_payload = crypto_research.json()
+assert crypto_research_payload["assetClass"] == "crypto"
+assert crypto_research_payload["provider"]["source"] == "Alpha Vantage"
+assert crypto_research_payload["providerContext"]["source"] == "Alpha Vantage"
+assert crypto_research_payload["providerContext"]["status"] in {"live", "partial", "unavailable"}
+assert "quote" in crypto_research_payload
+assert "news" in crypto_research_payload
+print("crypto research context ok")
+
 search_crypto = requests.get(
     f"{base}/api/search/BTC/USD",
     headers=headers,
@@ -334,6 +349,21 @@ assert tracked_crypto["provider"]["status"] in {"live", "partial", "unavailable"
 assert tracked_etf["provider"]["source"] == "Alpha Vantage"
 assert tracked_etf["provider"]["status"] in {"live", "partial", "unavailable"}
 print("watchlist news binding ok")
+
+etf_research = requests.get(
+    f"{base}/api/research/VOO",
+    headers=headers,
+    timeout=30,
+)
+etf_research.raise_for_status()
+etf_research_payload = etf_research.json()
+assert etf_research_payload["assetClass"] == "etf"
+assert etf_research_payload["provider"]["source"] == "Alpha Vantage"
+assert etf_research_payload["providerContext"]["source"] == "Alpha Vantage"
+assert etf_research_payload["providerContext"]["status"] in {"live", "partial", "unavailable"}
+assert "research" in etf_research_payload
+assert "fundamentals" in etf_research_payload
+print("etf research context ok")
 
 watchlist_alerts = requests.get(
     f"{base}/api/watchlists/{watchlist_id}/alerts",
