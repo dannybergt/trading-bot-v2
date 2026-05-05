@@ -387,6 +387,27 @@ def build_watchlist_alert(
     }
 
 
+def build_watchlist_alert_delivery_key(alert_item: dict[str, Any]) -> str:
+    signal = alert_item.get("signal") if isinstance(alert_item.get("signal"), dict) else {}
+    news = alert_item.get("news") if isinstance(alert_item.get("news"), dict) else {}
+    provider_context = (
+        alert_item.get("providerContext") if isinstance(alert_item.get("providerContext"), dict) else {}
+    )
+    parts = [
+        str(alert_item.get("symbol") or ""),
+        str(alert_item.get("alertType") or ""),
+        str(alert_item.get("priorityLabel") or ""),
+        str(alert_item.get("priorityScore") or 0),
+        str(signal.get("direction") or ""),
+        str(round(_safe_float(signal.get("confidence")) or 0.0, 2)),
+        str(news.get("aggregateLabel") or ""),
+        str(news.get("latestTimestamp") or ""),
+        str(provider_context.get("status") or ""),
+        str(provider_context.get("changePercent") or ""),
+    ]
+    return "|".join(parts)
+
+
 def summarize_watchlist_alerts(items: list[dict[str, Any]]) -> dict[str, Any]:
     provider_items = [item for item in items if item.get("providerContext", {}).get("source")]
     return {

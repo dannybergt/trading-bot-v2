@@ -21,18 +21,19 @@ class PushService:
     def send_notification_to_user(db: Session, user_id: int, payload: dict):
         """Send a push notification to all devices for a given user."""
         subscriptions = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
-        PushService.send_to_subscriptions(subscriptions, payload, db)
+        return PushService.send_to_subscriptions(subscriptions, payload, db)
 
     @staticmethod
     def broadcast_notification(db: Session, payload: dict):
         """Send a push notification to all users in the system."""
         subscriptions = db.query(PushSubscription).all()
-        PushService.send_to_subscriptions(subscriptions, payload, db)
+        return PushService.send_to_subscriptions(subscriptions, payload, db)
 
     @staticmethod
     def send_to_subscriptions(subscriptions, payload: dict, db: Session):
         """Helper to iterate and send web push to subscription rows."""
         payload_data = json.dumps(payload)
+        sent_count = 0
         
         expired_subs = []
         for sub in subscriptions:
@@ -55,6 +56,7 @@ class PushService:
                     "web_push_sent",
                     extra={"subscription_fingerprint": subscription_fingerprint},
                 )
+                sent_count += 1
             except WebPushException as ex:
                 logger.error(
                     "web_push_failed",
@@ -79,3 +81,5 @@ class PushService:
                 db.delete(es)
             db.commit()
             logger.info("web_push_expired_subscriptions_cleaned count=%s", len(expired_subs))
+
+        return sent_count

@@ -29,6 +29,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
     alert_settings = relationship("WatchlistAlertSetting", back_populates="user", cascade="all, delete-orphan")
+    alert_deliveries = relationship("WatchlistAlertDelivery", back_populates="user", cascade="all, delete-orphan")
 
 
 class PasswordResetToken(Base):
@@ -65,6 +66,7 @@ class Watchlist(Base):
     user = relationship("User", back_populates="watchlists")
     items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
     alert_settings = relationship("WatchlistAlertSetting", back_populates="watchlist", cascade="all, delete-orphan")
+    alert_deliveries = relationship("WatchlistAlertDelivery", back_populates="watchlist", cascade="all, delete-orphan")
 
 
 class WatchlistAlertSetting(Base):
@@ -83,6 +85,24 @@ class WatchlistAlertSetting(Base):
 
     user = relationship("User", back_populates="alert_settings")
     watchlist = relationship("Watchlist", back_populates="alert_settings")
+
+
+class WatchlistAlertDelivery(Base):
+    __tablename__ = "watchlist_alert_deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    watchlist_id = Column(String, ForeignKey("watchlists.id"), index=True, nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    channel = Column(String, index=True, nullable=False)
+    alert_key = Column(String, index=True, nullable=False)
+    alert_type = Column(String, nullable=False)
+    priority_label = Column(String, nullable=False)
+    priority_score = Column(Integer, nullable=False)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user = relationship("User", back_populates="alert_deliveries")
+    watchlist = relationship("Watchlist", back_populates="alert_deliveries")
 
 
 class WatchlistItem(Base):

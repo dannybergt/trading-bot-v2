@@ -1,5 +1,10 @@
 # Sitzungslog
 
+- Datum: 2026-05-05
+  Kontext: Nach dem Watchlist-Alert-Management soll die serverseitige periodische/deduplizierte Alert-Ausloesung umgesetzt werden.
+  Erledigt: Gemeinsamer Watchlist-Alert-Payload-Aufbau fuer API und Dispatcher eingefuehrt; neuer Background-Dispatcher wertet Watchlists mit aktivem `pushEnabled` periodisch aus und sendet Web-Push fuer `notification.pushEligible` Alerts. Erfolgreiche Push-Zustellungen werden in `watchlist_alert_deliveries` mit stabilem Alert-Key gespeichert und innerhalb des konfigurierbaren Dedupe-Fensters nicht erneut gesendet. `PushService` meldet erfolgreiche Zustellzahlen zurueck; Backup/Export/Import sichern die Delivery-Historie. Unit-Test deckt stabile Dedupe-Keys ab, API-Regression prueft die neue Backup-/Export-Flaeche.
+  Offen: Lokalen UI-Regressionslauf fuer den neuen Backend-Stand noch ausfuehren, danach Commit/Push und GitHub Actions beobachten. Naechster Produktschritt danach: expliziter Release-Tag mit Upgrade-/Restore-Rehearsal oder produktive Push-/VAPID-Haertung.
+
 - Datum: 2026-04-26
   Kontext: Nach dem Symbol-Research-Schnitt soll Phase 1 weiter in echtes Nutzer-Alert-/Popup-Management gehen.
   Erledigt: `watchlist_alert_settings` speichert pro Nutzer/Watchlist Alert-Aktivierung, Popup-Schalter, Push-Bereitschaft, Mindestprioritaet und Mindestscore; neue Endpunkte `/api/watchlists/{id}/alert-settings` lesen/schreiben diese Settings. `/api/watchlists/{id}/alerts` liefert jetzt `alertSettings`, `notificationPlan` sowie `notification.popupEligible`/`pushEligible` pro Alert-Item, und Backup/Export/Import decken die Settings ab. Das Dashboard zeigt ein `Alert Management`-Panel im Watchlist-Bereich; In-App-Popups werden nur noch fuer popup-eligible High-Priority-Alerts ausgelöst. API-Regression prueft Settings, Notification-Plan und Backup/Export; UI-Regression bestaetigt `ui_watchlist_alert_management ok`.

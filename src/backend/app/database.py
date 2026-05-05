@@ -36,6 +36,7 @@ def init_db():
         PushSubscription,
         User,
         Watchlist,
+        WatchlistAlertDelivery,
         WatchlistAlertSetting,
         WatchlistItem,
         WatchlistItemTag,

@@ -16,6 +16,12 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
+- Aktueller lokaler Produkt-Stand: Serverseitiger Watchlist-Alert-Dispatcher umgesetzt; Watchlists mit aktivem `pushEnabled` werden periodisch ausgewertet und erfolgreiche Web-Push-Zustellungen persistent dedupliziert.
+- Neue Tabelle `watchlist_alert_deliveries` speichert pro Nutzer, Watchlist, Symbol, Channel, Alert-Key, Prioritaet und Zeitstempel die Zustellhistorie; Backup/Export/Import sichern diese Historie mit.
+- Der Alert-Feed-Aufbau ist jetzt als gemeinsame Payload-Funktion wiederverwendet, sodass API und Dispatcher dieselbe Priorisierung, Settings-Auswertung und `notification.pushEligible`-Logik nutzen.
+- Verifikation: `bash ops/automation/build.sh`, `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`; offen ist noch der lokale UI-Regressionslauf und danach Commit/Push/Actions.
+- Naechster Schritt nach Push/Actions: expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren oder Push-/VAPID-Produktionskonfiguration haerten.
+
 - Aktueller lokaler Produkt-Stand: Watchlist-Alert-Management umgesetzt; pro Watchlist gibt es persistente Alert-Settings fuer Alerts an/aus, Popups, Push-Bereitschaft, Mindestprioritaet und Mindestscore.
 - `/api/watchlists/{id}/alerts` annotiert Alert-Items jetzt mit `notification.popupEligible`/`pushEligible` und liefert `alertSettings` sowie `notificationPlan`; Backup/Export/Import sichern `watchlist_alert_settings`.
 - Das Dashboard rendert ein `Alert Management`-Panel im Watchlist-Bereich und koppelt In-App-Popups an die gespeicherten Einstellungen.
@@ -43,8 +49,8 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - Watchlist-Alerts nach dem neuen Alert-Management serverseitig periodisch/dedupliziert ausloesen
   - fuer den naechsten expliziten Release-Tag wieder den Upgrade-/Restore-Rehearsal-Pfad fahren
+  - produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen
 
 ## Wichtiger Kontext
 

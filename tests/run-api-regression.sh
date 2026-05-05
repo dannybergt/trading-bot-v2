@@ -519,6 +519,7 @@ assert any(
     setting["watchlist_id"] == watchlist_id and setting["push_enabled"] is True
     for setting in backup_payload["data"].get("watchlist_alert_settings", [])
 )
+assert isinstance(backup_payload["data"].get("watchlist_alert_deliveries"), list)
 print("backup download ok")
 
 export_state = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
@@ -531,6 +532,7 @@ assert any(
     setting["watchlist_id"] == watchlist_id and setting["min_priority"] == "low"
     for setting in export_payload["data"].get("watchlist_alert_settings", [])
 )
+assert isinstance(export_payload["data"].get("watchlist_alert_deliveries"), list)
 print("export ok")
 
 platform_import = requests.post(

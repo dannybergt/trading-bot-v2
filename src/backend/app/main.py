@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import perf_counter
 from typing import List, Optional
@@ -36,19 +37,28 @@ from app.migrate_watchlists import migrate as migrate_watchlists
 from app.models import (
     User,
     Watchlist as WatchlistRecord,
+    WatchlistAlertDelivery,
     WatchlistAlertSetting,
     WatchlistItem as WatchlistItemRecord,
     WatchlistItemTag,
 )
 from app.push_service import PushService
 from app.services import MarketDataService
-from app.watchlist_alerts import build_provider_context, build_watchlist_alert, summarize_watchlist_alerts
+from app.watchlist_alerts import (
+    build_provider_context,
+    build_watchlist_alert,
+    build_watchlist_alert_delivery_key,
+    summarize_watchlist_alerts,
+)
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Trading Bot API")
 ALERT_PRIORITY_RANKS = {"low": 1, "medium": 2, "high": 3}
+WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS", "300"))
+WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS", "90"))
+WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
 
 
 def get_allowed_origins() -> list[str]:
@@ -258,6 +268,232 @@ def apply_alert_notifications(alert_items: list[dict], setting: WatchlistAlertSe
         "popupSymbols": [symbol for symbol in popup_symbols if symbol],
         "pushSymbols": [symbol for symbol in push_symbols if symbol],
     }
+
+
+def build_watchlist_alert_payload(
+    db: Session,
+    user: User,
+    record: WatchlistRecord,
+    *,
+    setting: WatchlistAlertSetting | None = None,
+    limit: int = 10,
+    news_limit: int = 2,
+) -> dict:
+    alert_setting = setting or get_or_create_watchlist_alert_setting(db, user, record)
+    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
+
+    alert_items: list[dict] = []
+    for tracked in tracked_assets:
+        symbol = tracked["symbol"]
+        try:
+            analysis_result = service.get_stock_data(
+                symbol,
+                period="1mo",
+                interval="1h",
+                user=user,
+                include_news=False,
+                include_fundamentals=False,
+            )
+        except Exception:
+            logger.exception(
+                "watchlist_alert_analysis_failed symbol=%s user_id=%s",
+                symbol,
+                user.id,
+            )
+            analysis_result = {}
+
+        try:
+            news_payload = service.get_market_news(symbol, asset_profile=tracked)
+        except Exception:
+            logger.exception(
+                "watchlist_alert_news_failed symbol=%s user_id=%s",
+                symbol,
+                user.id,
+            )
+            news_payload = {}
+
+        alert_items.append(
+            build_watchlist_alert(
+                tracked,
+                analysis_result,
+                news_payload,
+                news_limit=news_limit,
+            )
+        )
+
+    alert_items.sort(
+        key=lambda current: (
+            current.get("priorityScore", 0),
+            current.get("news", {}).get("latestTimestamp") or "",
+            current.get("signal", {}).get("confidence", 0),
+        ),
+        reverse=True,
+    )
+    alert_items = alert_items[:limit]
+
+    notification_plan = apply_alert_notifications(alert_items, alert_setting)
+    summary = summarize_watchlist_alerts(alert_items)
+    summary["trackedSymbols"] = len(tracked_assets)
+    summary["popupEligible"] = notification_plan["popupCount"]
+    summary["pushEligible"] = notification_plan["pushCount"]
+
+    return {
+        "watchlist": {"id": record.id, "name": record.name},
+        "alertSettings": serialize_alert_setting(alert_setting),
+        "notificationPlan": notification_plan,
+        "trackedAssets": tracked_assets,
+        "items": alert_items,
+        "summary": summary,
+    }
+
+
+def was_watchlist_alert_recently_delivered(
+    db: Session,
+    user_id: int,
+    watchlist_id: str,
+    alert_item: dict,
+    *,
+    channel: str,
+    now: datetime | None = None,
+) -> bool:
+    current_time = now or datetime.now(timezone.utc)
+    cutoff = current_time - timedelta(hours=WATCHLIST_ALERT_DEDUP_HOURS)
+    alert_key = build_watchlist_alert_delivery_key(alert_item)
+    existing = (
+        db.query(WatchlistAlertDelivery)
+        .filter(
+            WatchlistAlertDelivery.user_id == user_id,
+            WatchlistAlertDelivery.watchlist_id == watchlist_id,
+            WatchlistAlertDelivery.channel == channel,
+            WatchlistAlertDelivery.alert_key == alert_key,
+            WatchlistAlertDelivery.sent_at >= cutoff,
+        )
+        .first()
+    )
+    return existing is not None
+
+
+def record_watchlist_alert_delivery(
+    db: Session,
+    user_id: int,
+    watchlist_id: str,
+    alert_item: dict,
+    *,
+    channel: str,
+    now: datetime | None = None,
+) -> WatchlistAlertDelivery:
+    delivery = WatchlistAlertDelivery(
+        user_id=user_id,
+        watchlist_id=watchlist_id,
+        symbol=alert_item.get("symbol") or "",
+        channel=channel,
+        alert_key=build_watchlist_alert_delivery_key(alert_item),
+        alert_type=alert_item.get("alertType") or "watch",
+        priority_label=normalize_alert_priority(alert_item.get("priorityLabel")),
+        priority_score=clamp_alert_score(alert_item.get("priorityScore")),
+        sent_at=now or datetime.now(timezone.utc),
+    )
+    db.add(delivery)
+    return delivery
+
+
+def build_push_alert_payload(watchlist: WatchlistRecord, alert_item: dict) -> dict:
+    symbol = alert_item.get("symbol") or "watchlist item"
+    priority = str(alert_item.get("priorityLabel") or "alert").upper()
+    signal = alert_item.get("signal") if isinstance(alert_item.get("signal"), dict) else {}
+    direction = signal.get("direction") or "WATCH"
+    score = int(alert_item.get("priorityScore") or 0)
+    return {
+        "title": f"NexusPulse {priority} Alert: {symbol}",
+        "body": f"{direction} signal on {watchlist.name} with priority score {score}.",
+        "url": f"/analysis/{symbol}",
+        "watchlistId": watchlist.id,
+        "symbol": symbol,
+        "priority": alert_item.get("priorityLabel"),
+        "score": score,
+    }
+
+
+def dispatch_watchlist_push_alerts(
+    db: Session,
+    user: User,
+    watchlist: WatchlistRecord,
+    setting: WatchlistAlertSetting,
+) -> int:
+    if not setting.enabled or not setting.push_enabled:
+        return 0
+
+    payload = build_watchlist_alert_payload(db, user, watchlist, setting=setting)
+    dispatched = 0
+    now = datetime.now(timezone.utc)
+    for alert_item in payload.get("items", []):
+        notification = alert_item.get("notification") if isinstance(alert_item.get("notification"), dict) else {}
+        if not notification.get("pushEligible"):
+            continue
+        if was_watchlist_alert_recently_delivered(
+            db,
+            user.id,
+            watchlist.id,
+            alert_item,
+            channel="push",
+            now=now,
+        ):
+            continue
+
+        sent_count = PushService.send_notification_to_user(
+            db,
+            user.id,
+            build_push_alert_payload(watchlist, alert_item),
+        )
+        if sent_count:
+            record_watchlist_alert_delivery(
+                db,
+                user.id,
+                watchlist.id,
+                alert_item,
+                channel="push",
+                now=now,
+            )
+            dispatched += 1
+            logger.info(
+                "watchlist_push_alert_dispatched",
+                extra={
+                    "user_id": user.id,
+                    "watchlist_id": watchlist.id,
+                    "symbol": alert_item.get("symbol"),
+                    "priority": alert_item.get("priorityLabel"),
+                },
+            )
+
+    if dispatched:
+        db.commit()
+    return dispatched
+
+
+def dispatch_configured_watchlist_alerts(db: Session) -> int:
+    settings = (
+        db.query(WatchlistAlertSetting)
+        .filter(
+            WatchlistAlertSetting.enabled.is_(True),
+            WatchlistAlertSetting.push_enabled.is_(True),
+        )
+        .all()
+    )
+    dispatched = 0
+    for setting in settings:
+        user = setting.user
+        watchlist = setting.watchlist
+        if not user or not user.is_active or not watchlist or not watchlist.items:
+            continue
+        try:
+            dispatched += dispatch_watchlist_push_alerts(db, user, watchlist, setting)
+        except Exception:
+            logger.exception(
+                "watchlist_alert_dispatch_failed user_id=%s watchlist_id=%s",
+                setting.user_id,
+                setting.watchlist_id,
+            )
+    return dispatched
 
 
 def get_user_watchlist_symbol_name(db: Session, user: User, symbol: str) -> str | None:
@@ -472,6 +708,31 @@ async def auto_scanner_task():
         # Scan every 15 minutes
         await asyncio.sleep(60 * 15)
 
+
+async def watchlist_alert_dispatch_task():
+    logger.info(
+        "watchlist_alert_dispatcher_started interval_seconds=%s dedup_hours=%s",
+        WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS,
+        WATCHLIST_ALERT_DEDUP_HOURS,
+    )
+    await asyncio.sleep(WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS)
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                dispatched = dispatch_configured_watchlist_alerts(db)
+                logger.info(
+                    "watchlist_alert_dispatcher_cycle_completed",
+                    extra={"dispatched_alerts": dispatched},
+                )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("watchlist_alert_dispatcher_cycle_failed")
+
+        await asyncio.sleep(WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS)
+
 # Initialize database on startup
 @app.on_event("startup")
 async def on_startup():
@@ -488,6 +749,7 @@ async def on_startup():
     asyncio.create_task(alpaca_stream.start())
     # Start the auto-scanner
     asyncio.create_task(auto_scanner_task())
+    asyncio.create_task(watchlist_alert_dispatch_task())
     asyncio.create_task(backup_scheduler_task())
 
 @app.on_event("shutdown")
@@ -746,72 +1008,13 @@ def get_watchlist_alerts(
     db: Session = Depends(get_db),
 ):
     record = get_watchlist_record_or_404(db, current_user, id)
-    alert_setting = get_or_create_watchlist_alert_setting(db, current_user, record)
-    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
-
-    alert_items: list[dict] = []
-    for tracked in tracked_assets:
-        symbol = tracked["symbol"]
-        try:
-            analysis_result = service.get_stock_data(
-                symbol,
-                period="1mo",
-                interval="1h",
-                user=current_user,
-                include_news=False,
-                include_fundamentals=False,
-            )
-        except Exception:
-            logger.exception(
-                "watchlist_alert_analysis_failed symbol=%s user_id=%s",
-                symbol,
-                current_user.id,
-            )
-            analysis_result = {}
-
-        try:
-            news_payload = service.get_market_news(symbol, asset_profile=tracked)
-        except Exception:
-            logger.exception(
-                "watchlist_alert_news_failed symbol=%s user_id=%s",
-                symbol,
-                current_user.id,
-            )
-            news_payload = {}
-
-        alert_items.append(
-            build_watchlist_alert(
-                tracked,
-                analysis_result,
-                news_payload,
-                news_limit=news_limit,
-            )
-        )
-
-    alert_items.sort(
-        key=lambda current: (
-            current.get("priorityScore", 0),
-            current.get("news", {}).get("latestTimestamp") or "",
-            current.get("signal", {}).get("confidence", 0),
-        ),
-        reverse=True,
+    return build_watchlist_alert_payload(
+        db,
+        current_user,
+        record,
+        limit=limit,
+        news_limit=news_limit,
     )
-    alert_items = alert_items[:limit]
-
-    notification_plan = apply_alert_notifications(alert_items, alert_setting)
-    summary = summarize_watchlist_alerts(alert_items)
-    summary["trackedSymbols"] = len(tracked_assets)
-    summary["popupEligible"] = notification_plan["popupCount"]
-    summary["pushEligible"] = notification_plan["pushCount"]
-
-    return {
-        "watchlist": {"id": record.id, "name": record.name},
-        "alertSettings": serialize_alert_setting(alert_setting),
-        "notificationPlan": notification_plan,
-        "trackedAssets": tracked_assets,
-        "items": alert_items,
-        "summary": summary,
-    }
 
 # --- SCANNER ---
 

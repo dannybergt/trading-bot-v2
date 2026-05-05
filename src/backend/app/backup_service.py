@@ -14,6 +14,7 @@ from app.models import (
     PushSubscription,
     User,
     Watchlist,
+    WatchlistAlertDelivery,
     WatchlistAlertSetting,
     WatchlistItem,
     WatchlistItemTag,
@@ -39,6 +40,7 @@ class BackupService:
         watchlist_items = db.query(WatchlistItem).all()
         watchlist_item_tags = db.query(WatchlistItemTag).all()
         watchlist_alert_settings = db.query(WatchlistAlertSetting).all()
+        watchlist_alert_deliveries = db.query(WatchlistAlertDelivery).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -109,6 +111,21 @@ class BackupService:
                     }
                     for setting in watchlist_alert_settings
                 ],
+                "watchlist_alert_deliveries": [
+                    {
+                        "id": delivery.id,
+                        "user_id": delivery.user_id,
+                        "watchlist_id": delivery.watchlist_id,
+                        "symbol": delivery.symbol,
+                        "channel": delivery.channel,
+                        "alert_key": delivery.alert_key,
+                        "alert_type": delivery.alert_type,
+                        "priority_label": delivery.priority_label,
+                        "priority_score": delivery.priority_score,
+                        "sent_at": delivery.sent_at.isoformat() if delivery.sent_at else None,
+                    }
+                    for delivery in watchlist_alert_deliveries
+                ],
                 "push_subscriptions": [
                     {
                         "id": subscription.id,
@@ -172,6 +189,7 @@ class BackupService:
 
         if replace_existing:
             db.query(WatchlistItemTag).delete()
+            db.query(WatchlistAlertDelivery).delete()
             db.query(WatchlistAlertSetting).delete()
             db.query(WatchlistItem).delete()
             db.query(Watchlist).delete()
@@ -247,6 +265,24 @@ class BackupService:
                     push_enabled=record.get("push_enabled", False),
                     min_priority=record.get("min_priority", "high"),
                     min_score=record.get("min_score", 70),
+                )
+            )
+
+        db.flush()
+
+        for record in payload.get("watchlist_alert_deliveries", []):
+            db.add(
+                WatchlistAlertDelivery(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    watchlist_id=record["watchlist_id"],
+                    symbol=record["symbol"],
+                    channel=record["channel"],
+                    alert_key=record["alert_key"],
+                    alert_type=record.get("alert_type", "watch"),
+                    priority_label=record.get("priority_label", "low"),
+                    priority_score=record.get("priority_score", 0),
+                    sent_at=datetime.fromisoformat(record["sent_at"]) if record.get("sent_at") else None,
                 )
             )
 

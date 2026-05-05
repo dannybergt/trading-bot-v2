@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 import unittest
 
-from app.watchlist_alerts import build_watchlist_alert, summarize_watchlist_alerts
+from app.watchlist_alerts import (
+    build_watchlist_alert,
+    build_watchlist_alert_delivery_key,
+    summarize_watchlist_alerts,
+)
 
 
 class _FakeILoc:
@@ -144,6 +148,35 @@ class WatchlistAlertTests(unittest.TestCase):
         self.assertEqual(summary["providerUnavailable"], 1)
         self.assertEqual(summary["providerResearch"], 1)
         self.assertEqual(summary["providerMovers"], 1)
+
+    def test_delivery_key_is_stable_for_same_alert_state(self):
+        alert_item = {
+            "symbol": "VOO",
+            "alertType": "signal",
+            "priorityLabel": "high",
+            "priorityScore": 82,
+            "signal": {"direction": "UP", "confidence": 0.871},
+            "news": {"aggregateLabel": "bullish", "latestTimestamp": "2026-05-05T12:00:00+00:00"},
+            "providerContext": {"status": "live", "changePercent": 1.2},
+        }
+        same_alert_item = {
+            **alert_item,
+            "signal": {"direction": "UP", "confidence": 0.874},
+        }
+        changed_alert_item = {
+            **alert_item,
+            "priorityScore": 65,
+            "priorityLabel": "medium",
+        }
+
+        self.assertEqual(
+            build_watchlist_alert_delivery_key(alert_item),
+            build_watchlist_alert_delivery_key(same_alert_item),
+        )
+        self.assertNotEqual(
+            build_watchlist_alert_delivery_key(alert_item),
+            build_watchlist_alert_delivery_key(changed_alert_item),
+        )
 
 
 if __name__ == "__main__":
