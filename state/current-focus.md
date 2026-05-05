@@ -16,6 +16,12 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
+- Aktueller lokaler Produkt-Stand: Watchlist-Alert-Management umgesetzt; pro Watchlist gibt es persistente Alert-Settings fuer Alerts an/aus, Popups, Push-Bereitschaft, Mindestprioritaet und Mindestscore.
+- `/api/watchlists/{id}/alerts` annotiert Alert-Items jetzt mit `notification.popupEligible`/`pushEligible` und liefert `alertSettings` sowie `notificationPlan`; Backup/Export/Import sichern `watchlist_alert_settings`.
+- Das Dashboard rendert ein `Alert Management`-Panel im Watchlist-Bereich und koppelt In-App-Popups an die gespeicherten Einstellungen.
+- Verifikation: `bash ops/automation/test.sh`, `bash ops/automation/build.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`, `SKIP_BUILD=1 bash tests/run-ui-regression.sh`; UI bestaetigt `ui_watchlist_alert_management ok`.
+- Naechster Schritt nach Push/Actions: Alert-Ausloesung serverseitig periodisch/dedupliziert machen oder einen expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren.
+
 - Aktueller lokaler Produkt-Stand: Symbol-Research-Schnitt fuer `/api/research/{symbol}` plus UI-Panel `Provider Research` auf `/analysis/<symbol>` umgesetzt und lokal verifiziert
 - Verifikation: `bash ops/automation/test.sh`, `bash ops/automation/build.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`, `SKIP_BUILD=1 bash tests/run-ui-regression.sh`
 - Die API-Regression prueft jetzt Crypto- und ETF-Research-Kontext; die UI-Regression bestaetigt `ui_symbol_research ok`
@@ -37,7 +43,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - den ETF-/Krypto-Livepfad nach dem neuen Symbol-Research-Schnitt spaeter in echte Nutzer-Alerts/Popup-Alert-Management ausrollen
+  - Watchlist-Alerts nach dem neuen Alert-Management serverseitig periodisch/dedupliziert ausloesen
   - fuer den naechsten expliziten Release-Tag wieder den Upgrade-/Restore-Rehearsal-Pfad fahren
 
 ## Wichtiger Kontext

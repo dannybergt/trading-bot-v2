@@ -421,6 +421,14 @@ async function run() {
     );
     console.log("ui_watchlist_provider_coverage ok");
 
+    await waitForCondition(
+      client,
+      "watchlist alert management",
+      "!!document.getElementById('ui-patch-alert-management') && document.getElementById('ui-patch-alert-management').textContent.includes('Alert Management') && document.getElementById('ui-patch-alert-management').textContent.includes('Popups On') && document.getElementById('ui-patch-alert-management').textContent.includes('Push Off')",
+      15000,
+    );
+    console.log("ui_watchlist_alert_management ok");
+
     await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
     await waitForCondition(
       client,

@@ -31,5 +31,13 @@ def get_db():
 
 def init_db():
     """Create all tables."""
-    from app.models import PasswordResetToken, PushSubscription, User, Watchlist, WatchlistItem, WatchlistItemTag  # noqa: F401
+    from app.models import (  # noqa: F401
+        PasswordResetToken,
+        PushSubscription,
+        User,
+        Watchlist,
+        WatchlistAlertSetting,
+        WatchlistItem,
+        WatchlistItemTag,
+    )
     Base.metadata.create_all(bind=engine)

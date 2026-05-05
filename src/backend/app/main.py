@@ -14,7 +14,7 @@ import yfinance as yf
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.logging_config import (
@@ -33,7 +33,13 @@ from app.backup_service import BackupService, backup_scheduler_task
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.migrate_watchlists import migrate as migrate_watchlists
-from app.models import User, Watchlist as WatchlistRecord, WatchlistItem as WatchlistItemRecord, WatchlistItemTag
+from app.models import (
+    User,
+    Watchlist as WatchlistRecord,
+    WatchlistAlertSetting,
+    WatchlistItem as WatchlistItemRecord,
+    WatchlistItemTag,
+)
 from app.push_service import PushService
 from app.services import MarketDataService
 from app.watchlist_alerts import build_provider_context, build_watchlist_alert, summarize_watchlist_alerts
@@ -42,6 +48,7 @@ from app.websocket_manager import manager
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Trading Bot API")
+ALERT_PRIORITY_RANKS = {"low": 1, "medium": 2, "high": 3}
 
 
 def get_allowed_origins() -> list[str]:
@@ -165,6 +172,94 @@ def serialize_tracked_watchlist_item(record: WatchlistItemRecord) -> dict:
     return payload
 
 
+def normalize_alert_priority(value: str | None) -> str:
+    normalized = str(value or "high").strip().lower()
+    return normalized if normalized in ALERT_PRIORITY_RANKS else "high"
+
+
+def clamp_alert_score(value: int | None) -> int:
+    if value is None:
+        return 70
+    return max(0, min(int(value), 100))
+
+
+def get_or_create_watchlist_alert_setting(
+    db: Session,
+    user: User,
+    watchlist: WatchlistRecord,
+) -> WatchlistAlertSetting:
+    setting = (
+        db.query(WatchlistAlertSetting)
+        .filter(
+            WatchlistAlertSetting.user_id == user.id,
+            WatchlistAlertSetting.watchlist_id == watchlist.id,
+        )
+        .first()
+    )
+    if setting:
+        return setting
+
+    setting = WatchlistAlertSetting(
+        user_id=user.id,
+        watchlist_id=watchlist.id,
+        enabled=True,
+        toast_enabled=True,
+        push_enabled=False,
+        min_priority="high",
+        min_score=70,
+    )
+    db.add(setting)
+    db.commit()
+    db.refresh(setting)
+    return setting
+
+
+def serialize_alert_setting(setting: WatchlistAlertSetting) -> dict:
+    return {
+        "enabled": bool(setting.enabled),
+        "toastEnabled": bool(setting.toast_enabled),
+        "pushEnabled": bool(setting.push_enabled),
+        "minPriority": normalize_alert_priority(setting.min_priority),
+        "minScore": clamp_alert_score(setting.min_score),
+    }
+
+
+def alert_matches_setting(alert_item: dict, setting: WatchlistAlertSetting) -> bool:
+    if not setting.enabled:
+        return False
+
+    priority_rank = ALERT_PRIORITY_RANKS.get(str(alert_item.get("priorityLabel") or "low").lower(), 1)
+    min_priority_rank = ALERT_PRIORITY_RANKS[normalize_alert_priority(setting.min_priority)]
+    score = int(alert_item.get("priorityScore") or 0)
+    return priority_rank >= min_priority_rank and score >= clamp_alert_score(setting.min_score)
+
+
+def apply_alert_notifications(alert_items: list[dict], setting: WatchlistAlertSetting) -> dict:
+    popup_symbols: list[str] = []
+    push_symbols: list[str] = []
+
+    for item in alert_items:
+        matches = alert_matches_setting(item, setting)
+        popup_eligible = matches and bool(setting.toast_enabled)
+        push_eligible = matches and bool(setting.push_enabled)
+        item["notification"] = {
+            "popupEligible": popup_eligible,
+            "pushEligible": push_eligible,
+        }
+        if popup_eligible:
+            popup_symbols.append(item.get("symbol") or "")
+        if push_eligible:
+            push_symbols.append(item.get("symbol") or "")
+
+    return {
+        **serialize_alert_setting(setting),
+        "popupCount": len(popup_symbols),
+        "pushCount": len(push_symbols),
+        "popupSymbols": [symbol for symbol in popup_symbols if symbol],
+        "pushSymbols": [symbol for symbol in push_symbols if symbol],
+    }
+
+
 def get_user_watchlist_symbol_name(db: Session, user: User, symbol: str) -> str | None:
     canonical_symbol = canonicalize_symbol(symbol)
     record = (
@@ -215,6 +310,16 @@ class CreateWatchlistRequest(BaseModel):
 
 class RenameWatchlistRequest(BaseModel):
     name: str
+
+
+class WatchlistAlertSettingsRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool | None = None
+    toast_enabled: bool | None = Field(default=None, alias="toastEnabled")
+    push_enabled: bool | None = Field(default=None, alias="pushEnabled")
+    min_priority: str | None = Field(default=None, alias="minPriority")
+    min_score: int | None = Field(default=None, ge=0, le=100, alias="minScore")
 
 # Default Data
 DEFAULT_WATCHLISTS = [
@@ -547,6 +652,43 @@ def remove_item(id: str, symbol: str, current_user: User = Depends(get_current_u
     return serialize_watchlist(record)
 
 
+@app.get("/api/watchlists/{id}/alert-settings")
+def get_watchlist_alert_settings(
+    id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = get_watchlist_record_or_404(db, current_user, id)
+    setting = get_or_create_watchlist_alert_setting(db, current_user, record)
+    return serialize_alert_setting(setting)
+
+
+@app.put("/api/watchlists/{id}/alert-settings")
+def update_watchlist_alert_settings(
+    id: str,
+    req: WatchlistAlertSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = get_watchlist_record_or_404(db, current_user, id)
+    setting = get_or_create_watchlist_alert_setting(db, current_user, record)
+
+    if req.enabled is not None:
+        setting.enabled = req.enabled
+    if req.toast_enabled is not None:
+        setting.toast_enabled = req.toast_enabled
+    if req.push_enabled is not None:
+        setting.push_enabled = req.push_enabled
+    if req.min_priority is not None:
+        setting.min_priority = normalize_alert_priority(req.min_priority)
+    if req.min_score is not None:
+        setting.min_score = clamp_alert_score(req.min_score)
+
+    db.commit()
+    db.refresh(setting)
+    return serialize_alert_setting(setting)
+
+
 @app.get("/api/watchlists/{id}/news")
 def get_watchlist_news(
     id: str,
@@ -604,6 +746,7 @@ def get_watchlist_alerts(
     db: Session = Depends(get_db),
 ):
     record = get_watchlist_record_or_404(db, current_user, id)
+    alert_setting = get_or_create_watchlist_alert_setting(db, current_user, record)
     tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
 
     alert_items: list[dict] = []
@@ -655,11 +798,16 @@ def get_watchlist_alerts(
     )
     alert_items = alert_items[:limit]
 
+    notification_plan = apply_alert_notifications(alert_items, alert_setting)
     summary = summarize_watchlist_alerts(alert_items)
     summary["trackedSymbols"] = len(tracked_assets)
+    summary["popupEligible"] = notification_plan["popupCount"]
+    summary["pushEligible"] = notification_plan["pushCount"]
 
     return {
         "watchlist": {"id": record.id, "name": record.name},
+        "alertSettings": serialize_alert_setting(alert_setting),
+        "notificationPlan": notification_plan,
         "trackedAssets": tracked_assets,
         "items": alert_items,
         "summary": summary,

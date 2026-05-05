@@ -9,7 +9,15 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import PasswordResetToken, PushSubscription, User, Watchlist, WatchlistItem, WatchlistItemTag
+from app.models import (
+    PasswordResetToken,
+    PushSubscription,
+    User,
+    Watchlist,
+    WatchlistAlertSetting,
+    WatchlistItem,
+    WatchlistItemTag,
+)
 
 
 BACKUP_DIR = Path(os.getenv("BACKUP_DIR", Path(__file__).parent.parent / "data" / "backups"))
@@ -30,6 +38,7 @@ class BackupService:
         watchlists = db.query(Watchlist).all()
         watchlist_items = db.query(WatchlistItem).all()
         watchlist_item_tags = db.query(WatchlistItemTag).all()
+        watchlist_alert_settings = db.query(WatchlistAlertSetting).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -84,6 +93,21 @@ class BackupService:
                         "created_at": tag.created_at.isoformat() if tag.created_at else None,
                     }
                     for tag in watchlist_item_tags
+                ],
+                "watchlist_alert_settings": [
+                    {
+                        "id": setting.id,
+                        "user_id": setting.user_id,
+                        "watchlist_id": setting.watchlist_id,
+                        "enabled": setting.enabled,
+                        "toast_enabled": setting.toast_enabled,
+                        "push_enabled": setting.push_enabled,
+                        "min_priority": setting.min_priority,
+                        "min_score": setting.min_score,
+                        "created_at": setting.created_at.isoformat() if setting.created_at else None,
+                        "updated_at": setting.updated_at.isoformat() if setting.updated_at else None,
+                    }
+                    for setting in watchlist_alert_settings
                 ],
                 "push_subscriptions": [
                     {
@@ -148,6 +172,7 @@ class BackupService:
 
         if replace_existing:
             db.query(WatchlistItemTag).delete()
+            db.query(WatchlistAlertSetting).delete()
             db.query(WatchlistItem).delete()
             db.query(Watchlist).delete()
             db.query(PushSubscription).delete()
@@ -208,6 +233,20 @@ class BackupService:
                     id=record.get("id"),
                     watchlist_item_id=record["watchlist_item_id"],
                     tag=record["tag"],
+                )
+            )
+
+        for record in payload.get("watchlist_alert_settings", []):
+            db.add(
+                WatchlistAlertSetting(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    watchlist_id=record["watchlist_id"],
+                    enabled=record.get("enabled", True),
+                    toast_enabled=record.get("toast_enabled", True),
+                    push_enabled=record.get("push_enabled", False),
+                    min_priority=record.get("min_priority", "high"),
+                    min_score=record.get("min_score", 70),
                 )
             )
 

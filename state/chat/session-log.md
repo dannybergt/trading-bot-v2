@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-04-26
+  Kontext: Nach dem Symbol-Research-Schnitt soll Phase 1 weiter in echtes Nutzer-Alert-/Popup-Management gehen.
+  Erledigt: `watchlist_alert_settings` speichert pro Nutzer/Watchlist Alert-Aktivierung, Popup-Schalter, Push-Bereitschaft, Mindestprioritaet und Mindestscore; neue Endpunkte `/api/watchlists/{id}/alert-settings` lesen/schreiben diese Settings. `/api/watchlists/{id}/alerts` liefert jetzt `alertSettings`, `notificationPlan` sowie `notification.popupEligible`/`pushEligible` pro Alert-Item, und Backup/Export/Import decken die Settings ab. Das Dashboard zeigt ein `Alert Management`-Panel im Watchlist-Bereich; In-App-Popups werden nur noch fuer popup-eligible High-Priority-Alerts ausgelöst. API-Regression prueft Settings, Notification-Plan und Backup/Export; UI-Regression bestaetigt `ui_watchlist_alert_management ok`.
+  Offen: Nach Push den GitHub-Actions-Publish-Lauf beobachten; danach als naechster Schritt serverseitige periodische/deduplizierte Alert-Ausloesung oder expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren.
+
+- Datum: 2026-04-26
   Kontext: Phase 1 soll wie besprochen weitergezogen werden: der ETF-/Krypto-Providerpfad soll aus Watchlist/Alerts in eine echte Symbol-Research-Flaeche wandern.
   Erledigt: Neuer Endpunkt `/api/research/{symbol}` liefert normalisierte Assetdaten, Providerstatus, Quote, Provider-Research, Fundamentals und News; fuer beobachtete Symbole nutzt der Endpunkt Watchlist-Namen als Klassifizierungsfallback, damit ETFs wie `VOO` auch ohne sofort verfuegbare externe Metadaten korrekt als ETF laufen. `src/frontend-dist/ui-patches.js` rendert auf `/analysis/<symbol>` jetzt ein `Provider Research`-Panel mit Providerstatus, Kurs/Move, History-Abdeckung, ETF-Research, Top-Holdings, Headlines und Stock-Fundamentals. API-Regression prueft Crypto- und ETF-Research-Kontext; UI-Regression bestaetigt `ui_symbol_research ok`.
   Offen: Nach Push den GitHub-Actions-Publish-Lauf beobachten; danach als naechster Phase-1-Schnitt echte Nutzer-Alerts/Popup-Alert-Management aus dem vorhandenen Watchlist-Alert-Feed bauen oder einen expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren.

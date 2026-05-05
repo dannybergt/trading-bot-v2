@@ -95,6 +95,7 @@ class WatchlistAlertTests(unittest.TestCase):
                 "priorityLabel": "high",
                 "alertType": "signal",
                 "signal": {"direction": "UP"},
+                "notification": {"popupEligible": True, "pushEligible": True},
                 "providerContext": {
                     "status": "live",
                     "source": "Alpha Vantage",
@@ -106,6 +107,7 @@ class WatchlistAlertTests(unittest.TestCase):
                 "priorityLabel": "medium",
                 "alertType": "news",
                 "signal": {"direction": "DOWN"},
+                "notification": {"popupEligible": False, "pushEligible": False},
                 "providerContext": {
                     "status": "partial",
                     "source": "Alpha Vantage",
@@ -117,6 +119,7 @@ class WatchlistAlertTests(unittest.TestCase):
                 "priorityLabel": "low",
                 "alertType": "watchlist",
                 "signal": {"direction": "HOLD"},
+                "notification": {"popupEligible": False, "pushEligible": False},
                 "providerContext": {
                     "status": "unavailable",
                     "source": "Alpha Vantage",

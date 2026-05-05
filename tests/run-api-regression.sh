@@ -365,6 +365,38 @@ assert "research" in etf_research_payload
 assert "fundamentals" in etf_research_payload
 print("etf research context ok")
 
+alert_settings = requests.get(
+    f"{base}/api/watchlists/{watchlist_id}/alert-settings",
+    headers=headers,
+    timeout=30,
+)
+alert_settings.raise_for_status()
+alert_settings_payload = alert_settings.json()
+assert alert_settings_payload["enabled"] is True
+assert alert_settings_payload["toastEnabled"] is True
+assert alert_settings_payload["pushEnabled"] is False
+assert alert_settings_payload["minPriority"] == "high"
+assert alert_settings_payload["minScore"] == 70
+
+alert_settings_update = requests.put(
+    f"{base}/api/watchlists/{watchlist_id}/alert-settings",
+    headers=headers,
+    json={
+        "enabled": True,
+        "toastEnabled": True,
+        "pushEnabled": True,
+        "minPriority": "low",
+        "minScore": 0,
+    },
+    timeout=30,
+)
+alert_settings_update.raise_for_status()
+alert_settings_update_payload = alert_settings_update.json()
+assert alert_settings_update_payload["pushEnabled"] is True
+assert alert_settings_update_payload["minPriority"] == "low"
+assert alert_settings_update_payload["minScore"] == 0
+print("watchlist alert settings ok")
+
 watchlist_alerts = requests.get(
     f"{base}/api/watchlists/{watchlist_id}/alerts",
     headers=headers,
@@ -379,6 +411,10 @@ assert watchlist_alerts_payload["summary"]["alertItems"] == 2
 assert "providerLive" in watchlist_alerts_payload["summary"]
 assert "providerResearch" in watchlist_alerts_payload["summary"]
 assert "providerMovers" in watchlist_alerts_payload["summary"]
+assert watchlist_alerts_payload["alertSettings"]["pushEnabled"] is True
+assert watchlist_alerts_payload["notificationPlan"]["pushCount"] == 2
+assert watchlist_alerts_payload["summary"]["popupEligible"] == 2
+assert watchlist_alerts_payload["summary"]["pushEligible"] == 2
 tracked_alert_crypto = next(item for item in watchlist_alerts_payload["trackedAssets"] if item["symbol"] == "BTC/USD")
 tracked_alert_etf = next(item for item in watchlist_alerts_payload["trackedAssets"] if item["symbol"] == "VOO")
 assert tracked_alert_crypto["tags"] == ["priority", "swing"]
@@ -402,6 +438,8 @@ for alert_item in (crypto_alert_item, etf_alert_item):
     assert alert_item["news"]["aggregateLabel"] in {"bullish", "bearish", "neutral"}
     assert alert_item["providerContext"]["status"] in {"live", "partial", "unavailable"}
     assert "researchAvailable" in alert_item["providerContext"]
+    assert alert_item["notification"]["popupEligible"] is True
+    assert alert_item["notification"]["pushEligible"] is True
 print("watchlist alerts priority feed ok")
 
 watchlist_remove_etf_item = requests.delete(
@@ -477,6 +515,10 @@ download = requests.get(f"{base}/api/admin/backups/{backup_filename}", headers=h
 download.raise_for_status()
 backup_payload = download.json()
 assert backup_payload["schema_version"] == 1
+assert any(
+    setting["watchlist_id"] == watchlist_id and setting["push_enabled"] is True
+    for setting in backup_payload["data"].get("watchlist_alert_settings", [])
+)
 print("backup download ok")
 
 export_state = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
@@ -485,6 +527,10 @@ export_payload = export_state.json()
 assert export_payload["schema_version"] == 1
 exported_user_emails = {user["email"] for user in export_payload["data"]["users"]}
 assert exported_user_emails == {email, "member@example.com"}
+assert any(
+    setting["watchlist_id"] == watchlist_id and setting["min_priority"] == "low"
+    for setting in export_payload["data"].get("watchlist_alert_settings", [])
+)
 print("export ok")
 
 platform_import = requests.post(

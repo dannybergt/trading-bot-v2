@@ -192,22 +192,72 @@
     return next;
   }
 
-  async function fetchJson(url) {
+  async function fetchJson(url, options) {
     const token = getAccessToken();
     if (!token) {
       throw new Error("Authentication token missing");
     }
 
-    const response = await fetch(url, {
-      headers: {
+    const headers = Object.assign(
+      {
         Authorization: "Bearer " + token,
       },
-    });
+      (options && options.headers) || {},
+    );
+    if (options && options.body !== undefined && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const response = await fetch(
+      url,
+      Object.assign({}, options || {}, {
+        headers,
+      }),
+    );
 
     if (!response.ok) {
       throw new Error("Request failed with status " + response.status);
     }
     return response.json();
+  }
+
+  function getAlertSettings(alerts) {
+    const settings = alerts && alerts.alertSettings ? alerts.alertSettings : {};
+    return {
+      enabled: settings.enabled !== false,
+      toastEnabled: settings.toastEnabled !== false,
+      pushEnabled: settings.pushEnabled === true,
+      minPriority: ["low", "medium", "high"].includes(settings.minPriority) ? settings.minPriority : "high",
+      minScore:
+        Number.isFinite(Number(settings.minScore)) && Number(settings.minScore) >= 0
+          ? Math.min(100, Math.max(0, Number(settings.minScore)))
+          : 70,
+    };
+  }
+
+  function updateAlertSettings(watchlistMeta, updates) {
+    if (!watchlistMeta || !watchlistMeta.id) {
+      return;
+    }
+
+    const entry = getCachedInsights(watchlistMeta.id);
+    const current = getAlertSettings(entry && entry.alerts ? entry.alerts : null);
+    const payload = Object.assign({}, current, updates);
+
+    fetchJson("/api/watchlists/" + encodeURIComponent(watchlistMeta.id) + "/alert-settings", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+      .then(function () {
+        WATCHLIST_STATE.cache.delete(watchlistMeta.id);
+        ensureWatchlistInsights(watchlistMeta);
+        schedulePatches();
+      })
+      .catch(function (error) {
+        updateInsightCache(watchlistMeta, {
+          alertsError: error instanceof Error ? error.message : String(error),
+        });
+      });
   }
 
   function ensureWatchlistInsights(watchlistMeta) {
@@ -751,6 +801,142 @@
       }
       section.appendChild(grid);
     }
+
+    return section;
+  }
+
+  function getPriorityLabel(value) {
+    if (value === "low") {
+      return "Low";
+    }
+    if (value === "medium") {
+      return "Medium";
+    }
+    return "High";
+  }
+
+  function buildAlertManagementSection(watchlistMeta, alerts) {
+    const settings = getAlertSettings(alerts);
+    const notificationPlan = alerts && alerts.notificationPlan ? alerts.notificationPlan : {};
+    const section = createNode(
+      "section",
+      "mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4",
+    );
+    section.id = "ui-patch-alert-management";
+
+    const header = createNode("div", "flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between");
+    const copy = createNode("div");
+    copy.appendChild(createNode("h5", "text-sm font-bold text-slate-900 dark:text-white", "Alert Management"));
+    copy.appendChild(
+      createNode(
+        "p",
+        "mt-1 text-sm text-slate-500 dark:text-slate-400",
+        "Watchlist alert delivery for " + ((alerts && alerts.watchlist && alerts.watchlist.name) || (watchlistMeta && watchlistMeta.name) || "this list") + ".",
+      ),
+    );
+    header.appendChild(copy);
+
+    const statusPills = createNode("div", "flex flex-wrap items-center gap-2");
+    statusPills.appendChild(
+      buildPill(
+        settings.enabled ? "Alerts on" : "Alerts off",
+        settings.enabled
+          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-300",
+      ),
+    );
+    statusPills.appendChild(
+      buildPill(
+        (notificationPlan.popupCount || 0) + " popup-ready",
+        "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
+      ),
+    );
+    statusPills.appendChild(
+      buildPill(
+        (notificationPlan.pushCount || 0) + " push-ready",
+        "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+      ),
+    );
+    header.appendChild(statusPills);
+    section.appendChild(header);
+
+    const controls = createNode("div", "mt-4 flex flex-wrap items-center gap-2");
+    controls.appendChild(
+      createActionButton(
+        settings.enabled ? "Disable Alerts" : "Enable Alerts",
+        settings.enabled
+          ? "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500"
+          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20",
+        function () {
+          updateAlertSettings(watchlistMeta, { enabled: !settings.enabled });
+        },
+      ),
+    );
+    controls.appendChild(
+      createActionButton(
+        settings.toastEnabled ? "Popups On" : "Popups Off",
+        settings.toastEnabled
+          ? "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300 hover:bg-rose-500/20"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500",
+        function () {
+          updateAlertSettings(watchlistMeta, { toastEnabled: !settings.toastEnabled });
+        },
+      ),
+    );
+    controls.appendChild(
+      createActionButton(
+        settings.pushEnabled ? "Push On" : "Push Off",
+        settings.pushEnabled
+          ? "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500",
+        function () {
+          updateAlertSettings(watchlistMeta, { pushEnabled: !settings.pushEnabled });
+        },
+      ),
+    );
+
+    for (const priority of ["high", "medium", "low"]) {
+      controls.appendChild(
+        createActionButton(
+          getPriorityLabel(priority) + "+",
+          settings.minPriority === priority
+            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+            : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500",
+          function () {
+            updateAlertSettings(watchlistMeta, { minPriority: priority });
+          },
+        ),
+      );
+    }
+
+    const scoreLabel = buildPill(
+      "Score " + settings.minScore + "+",
+      "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200",
+    );
+    controls.appendChild(scoreLabel);
+    controls.appendChild(
+      createActionButton(
+        "Score 70",
+        settings.minScore === 70
+          ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500",
+        function () {
+          updateAlertSettings(watchlistMeta, { minScore: 70 });
+        },
+      ),
+    );
+    controls.appendChild(
+      createActionButton(
+        "Score 50",
+        settings.minScore === 50
+          ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500",
+        function () {
+          updateAlertSettings(watchlistMeta, { minScore: 50 });
+        },
+      ),
+    );
+    section.appendChild(controls);
 
     return section;
   }
@@ -1345,7 +1531,11 @@
     }
 
     const highPriorityItems = alerts.items.filter(function (item) {
-      return item.priorityLabel === "high";
+      return (
+        item.notification &&
+        item.notification.popupEligible &&
+        item.priorityLabel === "high"
+      );
     });
     const latestKeys = new Set(highPriorityItems.map(function (item) {
       return buildAlertToastKey(watchlistMeta.id, item);
@@ -1388,6 +1578,21 @@
       alerts && alerts.summary ? alerts.summary.highPriority : 0,
       news && news.summary ? news.summary.newsItems : 0,
       trackedAssets.length,
+      alerts && alerts.alertSettings
+        ? [
+            alerts.alertSettings.enabled,
+            alerts.alertSettings.toastEnabled,
+            alerts.alertSettings.pushEnabled,
+            alerts.alertSettings.minPriority,
+            alerts.alertSettings.minScore,
+          ].join(":")
+        : "",
+      alerts && alerts.notificationPlan
+        ? [
+            alerts.notificationPlan.popupCount,
+            alerts.notificationPlan.pushCount,
+          ].join(":")
+        : "",
       trackedSummary.assetClasses[0] ? trackedSummary.assetClasses[0][0] + ":" + trackedSummary.assetClasses[0][1] : "",
       trackedSummary.tags[0] ? trackedSummary.tags[0][0] + ":" + trackedSummary.tags[0][1] : "",
       providerSummary.live + ":" + providerSummary.partial + ":" + providerSummary.research + ":" + providerSummary.movers,
@@ -1412,6 +1617,18 @@
           ].join(":");
         })
         .join(","),
+      alerts && alerts.items
+        ? alerts.items
+            .slice(0, 4)
+            .map(function (item) {
+              return [
+                item.symbol || "",
+                item.notification && item.notification.popupEligible ? "popup" : "",
+                item.notification && item.notification.pushEligible ? "push" : "",
+              ].join(":");
+            })
+            .join(",")
+        : "",
       alerts && alerts.items && alerts.items[0] ? alerts.items[0].symbol : "",
       entry && entry.error ? entry.error : "",
     ];
@@ -1605,6 +1822,9 @@
       }
       tagSection.appendChild(tagRow);
       assetSection.appendChild(tagSection);
+      if (watchlistMeta) {
+        assetSection.appendChild(buildAlertManagementSection(watchlistMeta, alerts));
+      }
       assetSection.appendChild(buildProviderCoverageSection(providerSummary));
 
       const alertBySymbol = new Map();
