@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-05-05
+  Kontext: Nach erfolgreichem Push-Alert-Dispatcher soll ein expliziter Release-Tag gebaut und der Docker-Hub-Upgrade-/Restore-Pfad validiert werden.
+  Erledigt: Annotierter Git-Tag `v2026.05.05-1` wurde auf Commit `ec48455` gesetzt und gepusht. GitHub Actions `publish #16` fuer den Tag lief erfolgreich und synchronisierte die versionierten Docker-Hub-Images. `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack. Upgrade-Record: `state/runtime/deployments/deployment-20260505T202750Z.env`; Backend-Digest `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`; Frontend-Digest `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`.
+  Offen: Produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen und einen Push-Konfigurations-Smoke-Test bauen, der keine echten Nutzergeraete belaestigt.
+
+- Datum: 2026-05-05
   Kontext: Nach dem Watchlist-Alert-Management soll die serverseitige periodische/deduplizierte Alert-Ausloesung umgesetzt werden.
   Erledigt: Gemeinsamer Watchlist-Alert-Payload-Aufbau fuer API und Dispatcher eingefuehrt; neuer Background-Dispatcher wertet Watchlists mit aktivem `pushEnabled` periodisch aus und sendet Web-Push fuer `notification.pushEligible` Alerts. Erfolgreiche Push-Zustellungen werden in `watchlist_alert_deliveries` mit stabilem Alert-Key gespeichert und innerhalb des konfigurierbaren Dedupe-Fensters nicht erneut gesendet. `PushService` meldet erfolgreiche Zustellzahlen zurueck; Backup/Export/Import sichern die Delivery-Historie. Unit-Test deckt stabile Dedupe-Keys ab, API-Regression prueft die neue Backup-/Export-Flaeche.
   Offen: Lokalen UI-Regressionslauf fuer den neuen Backend-Stand noch ausfuehren, danach Commit/Push und GitHub Actions beobachten. Naechster Produktschritt danach: expliziter Release-Tag mit Upgrade-/Restore-Rehearsal oder produktive Push-/VAPID-Haertung.

@@ -3,8 +3,8 @@
 ## Stand
 
 - Status: Plattformbasis mit validiertem PostgreSQL-Laufzeitpfad, Bootstrap-Superadmin ohne initialen MFA-Zwang, produktivem Passwort-Reset-Delivery-Pfad, Backup/Export/Import/Download-Adminpfaden, gehaertetem Scheduler, request-korreliertem strukturiertem Backend-Logging sowie mehreren Phase-1-Lieferungen fuer Assetklassifizierung, Watchlist-Tags, Watchlist-News-Bindung, priorisierten Watchlist-Alerts, deren sichtbare Dashboard-Nutzung und jetzt einem echten optionalen Alpha-Vantage-Providerpfad fuer ETFs und Krypto umgesetzt
-- Letzte Aktualisierung: 2026-04-26
-- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.03.18-2` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, priorisierte Watchlist-Alerts, Provider-Coverage im Dashboard, einen optionalen Alpha-Vantage-Livepfad fuer ETFs und Krypto, einen Symbol-Research-Schnitt auf `/api/research/{symbol}` mit sichtbarem `Provider Research`-Panel auf `/analysis/<symbol>`, persistiertes Watchlist-Alert-Management mit Popup-/Push-Eligibility sowie einen serverseitigen periodischen Watchlist-Push-Dispatcher mit Delivery-Deduplizierung; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, der lokale Betriebsweg laedt fuer wiederkehrende Sitzungen eine persistente `.env.local` als private Override-Datei fuer Keys und persoenliche Zugangsdaten; naechster Fokus ist ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal oder produktive Push-/VAPID-Haertung
+- Letzte Aktualisierung: 2026-05-05
+- Aktive Arbeit: API- und UI-Regression sind als Gates verankert; der verlustfreie Docker-Hub-Deploy-/Upgrade-Pfad ist fuer Release `2026.05.05-1` durchgeprobt, HTTP-Logs tragen Request-ID und redaktierte Audit-Felder, Phase 1 liefert normalisierte Assetmetadaten, Watchlist-Tags, aggregierte Watchlist-News, priorisierte Watchlist-Alerts, Provider-Coverage im Dashboard, einen optionalen Alpha-Vantage-Livepfad fuer ETFs und Krypto, einen Symbol-Research-Schnitt auf `/api/research/{symbol}` mit sichtbarem `Provider Research`-Panel auf `/analysis/<symbol>`, persistiertes Watchlist-Alert-Management mit Popup-/Push-Eligibility sowie einen serverseitigen periodischen Watchlist-Push-Dispatcher mit Delivery-Deduplizierung; der automatische GitHub-Actions-Publish-Pfad ist mit echten Docker-Hub-Secrets live bestaetigt, der lokale Betriebsweg laedt fuer wiederkehrende Sitzungen eine persistente `.env.local` als private Override-Datei fuer Keys und persoenliche Zugangsdaten; naechster Fokus ist produktive Push-/VAPID-Haertung
 
 ## Gesichert verifiziert
 
@@ -47,6 +47,10 @@
   - `dbergt/trading-bot-backend:2026.03.18-2` -> `sha256:29cb70ebac978e0a90e9f95b605638e7894391d21ad0123d2cd6d46536986f82`
   - `dbergt/trading-bot-frontend:2026.03.18-2` -> `sha256:201169e45e11e6edc2fade078cda4d93dfff509dd65d6a42394b7def31fe7167`
 - vollstaendiges Docker-Hub-Upgrade-/Restore-Rehearsal fuer `2026.03.18-2` lief erfolgreich durch; der Upgrade-Record liegt unter `state/runtime/deployments/deployment-20260318T213234Z.env`
+- Docker-Hub-Release `2026.05.05-1` wurde erfolgreich ueber GitHub Actions `publish #16` gepusht:
+  - `dbergt/trading-bot-backend:2026.05.05-1` -> `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`
+  - `dbergt/trading-bot-frontend:2026.05.05-1` -> `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`
+- vollstaendiges Docker-Hub-Upgrade-/Restore-Rehearsal fuer `2026.05.05-1` lief erfolgreich durch; der Upgrade-Record liegt unter `state/runtime/deployments/deployment-20260505T202750Z.env`
 - GitHub-Repository `https://github.com/dannybergt/trading-bot-v2.git` ist jetzt initial befuellt; lokales `main` trackt `origin/main`
 - der Restore-Blocker im Legacy-Watchlist-Migrationspfad wurde behoben: bei nicht-SQLite-Datenbanken wird der SQLite-Migrationspfad nun sauber uebersprungen statt den Startup zu crashen
 - Backend-Logging fuehrt jetzt pro HTTP-Request eine `X-Request-ID`, schreibt strukturierte Request-Metadaten in JSON-Logs und redigiert identifizierende Audit-Werte wie E-Mail-Adressen und Push-Endpoints auf Fingerprints
@@ -125,7 +129,6 @@
 ## Naechste Schritte
 
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
-- fuer den naechsten produktiven Stand einen expliziten Release-Tag erzeugen und danach den Upgrade-/Restore-Rehearsal-Pfad gegen diesen Stand fahren
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren

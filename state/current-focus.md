@@ -16,11 +16,15 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
+- Aktueller Release-Stand: `v2026.05.05-1` auf Commit `ec48455` (`Dispatch watchlist push alerts`) ist gepusht, GitHub-Actions-`publish` run `#16` lief erfolgreich und synchronisierte die versionierten Docker-Hub-Tags.
+- Docker-Hub-Rehearsal fuer `IMAGE_TAG=2026.05.05-1` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack.
+- Rehearsal-Artefakte: Deployment-Record `state/runtime/deployments/deployment-20260505T202750Z.env`; Backend-Digest `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`; Frontend-Digest `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`.
+- Naechster sinnvoller Schritt: produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen und einen Smoke-Test fuer Push-Konfiguration bauen, ohne echte Nutzergeraete zu belaestigen.
+
 - Aktueller lokaler Produkt-Stand: Serverseitiger Watchlist-Alert-Dispatcher umgesetzt; Watchlists mit aktivem `pushEnabled` werden periodisch ausgewertet und erfolgreiche Web-Push-Zustellungen persistent dedupliziert.
 - Neue Tabelle `watchlist_alert_deliveries` speichert pro Nutzer, Watchlist, Symbol, Channel, Alert-Key, Prioritaet und Zeitstempel die Zustellhistorie; Backup/Export/Import sichern diese Historie mit.
 - Der Alert-Feed-Aufbau ist jetzt als gemeinsame Payload-Funktion wiederverwendet, sodass API und Dispatcher dieselbe Priorisierung, Settings-Auswertung und `notification.pushEligible`-Logik nutzen.
-- Verifikation: `bash ops/automation/build.sh`, `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`; offen ist noch der lokale UI-Regressionslauf und danach Commit/Push/Actions.
-- Naechster Schritt nach Push/Actions: expliziten Release-Tag mit Upgrade-/Restore-Rehearsal fahren oder Push-/VAPID-Produktionskonfiguration haerten.
+- Verifikation: `bash ops/automation/build.sh`, `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`, `SKIP_BUILD=1 bash tests/run-ui-regression.sh`; `ci #21`, `codeql #27` und `publish #15` fuer `ec48455` erfolgreich.
 
 - Aktueller lokaler Produkt-Stand: Watchlist-Alert-Management umgesetzt; pro Watchlist gibt es persistente Alert-Settings fuer Alerts an/aus, Popups, Push-Bereitschaft, Mindestprioritaet und Mindestscore.
 - `/api/watchlists/{id}/alerts` annotiert Alert-Items jetzt mit `notification.popupEligible`/`pushEligible` und liefert `alertSettings` sowie `notificationPlan`; Backup/Export/Import sichern `watchlist_alert_settings`.
@@ -49,8 +53,8 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - fuer den naechsten expliziten Release-Tag wieder den Upgrade-/Restore-Rehearsal-Pfad fahren
   - produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen
+  - optional danach Live-Smokes fuer den neuen Release-Stand mit gesetztem Alpha-Vantage-Key fahren
 
 ## Wichtiger Kontext
 
