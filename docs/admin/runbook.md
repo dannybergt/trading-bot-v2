@@ -29,7 +29,7 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
 `start.sh` setzt ohne weitere Angabe `IMAGE_TAG=latest`, zieht Backend und Frontend frisch von Docker Hub und ruft danach den normalen Deploy-/Upgrade-Pfad auf. Fuer einen festen Stand:
 
 - `IMAGE_TAG=sha-92cefb3138e6 bash ops/automation/start.sh`
-- `IMAGE_TAG=2026.03.18-2 bash ops/automation/start.sh`
+- `IMAGE_TAG=2026.05.05-1 bash ops/automation/start.sh`
 
 ## Docker-Hub-Deploy
 
@@ -66,9 +66,9 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
 - reproduzierbare Browser/UI-Laufzeitprobe:
   - `bash tests/run-ui-regression.sh`
 - reproduzierbare Upgrade-/Restore-Laufzeitprobe ueber Docker Hub:
-  - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
+  - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
 - reproduzierbare Alpha-Vantage-Liveprobe fuer ETF-/Krypto-Providerdaten:
-  - `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=sha-d4939da591ec bash tests/run-alpha-vantage-live-smoke.sh`
+  - `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=2026.05.05-1 bash tests/run-alpha-vantage-live-smoke.sh`
 - Low-Level-Browserprobe gegen bereits laufenden Stack:
   - `node tests/run-ui-regression.mjs`
 - gepruefte Pfade:

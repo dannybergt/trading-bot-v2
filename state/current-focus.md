@@ -19,6 +19,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Aktueller Release-Stand: `v2026.05.05-1` auf Commit `ec48455` (`Dispatch watchlist push alerts`) ist gepusht, GitHub-Actions-`publish` run `#16` lief erfolgreich und synchronisierte die versionierten Docker-Hub-Tags.
 - Docker-Hub-Rehearsal fuer `IMAGE_TAG=2026.05.05-1` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack.
 - Rehearsal-Artefakte: Deployment-Record `state/runtime/deployments/deployment-20260505T202750Z.env`; Backend-Digest `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`; Frontend-Digest `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`.
+- Gesamtplan-Verankerung: `docs/admin/project-plan.md` beschreibt aktuellen Release, Phasenposition, Sicherheitsachsen, Architekturachsen und Prioritaeten; README, Roadmap, Release- und Security-Doku wurden darauf ausgerichtet.
 - Naechster sinnvoller Schritt: produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen und einen Smoke-Test fuer Push-Konfiguration bauen, ohne echte Nutzergeraete zu belaestigen.
 
 - Aktueller lokaler Produkt-Stand: Serverseitiger Watchlist-Alert-Dispatcher umgesetzt; Watchlists mit aktivem `pushEnabled` werden periodisch ausgewertet und erfolgreiche Web-Push-Zustellungen persistent dedupliziert.

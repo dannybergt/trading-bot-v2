@@ -15,6 +15,17 @@ Das Produkt soll sich von einem rekonstruierten MVP zu einer vollwertigen Tradin
 - Export, Import, manuelle und geplante Backups
 - permanenter Build-/Sync-Pfad Richtung Docker Hub
 
+## Aktueller Standort
+
+Der operative Gesamtplan und der aktuelle Release-Stand sind in `docs/admin/project-plan.md` verankert. Kurzstand am 2026-05-05:
+
+- validierter Release: `v2026.05.05-1` auf Produkt-Commit `ec48455`
+- Phase 0 ist operativ weitgehend abgeschlossen und muss fuer jeden Release wiederholt werden
+- Phase 1 ist funktional und releasefaehig: Assetklassen, Watchlists, Provider-Kontext, Research, Alert-Management und serverseitiger Push-Dispatcher stehen
+- Phase 2 ist begonnen: Symbol-Research und Provider-Research-Panel sind vorhanden
+- Phase 3 und Phase 4 bleiben bewusst spaeter, nach Daten-/Security-/Migrationshaertung
+- naechster Fokus: produktive Push-/VAPID-Haertung, danach DB-Migrationen und Provider-Ausbau
+
 ## Phasen
 
 ### Phase 0: Plattform und Betrieb

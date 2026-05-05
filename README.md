@@ -15,11 +15,14 @@ Stand der Synchronisierung:
 Das Tool ist eine AI-gestuetzte Trading-Anwendung mit:
 
 - FastAPI-Backend fuer Marktanalyse, Scanner, Watchlists, Auth, MFA, Push und Alpaca-Integration
-- priorisierter Watchlist-Alert-Feed mit Signal-, News- und Tag-Kontext als Backend-Basis fuer spaetere Popups
+- priorisierter Watchlist-Alert-Feed mit Signal-, News-, Tag- und Provider-Kontext
+- persistiertes Watchlist-Alert-Management und serverseitiger Watchlist-Push-Dispatcher mit Delivery-Deduplizierung
 - Nginx-Frontend mit bereits gebautem Web-Bundle, SPA-Fallback sowie `/api`-/`/ws`-Proxy zum Backend
-- SQLAlchemy-Persistenz mit SQLite-Fallback und PostgreSQL-Ready-Pfad fuer User, Reset-Tokens und Push-Subscriptions
+- SQLAlchemy-Persistenz mit SQLite-Fallback und PostgreSQL-Ready-Pfad fuer User, Reset-Tokens, Watchlists, Alert-Settings, Alert-Deliveries und Push-Subscriptions
 - externer Datenintegration ueber Alpaca, yfinance, Alpha Vantage, FIGI/WKN/ISIN-Suche
 - ML-gestuetzter Kursprognose mit `scikit-learn` und `xgboost`
+
+Der aktuelle Gesamtstand und die Phasenposition sind in `docs/admin/project-plan.md` verankert. Aktuell vollstaendig verifizierter Release: `2026.05.05-1`.
 
 ## Lokale Struktur
 
@@ -64,11 +67,11 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 `start.sh` nutzt standardmaessig Docker Hub `latest`. Ein expliziter Stand bleibt moeglich:
 
 - `IMAGE_TAG=sha-92cefb3138e6 bash ops/automation/start.sh`
-- `IMAGE_TAG=2026.03.18-2 bash ops/automation/start.sh`
+- `IMAGE_TAG=2026.05.05-1 bash ops/automation/start.sh`
 
 ## Docker-Hub-Deploy
 
-1. in `.env` einen expliziten Release-Tag setzen, z. B. `IMAGE_TAG=2026.03.18-1`
+1. in `.env` einen expliziten Release-Tag setzen, z. B. `IMAGE_TAG=2026.05.05-1`
 2. optional direkte Image-Refs setzen oder aus Namespace, Image-Namen und Tag ableiten lassen
 3. `bash ops/automation/deploy.sh`
 4. der Deploy-Pfad erstellt vor einem Upgrade automatisch einen PostgreSQL-Dump und, wenn das Backend bereits laeuft, einen App-Snapshot in `state/runtime/backups`
@@ -83,7 +86,7 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
   - `docker.io/<namespace>/trading-bot-frontend:latest`
   - `docker.io/<namespace>/trading-bot-backend:sha-<commit>`
   - `docker.io/<namespace>/trading-bot-frontend:sha-<commit>`
-- fuer Release-Tags `v2026.03.18-3` entstehen die versionierten Docker-Hub-Tags `2026.03.18-3`
+- fuer Release-Tags `v2026.05.05-1` entstehen die versionierten Docker-Hub-Tags `2026.05.05-1`
 - dafuer muessen in GitHub Actions mindestens `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` als Repository-Secrets gesetzt sein; `DOCKERHUB_NAMESPACE` ist optional und faellt sonst auf `.env.example` zurueck
 
 ## Regressionstest
@@ -95,7 +98,7 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 - Browser/UI-Laufzeitprobe mit eigenem Stack-Start, Login, Register und Settings:
   - `bash tests/run-ui-regression.sh`
 - Upgrade-Rehearsal fuer Docker-Hub-Deploy, Pre-Upgrade-Dump und Dump-Restore:
-  - `IMAGE_TAG=2026.03.18-1 bash tests/run-upgrade-rehearsal.sh`
+  - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
 - Low-Level-Browserprobe gegen bereits laufenden Stack:
   - `node tests/run-ui-regression.mjs`
 
@@ -112,7 +115,9 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 
 ## Prioritaeten
 
+- produktive Push-/VAPID-Secrets ohne Code-Defaults erzwingen
+- DB-Migrationspfad fuer PostgreSQL-first professionalisieren
+- Provider- und Live-Datenabdeckung weiter ausbauen
 - Frontend-Quellstand statt nur Build-Artefakt beschaffen oder rekonstruieren
-- Datenmodell, Persistenz und Migrationspfad professionalisieren
 - getaggte Docker-Hub-Releases und Deploy-/Upgrade-Rehearsals diszipliniert fahren
 - strukturierte Logging-/Telemetrie-Haertung nachziehen

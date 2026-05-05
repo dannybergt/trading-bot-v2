@@ -1,5 +1,10 @@
 # Entscheidungen
 
+- Datum: 2026-05-05
+  Entscheidung: `docs/admin/project-plan.md` ist ab jetzt die kanonische Kurzverankerung fuer Gesamtstand, Phasenposition, Sicherheitsachsen und naechste Prioritaeten.
+  Begruendung: Nach `v2026.05.05-1` ist das Projekt nicht mehr nur ein rekonstruiertes MVP, sondern ein releasefaehiger Phase-1-Stand mit begonnener Research-Schicht und aktivem Alert-Dispatcher. Der Gesamtplan muss deshalb explizit sichtbar bleiben, damit einzelne Folgeaufgaben nicht vom Produkt-, Betriebs- oder Sicherheitsziel abweichen.
+  Konsequenzen: Roadmap, README, Release- und Security-Doku verweisen auf den aktuellen validierten Release und die naechsten Guardrails; neue groessere Arbeiten muessen gegen Phasenplan, Security, Tests, Backup/Export/Import und Rehearsal-Regeln eingeordnet werden.
+
 - Datum: 2026-04-26
   Entscheidung: Dauerhafte private lokale Secrets und persoenliche Zugangsdaten werden in einer gitignorierten `.env.local` gepflegt, die von den Ops-Skripten immer nach `.env` geladen wird.
   Begruendung: Der bisherige Betriebsweg war fehleranfaellig, weil `docker compose -f ops/docker/compose.yaml ...` die Root-`.env` nicht verlaesslich als Projektkontext behandelt und Nutzer dadurch Keys bei Wiedereinstiegen wiederholt neu eintragen mussten.

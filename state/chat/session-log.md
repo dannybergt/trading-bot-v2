@@ -1,6 +1,11 @@
 # Sitzungslog
 
 - Datum: 2026-05-05
+  Kontext: Der Gesamtstand, der Phasenplan und die Sicherheits-/Betriebsleitplanken sollen dauerhaft im Projekt verankert werden.
+  Erledigt: Neue kanonische Plan-Datei `docs/admin/project-plan.md` angelegt. Sie dokumentiert Release `v2026.05.05-1`, Phasenposition, Sicherheitsachsen, Architekturachsen, naechste Prioritaeten und Fertigstellungsregeln. README, Roadmap, Release-Doku, Runbook und Security-Doku wurden auf den aktuellen validierten Stand und den naechsten Fokus Push-/VAPID-Haertung aktualisiert; `state/decisions.md` haelt die neue Plan-Verankerung als Entscheidung fest.
+  Offen: Naechster Umsetzungsschritt bleibt produktive Push-/VAPID-Haertung mit nicht-invasivem Smoke-Test.
+
+- Datum: 2026-05-05
   Kontext: Nach erfolgreichem Push-Alert-Dispatcher soll ein expliziter Release-Tag gebaut und der Docker-Hub-Upgrade-/Restore-Pfad validiert werden.
   Erledigt: Annotierter Git-Tag `v2026.05.05-1` wurde auf Commit `ec48455` gesetzt und gepusht. GitHub Actions `publish #16` fuer den Tag lief erfolgreich und synchronisierte die versionierten Docker-Hub-Images. `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack. Upgrade-Record: `state/runtime/deployments/deployment-20260505T202750Z.env`; Backend-Digest `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`; Frontend-Digest `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`.
   Offen: Produktive Push-/VAPID-Konfiguration ohne Code-Defaults erzwingen und einen Push-Konfigurations-Smoke-Test bauen, der keine echten Nutzergeraete belaestigt.
