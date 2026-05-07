@@ -27,7 +27,11 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
   - Web-Push-Versand wird bei fehlender lokaler VAPID-Konfiguration uebersprungen statt mit geteilten Defaults zu senden
 - Neuer Smoke: `tests/run-push-config-smoke.sh`; Standardmodus validiert echte Zielkonfiguration ohne Nutzergeraete zu benachrichtigen, `GENERATE_TEST_VAPID=1` prueft den Parser mit einem disposable Keypair.
 - Verifikation: `bash ops/automation/build.sh`, `bash ops/automation/test.sh`, `GENERATE_TEST_VAPID=1 bash tests/run-push-config-smoke.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh`, `SKIP_BUILD=1 bash tests/run-ui-regression.sh`; ein UI-Zwischenlauf scheiterte transient am bekannten externen Daten-/Navigationspfad, der direkte Wiederholungslauf war gruen.
-- Naechster sinnvoller Schritt: VAPID-Haertung committen, nach `main` pushen und GitHub Actions beobachten.
+- Commit `21b970a` (`Harden VAPID push configuration`) wurde nach `main` gepusht; GitHub Actions liefen erfolgreich:
+  - `ci` run `#24` / `25488743824`
+  - `publish` run `#19` / `25488743838`
+  - `codeql` run `#30` / `25488743817`
+- Naechster sinnvoller Schritt: bei produktiver Push-Nutzung echte VAPID-Werte in der Zielumgebung setzen und `bash tests/run-push-config-smoke.sh` gegen diese Zielkonfiguration fahren; danach optional ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal oder weitere Phase-1-Produktarbeit.
 
 - Aktueller lokaler Produkt-Stand: Serverseitiger Watchlist-Alert-Dispatcher umgesetzt; Watchlists mit aktivem `pushEnabled` werden periodisch ausgewertet und erfolgreiche Web-Push-Zustellungen persistent dedupliziert.
 - Neue Tabelle `watchlist_alert_deliveries` speichert pro Nutzer, Watchlist, Symbol, Channel, Alert-Key, Prioritaet und Zeitstempel die Zustellhistorie; Backup/Export/Import sichern diese Historie mit.
@@ -61,7 +65,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Der Alpha-Vantage-BTC-Liveblocker ist behoben: `DIGITAL_CURRENCY_DAILY` liefert fuer `BTC/USD` aktuell generische OHLC-Keys (`1. open`, `2. high`, `3. low`, `4. close`) statt der alten waehrungsspezifischen Keys; der Parser akzeptiert jetzt beide Formen.
 - Das Upgrade-Rehearsal ignoriert fuer seine isolierten Wegwerf-Stacks jetzt reale `INITIAL_ADMIN_*`-Werte aus `.env`, damit eine lokale Zielumgebungs-Konfiguration den Test-Admin-Seed nicht entprivilegiert.
 - Naechster sinnvoller Schritt ist:
-  - VAPID-Haertung pushen und GitHub Actions beobachten
+  - echte Zielumgebungs-VAPID-Werte per `tests/run-push-config-smoke.sh` validieren, sobald sie gesetzt sind
   - optional danach Live-Smokes fuer den neuen Release-Stand mit gesetztem Alpha-Vantage-Key fahren
 
 ## Wichtiger Kontext
