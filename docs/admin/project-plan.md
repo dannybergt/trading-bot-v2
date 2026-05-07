@@ -1,16 +1,16 @@
 # Projektplan
 
-## Stand 2026-05-05
+## Stand 2026-05-07
 
 Aktuell validierter Produkt-Release:
 
-- Git-Tag: `v2026.05.05-1`
-- Produkt-Commit: `ec48455` (`Dispatch watchlist push alerts`)
+- Git-Tag: `v2026.05.07-1`
+- Produkt-Commit: `878fcff` (`Record VAPID hardening publish status`)
 - Dokumentationsstand: auf `main` nachgezogen
-- Backend-Image: `dbergt/trading-bot-backend:2026.05.05-1`
-- Frontend-Image: `dbergt/trading-bot-frontend:2026.05.05-1`
+- Backend-Image: `dbergt/trading-bot-backend:2026.05.07-1`
+- Frontend-Image: `dbergt/trading-bot-frontend:2026.05.07-1`
 - Upgrade-/Restore-Rehearsal: bestanden
-- Deployment-Record: `state/runtime/deployments/deployment-20260505T202750Z.env`
+- Deployment-Record: `state/runtime/deployments/deployment-20260507T120020Z.env`
 
 Der aktuelle Stand ist nicht nur gebaut, sondern auch ueber GitHub Actions veroeffentlicht und mit einem isolierten Docker-Hub-Deploy, Upgrade ueber bestehende Daten, PostgreSQL-Dump, App-Snapshot und Restore in einen frischen Stack geprueft.
 

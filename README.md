@@ -22,7 +22,7 @@ Das Tool ist eine AI-gestuetzte Trading-Anwendung mit:
 - externer Datenintegration ueber Alpaca, yfinance, Alpha Vantage, FIGI/WKN/ISIN-Suche
 - ML-gestuetzter Kursprognose mit `scikit-learn` und `xgboost`
 
-Der aktuelle Gesamtstand und die Phasenposition sind in `docs/admin/project-plan.md` verankert. Aktuell vollstaendig verifizierter Release: `2026.05.05-1`.
+Der aktuelle Gesamtstand und die Phasenposition sind in `docs/admin/project-plan.md` verankert. Aktuell vollstaendig verifizierter Release: `2026.05.07-1`.
 
 ## Lokale Struktur
 
@@ -67,11 +67,11 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 `start.sh` nutzt standardmaessig Docker Hub `latest`. Ein expliziter Stand bleibt moeglich:
 
 - `IMAGE_TAG=sha-92cefb3138e6 bash ops/automation/start.sh`
-- `IMAGE_TAG=2026.05.05-1 bash ops/automation/start.sh`
+- `IMAGE_TAG=2026.05.07-1 bash ops/automation/start.sh`
 
 ## Docker-Hub-Deploy
 
-1. in `.env` einen expliziten Release-Tag setzen, z. B. `IMAGE_TAG=2026.05.05-1`
+1. in `.env` einen expliziten Release-Tag setzen, z. B. `IMAGE_TAG=2026.05.07-1`
 2. optional direkte Image-Refs setzen oder aus Namespace, Image-Namen und Tag ableiten lassen
 3. `bash ops/automation/deploy.sh`
 4. der Deploy-Pfad erstellt vor einem Upgrade automatisch einen PostgreSQL-Dump und, wenn das Backend bereits laeuft, einen App-Snapshot in `state/runtime/backups`
@@ -86,7 +86,7 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
   - `docker.io/<namespace>/trading-bot-frontend:latest`
   - `docker.io/<namespace>/trading-bot-backend:sha-<commit>`
   - `docker.io/<namespace>/trading-bot-frontend:sha-<commit>`
-- fuer Release-Tags `v2026.05.05-1` entstehen die versionierten Docker-Hub-Tags `2026.05.05-1`
+- fuer Release-Tags `v2026.05.07-1` entstehen die versionierten Docker-Hub-Tags `2026.05.07-1`
 - dafuer muessen in GitHub Actions mindestens `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` als Repository-Secrets gesetzt sein; `DOCKERHUB_NAMESPACE` ist optional und faellt sonst auf `.env.example` zurueck
 
 ## Regressionstest
@@ -98,7 +98,7 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 - Browser/UI-Laufzeitprobe mit eigenem Stack-Start, Login, Register und Settings:
   - `bash tests/run-ui-regression.sh`
 - Upgrade-Rehearsal fuer Docker-Hub-Deploy, Pre-Upgrade-Dump und Dump-Restore:
-  - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
+  - `IMAGE_TAG=2026.05.07-1 bash tests/run-upgrade-rehearsal.sh`
 - Low-Level-Browserprobe gegen bereits laufenden Stack:
   - `node tests/run-ui-regression.mjs`
 

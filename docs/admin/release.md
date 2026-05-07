@@ -14,8 +14,8 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `main` publiziert automatisch `latest` plus einen unveraenderlichen `sha-<commit>`-Tag fuer Backend und Frontend
   - Git-Tags `v*` publizieren den gleichlautenden Docker-Hub-Release-Tag ohne fuehrendes `v`
   - keine produktiven Upgrades ueber ein schwebendes `latest`
-  - fuer Releases immer explizite Tags verwenden, z. B. `2026.05.05-1`
-  - aktuell vollstaendig verifizierter Release: `2026.05.05-1`
+  - fuer Releases immer explizite Tags verwenden, z. B. `2026.05.07-1`
+  - aktuell vollstaendig verifizierter Release: `2026.05.07-1`
 
 ## Build
 
@@ -31,9 +31,9 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `bash tests/run-password-reset-email-smoke.sh`
   - `bash tests/run-ui-regression.sh`
   - fuer produktive Push-Konfiguration: `bash tests/run-push-config-smoke.sh`
-  - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
+  - `IMAGE_TAG=2026.05.07-1 bash tests/run-upgrade-rehearsal.sh`
   - optional mit echtem Provider-Key:
-    `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=2026.05.05-1 bash tests/run-alpha-vantage-live-smoke.sh`
+    `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=2026.05.07-1 bash tests/run-alpha-vantage-live-smoke.sh`
   - optional `node tests/run-ui-regression.mjs` gegen bereits laufenden Stack
   - optional manuell `bash ops/automation/start.sh`
 
@@ -47,7 +47,7 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `.github/workflows/publish.yml` laeuft automatisch auf Push nach `main` sowie auf Git-Tags `v*`
   - der Workflow fuehrt vor dem Push `build`, `test`, API-Regression und UI-Regression als Gates aus
   - `main` erzeugt automatisch `latest` und `sha-<commit>`
-  - `v2026.05.05-1` erzeugt automatisch den Docker-Hub-Tag `2026.05.05-1`
+  - `v2026.05.07-1` erzeugt automatisch den Docker-Hub-Tag `2026.05.07-1`
   - benoetigte Repository-Secrets:
     - `DOCKERHUB_USERNAME`
     - `DOCKERHUB_TOKEN`
@@ -71,9 +71,9 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
 - nach jedem Publish schreibt `ops/automation/sync-components.sh` ein Release-Metadatenfile:
   - `state/releases/<IMAGE_TAG>.env`
 - empfohlenes Release-Beispiel:
-  - `IMAGE_TAG=2026.05.05-1 bash ops/automation/sync-components.sh`
+  - `IMAGE_TAG=2026.05.07-1 bash ops/automation/sync-components.sh`
   - fuer den aktuell validierten Stand:
-    `IMAGE_TAG=2026.05.05-1 bash ops/automation/sync-components.sh`
+    `IMAGE_TAG=2026.05.07-1 bash ops/automation/sync-components.sh`
 
 ## Deploy und Upgrade
 
@@ -82,11 +82,11 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
 - normalen Stack stoppen, ohne Runtime-Daten zu loeschen:
   - `bash ops/automation/stop.sh`
 - aus Docker Hub deployen oder upgraden:
-  - `IMAGE_TAG=2026.05.05-1 bash ops/automation/deploy.sh`
+  - `IMAGE_TAG=2026.05.07-1 bash ops/automation/deploy.sh`
 - kompletter Upgrade-/Restore-Probelauf:
-  - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
+  - `IMAGE_TAG=2026.05.07-1 bash tests/run-upgrade-rehearsal.sh`
   - aktuell erfolgreich verifiziert:
-    `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
+    `IMAGE_TAG=2026.05.07-1 bash tests/run-upgrade-rehearsal.sh`
 - Verhalten des Deploy-Skripts:
   - zieht Backend- und Frontend-Images aus Docker Hub
   - erstellt vor einem Upgrade einen PostgreSQL-Dump

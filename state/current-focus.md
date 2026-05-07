@@ -16,9 +16,9 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 ## Stand Beim Letzten Handover
 
-- Aktueller Release-Stand: `v2026.05.05-1` auf Commit `ec48455` (`Dispatch watchlist push alerts`) ist gepusht, GitHub-Actions-`publish` run `#16` lief erfolgreich und synchronisierte die versionierten Docker-Hub-Tags.
-- Docker-Hub-Rehearsal fuer `IMAGE_TAG=2026.05.05-1` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack.
-- Rehearsal-Artefakte: Deployment-Record `state/runtime/deployments/deployment-20260505T202750Z.env`; Backend-Digest `sha256:9ba0eecf4a1ace9259705191b500fc2b4d0183145076cc34f1702dfabcc4e272`; Frontend-Digest `sha256:973882f6813f9efe7c7f32bbbdccfa4ba7c30c8d4552a4526daf0cb0636159fb`.
+- Aktueller Release-Stand: `v2026.05.07-1` auf Commit `878fcff` (`Record VAPID hardening publish status`) ist gepusht, GitHub-Actions-`publish` run `#21` lief erfolgreich und synchronisierte die versionierten Docker-Hub-Tags.
+- Docker-Hub-Rehearsal fuer `IMAGE_TAG=2026.05.07-1` lief erfolgreich: initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot und Dump-Restore in einen frischen Stack.
+- Rehearsal-Artefakte: Deployment-Record `state/runtime/deployments/deployment-20260507T120020Z.env`; Backend-Digest `sha256:835f50167496e5bc0fd6e83bdea86bed386590fe88cf71506d759db1380aa4bf`; Frontend-Digest `sha256:f66fe7516f6764bf8a69bd1b920250895013521c73ab6b978165d6846c813d12`.
 - Gesamtplan-Verankerung: `docs/admin/project-plan.md` beschreibt aktuellen Release, Phasenposition, Sicherheitsachsen, Architekturachsen und Prioritaeten; README, Roadmap, Release- und Security-Doku wurden darauf ausgerichtet.
 - Aktueller lokaler Security-Stand: produktive Push-/VAPID-Konfiguration wurde ohne Code-Defaults gehaertet; Backend und Frontend nutzen keine eingebetteten Default-VAPID-Keys mehr.
 - Neue Backend-Pfade:
@@ -31,7 +31,8 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
   - `ci` run `#24` / `25488743824`
   - `publish` run `#19` / `25488743838`
   - `codeql` run `#30` / `25488743817`
-- Naechster sinnvoller Schritt: bei produktiver Push-Nutzung echte VAPID-Werte in der Zielumgebung setzen und `bash tests/run-push-config-smoke.sh` gegen diese Zielkonfiguration fahren; danach optional ein expliziter Release-Tag mit Upgrade-/Restore-Rehearsal oder weitere Phase-1-Produktarbeit.
+- Lokale Ziel-VAPID-Werte wurden in der gitignorierten `.env.local` erzeugt, Modus `600`; Werte wurden nicht ausgegeben. `bash tests/run-push-config-smoke.sh` validierte diese Konfiguration erfolgreich.
+- Naechster sinnvoller Schritt: den Release-/Rehearsal-Status committen und nach `main` pushen; danach weitere Phase-1-Produktarbeit oder bei Bedarf ein Live-Smoke mit gesetztem Alpha-Vantage-Key gegen `2026.05.07-1`.
 
 - Aktueller lokaler Produkt-Stand: Serverseitiger Watchlist-Alert-Dispatcher umgesetzt; Watchlists mit aktivem `pushEnabled` werden periodisch ausgewertet und erfolgreiche Web-Push-Zustellungen persistent dedupliziert.
 - Neue Tabelle `watchlist_alert_deliveries` speichert pro Nutzer, Watchlist, Symbol, Channel, Alert-Key, Prioritaet und Zeitstempel die Zustellhistorie; Backup/Export/Import sichern diese Historie mit.

@@ -17,14 +17,14 @@ Das Produkt soll sich von einem rekonstruierten MVP zu einer vollwertigen Tradin
 
 ## Aktueller Standort
 
-Der operative Gesamtplan und der aktuelle Release-Stand sind in `docs/admin/project-plan.md` verankert. Kurzstand am 2026-05-05:
+Der operative Gesamtplan und der aktuelle Release-Stand sind in `docs/admin/project-plan.md` verankert. Kurzstand am 2026-05-07:
 
-- validierter Release: `v2026.05.05-1` auf Produkt-Commit `ec48455`
+- validierter Release: `v2026.05.07-1` auf Produkt-Commit `878fcff`
 - Phase 0 ist operativ weitgehend abgeschlossen und muss fuer jeden Release wiederholt werden
 - Phase 1 ist funktional und releasefaehig: Assetklassen, Watchlists, Provider-Kontext, Research, Alert-Management und serverseitiger Push-Dispatcher stehen
 - Phase 2 ist begonnen: Symbol-Research und Provider-Research-Panel sind vorhanden
 - Phase 3 und Phase 4 bleiben bewusst spaeter, nach Daten-/Security-/Migrationshaertung
-- naechster Fokus: produktive Push-/VAPID-Haertung, danach DB-Migrationen und Provider-Ausbau
+- naechster Fokus: DB-Migrationen und Provider-Ausbau; produktive Push-/VAPID-Haertung ist umgesetzt und release-validiert
 
 ## Phasen
 
