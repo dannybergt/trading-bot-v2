@@ -113,10 +113,11 @@ class PricePredictor:
             logger.exception("model_training_failed")
             return {'accuracy': 0, 'features': []}
 
-    def predict_next_movement(self, current_data_df: pd.DataFrame):
+    def predict_next_movement(self, current_data_df: pd.DataFrame, *, user=None):
         """
         Predict the movement for the next period based on the latest data,
-        with explainability and entry/stop/target zones derived from ATR.
+        with explainability, entry/stop/target zones derived from ATR, and
+        broker-cost + capital-gains-tax aware net-yield projection.
         """
         if not ML_AVAILABLE or not self.is_trained or self.model is None:
             return None
@@ -149,6 +150,7 @@ class PricePredictor:
 
             explanation = self._explain_prediction(X_new, feature_cols)
             zones = self._compute_zones(latest, direction=direction, confidence=confidence)
+            zones = self._enrich_with_yield_model(zones, user)
             reasoning = self._build_reasoning(direction, explanation)
 
             return {
@@ -229,6 +231,84 @@ class PricePredictor:
         except Exception:
             logger.exception("model_explanation_failed")
             return None
+
+    @staticmethod
+    def _enrich_with_yield_model(zones: dict | None, user) -> dict | None:
+        """Attach broker-cost + tax-aware net yield to the zone payload.
+
+        Why this exists: the user has set a `min_target_yield` (in percent
+        net) — the system must only flag a buy/sell candidate as actionable
+        if the projected NET return clears that bar. Net = gross target
+        return - round-trip broker fees - capital-gains tax on profit.
+
+        `meetsMinimum` is the boolean the recommendation/auto-trading layer
+        will gate on. When the user has no min set or no zones exist, we
+        leave the field absent so consumers can detect "no constraint".
+        """
+        if not zones:
+            return zones
+
+        current_price = float(zones.get("currentPrice") or 0.0)
+        target = float(zones.get("target") or 0.0)
+        if current_price <= 0 or target <= 0:
+            return zones
+
+        gross_pct = (target - current_price) / current_price * 100.0
+        if zones.get("direction") == "DOWN":
+            gross_pct = -gross_pct  # absolute target distance for shorts
+
+        # Broker fee model: percent applied per leg (entry + exit) plus an
+        # absolute fee per leg expressed as percent of current price.
+        fee_pct_per_leg = 0.0
+        fee_absolute_pct_per_leg = 0.0
+        cap_gains_rate_pct = 0.0
+        income_tax_rate_pct = 0.0
+        min_target_yield_pct: float | None = None
+
+        if user is not None:
+            try:
+                fee_pct_per_leg = float(getattr(user, "trade_fee_percent", 0) or 0)
+                fee_absolute = float(getattr(user, "trade_fee_absolute", 0) or 0)
+                if current_price > 0:
+                    fee_absolute_pct_per_leg = (fee_absolute / current_price) * 100.0
+                cap_gains_bps = float(getattr(user, "capital_gains_tax_bps", 0) or 0)
+                income_tax_bps = float(getattr(user, "income_tax_bps", 0) or 0)
+                cap_gains_rate_pct = cap_gains_bps / 100.0
+                income_tax_rate_pct = income_tax_bps / 100.0
+                min_target_yield_pct = float(getattr(user, "min_target_yield", 0) or 0) or None
+            except Exception:
+                logger.exception("yield_model_user_settings_failed")
+
+        round_trip_fee_pct = 2.0 * (fee_pct_per_leg + fee_absolute_pct_per_leg)
+        gross_after_fees_pct = gross_pct - round_trip_fee_pct
+
+        # Apply tax only to a positive profit. Cap-gains rate dominates when
+        # set; income-tax rate is a fallback for jurisdictions/brokers that
+        # treat short-term gains as ordinary income.
+        effective_tax_rate_pct = cap_gains_rate_pct or income_tax_rate_pct
+        tax_drag_pct = 0.0
+        if gross_after_fees_pct > 0 and effective_tax_rate_pct > 0:
+            tax_drag_pct = gross_after_fees_pct * (effective_tax_rate_pct / 100.0)
+
+        net_pct = gross_after_fees_pct - tax_drag_pct
+
+        enriched = dict(zones)
+        enriched.update(
+            {
+                "grossTargetPct": round(gross_pct, 4),
+                "feeRoundTripPct": round(round_trip_fee_pct, 4),
+                "taxDragPct": round(tax_drag_pct, 4),
+                "netTargetPct": round(net_pct, 4),
+                "effectiveTaxRatePct": round(effective_tax_rate_pct, 4),
+                "minTargetYieldPct": min_target_yield_pct,
+                "meetsMinimum": (
+                    None
+                    if min_target_yield_pct is None
+                    else net_pct >= float(min_target_yield_pct)
+                ),
+            }
+        )
+        return enriched
 
     @staticmethod
     def _build_reasoning(direction: str, explanation: dict | None) -> str | None:

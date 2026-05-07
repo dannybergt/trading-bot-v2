@@ -24,8 +24,15 @@ class User(Base):
     # Portfolio Settings
     trade_fee_absolute = Column(Integer, default=1) # in dollars/euros
     trade_fee_percent = Column(Integer, default=0) # percentage 0-100
-    min_target_yield = Column(Integer, default=1) # minimum profit percentage
-    
+    min_target_yield = Column(Integer, default=1) # minimum NET profit percentage after fees + taxes
+    # Capital gains / Abgeltungssteuer rate in basis points (e.g. 26375 = 26.375%).
+    # Stored as integer basis points so SQLite + PostgreSQL stay aligned
+    # without introducing a Numeric column. Default 0 = no tax model applied.
+    capital_gains_tax_bps = Column(Integer, default=0)
+    # Optional income-tax fallback in basis points for jurisdictions/brokers
+    # that tax short-term gains as ordinary income.
+    income_tax_bps = Column(Integer, default=0)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
     alert_settings = relationship("WatchlistAlertSetting", back_populates="user", cascade="all, delete-orphan")

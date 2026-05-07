@@ -152,11 +152,15 @@ class PortfolioSettingsResponse(BaseModel):
     trade_fee_absolute: int
     trade_fee_percent: int
     min_target_yield: int
+    capital_gains_tax_bps: int = 0
+    income_tax_bps: int = 0
 
 class PortfolioSettingsRequest(BaseModel):
     trade_fee_absolute: int
     trade_fee_percent: int
     min_target_yield: int
+    capital_gains_tax_bps: int = 0
+    income_tax_bps: int = 0
 
 class PushSubscriptionRequest(BaseModel):
     endpoint: str
@@ -305,7 +309,9 @@ def get_my_portfolio_settings(current_user: User = Depends(get_current_user)):
     return {
         "trade_fee_absolute": current_user.trade_fee_absolute,
         "trade_fee_percent": current_user.trade_fee_percent,
-        "min_target_yield": current_user.min_target_yield
+        "min_target_yield": current_user.min_target_yield,
+        "capital_gains_tax_bps": current_user.capital_gains_tax_bps or 0,
+        "income_tax_bps": current_user.income_tax_bps or 0,
     }
 
 @router.put("/me/portfolio-settings", response_model=PortfolioSettingsResponse)
@@ -313,6 +319,8 @@ def update_my_portfolio_settings(req: PortfolioSettingsRequest, current_user: Us
     current_user.trade_fee_absolute = req.trade_fee_absolute
     current_user.trade_fee_percent = req.trade_fee_percent
     current_user.min_target_yield = req.min_target_yield
+    current_user.capital_gains_tax_bps = max(0, min(req.capital_gains_tax_bps, 10000))
+    current_user.income_tax_bps = max(0, min(req.income_tax_bps, 10000))
     db.commit()
     return get_my_portfolio_settings(current_user)
 

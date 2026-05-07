@@ -57,6 +57,13 @@ export type ChartZones = {
   stopLoss: number;
   target: number;
   riskReward: number | null;
+  grossTargetPct?: number | null;
+  feeRoundTripPct?: number | null;
+  taxDragPct?: number | null;
+  netTargetPct?: number | null;
+  effectiveTaxRatePct?: number | null;
+  minTargetYieldPct?: number | null;
+  meetsMinimum?: boolean | null;
 };
 
 type OverlayKey =

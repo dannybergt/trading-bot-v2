@@ -67,6 +67,8 @@ class BackupService:
                         "trade_fee_absolute": user.trade_fee_absolute,
                         "trade_fee_percent": user.trade_fee_percent,
                         "min_target_yield": user.min_target_yield,
+                        "capital_gains_tax_bps": user.capital_gains_tax_bps or 0,
+                        "income_tax_bps": user.income_tax_bps or 0,
                         "created_at": user.created_at.isoformat() if user.created_at else None,
                     }
                     for user in users
@@ -256,6 +258,8 @@ class BackupService:
                     trade_fee_absolute=record.get("trade_fee_absolute", 1),
                     trade_fee_percent=record.get("trade_fee_percent", 0),
                     min_target_yield=record.get("min_target_yield", 1),
+                    capital_gains_tax_bps=record.get("capital_gains_tax_bps", 0),
+                    income_tax_bps=record.get("income_tax_bps", 0),
                 )
             )
 

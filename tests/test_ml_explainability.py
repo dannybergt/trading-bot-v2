@@ -46,6 +46,23 @@ def _trending_ohlcv(n: int = 320) -> pd.DataFrame:
     return df
 
 
+class _UserStub:
+    def __init__(
+        self,
+        *,
+        trade_fee_percent=0,
+        trade_fee_absolute=0,
+        capital_gains_tax_bps=0,
+        income_tax_bps=0,
+        min_target_yield=0,
+    ):
+        self.trade_fee_percent = trade_fee_percent
+        self.trade_fee_absolute = trade_fee_absolute
+        self.capital_gains_tax_bps = capital_gains_tax_bps
+        self.income_tax_bps = income_tax_bps
+        self.min_target_yield = min_target_yield
+
+
 @unittest.skipUnless(ML_AVAILABLE, "ML deps missing")
 class PricePredictorExplainabilityTests(unittest.TestCase):
     def test_prediction_carries_explanation_and_zones(self):
@@ -110,6 +127,71 @@ class PricePredictorExplainabilityTests(unittest.TestCase):
         # Risk/reward ratio is positive (target distance > 0, stop distance > 0)
         self.assertIsNotNone(zones["riskReward"])
         self.assertGreater(zones["riskReward"], 0.0)
+
+    def test_yield_model_subtracts_fees_and_taxes_from_target(self):
+        zones = {
+            "direction": "UP",
+            "currentPrice": 100.0,
+            "atr": 2.0,
+            "entryLow": 99.0,
+            "entryHigh": 100.0,
+            "stopLoss": 97.0,
+            "target": 110.0,
+            "riskReward": 3.33,
+        }
+        user = _UserStub(
+            trade_fee_percent=0,
+            trade_fee_absolute=1,  # 1 EUR per leg, on a 100 EUR price -> 1% per leg, 2% round trip
+            capital_gains_tax_bps=2500,  # 25%
+            min_target_yield=5,  # 5% net floor
+        )
+        enriched = PricePredictor._enrich_with_yield_model(zones, user)
+        self.assertIsNotNone(enriched)
+        assert enriched is not None
+        # Gross target = (110 - 100)/100 * 100 = 10%
+        self.assertAlmostEqual(10.0, enriched["grossTargetPct"], places=2)
+        # Round-trip fee = 2%
+        self.assertAlmostEqual(2.0, enriched["feeRoundTripPct"], places=2)
+        # After fees: 8%; tax 25% of 8% = 2%; net = 6%
+        self.assertAlmostEqual(6.0, enriched["netTargetPct"], places=2)
+        # 6% net beats 5% min -> meetsMinimum True
+        self.assertTrue(enriched["meetsMinimum"])
+
+    def test_yield_model_flags_when_below_minimum(self):
+        zones = {
+            "direction": "UP",
+            "currentPrice": 100.0,
+            "atr": 1.0,
+            "entryLow": 99.0,
+            "entryHigh": 100.0,
+            "stopLoss": 98.5,
+            "target": 102.0,  # only 2% gross
+        }
+        user = _UserStub(
+            trade_fee_percent=0,
+            trade_fee_absolute=1,  # 1% per leg, 2% round trip
+            capital_gains_tax_bps=0,
+            min_target_yield=5,
+        )
+        enriched = PricePredictor._enrich_with_yield_model(zones, user)
+        # 2% gross - 2% fees - 0% tax = 0% net, way under 5% threshold
+        self.assertAlmostEqual(0.0, enriched["netTargetPct"], places=2)
+        self.assertFalse(enriched["meetsMinimum"])
+
+    def test_yield_model_short_uses_absolute_target_distance(self):
+        zones = {
+            "direction": "DOWN",
+            "currentPrice": 100.0,
+            "atr": 2.0,
+            "entryLow": 100.0,
+            "entryHigh": 101.0,
+            "stopLoss": 103.0,
+            "target": 90.0,
+        }
+        user = _UserStub(min_target_yield=5)
+        enriched = PricePredictor._enrich_with_yield_model(zones, user)
+        # For DOWN, the target distance is abs(target - current)/current.
+        self.assertAlmostEqual(10.0, enriched["grossTargetPct"], places=2)
 
     def test_zones_skip_when_atr_unavailable(self):
         # Direct call into the static zone helper with no ATR set.

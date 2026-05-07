@@ -302,15 +302,18 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
       ) : null}
 
       {prediction.zones ? (
-        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
-          <ZoneCell
-            label="Entry"
-            value={`${prediction.zones.entryLow.toFixed(2)} – ${prediction.zones.entryHigh.toFixed(2)}`}
-          />
-          <ZoneCell label="Stop" value={prediction.zones.stopLoss.toFixed(2)} accent="red" />
-          <ZoneCell label="Target" value={prediction.zones.target.toFixed(2)} accent="green" />
-          <ZoneCell label="ATR" value={prediction.zones.atr.toFixed(3)} />
-        </div>
+        <>
+          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+            <ZoneCell
+              label="Entry"
+              value={`${prediction.zones.entryLow.toFixed(2)} – ${prediction.zones.entryHigh.toFixed(2)}`}
+            />
+            <ZoneCell label="Stop" value={prediction.zones.stopLoss.toFixed(2)} accent="red" />
+            <ZoneCell label="Target" value={prediction.zones.target.toFixed(2)} accent="green" />
+            <ZoneCell label="ATR" value={prediction.zones.atr.toFixed(3)} />
+          </div>
+          <YieldBreakdown zones={prediction.zones} />
+        </>
       ) : null}
 
       {categories.length > 0 ? (
@@ -437,6 +440,81 @@ function CategoryBar({ contribution }: { contribution: number }) {
         <span className="absolute left-1/2 top-0 h-full w-px bg-slate-600" />
       </span>
     </span>
+  );
+}
+
+function YieldBreakdown({ zones }: { zones: ChartZones }) {
+  const gross = zones.grossTargetPct;
+  const fee = zones.feeRoundTripPct;
+  const tax = zones.taxDragPct;
+  const net = zones.netTargetPct;
+  if (gross == null || net == null) return null;
+  const meets = zones.meetsMinimum;
+  const minYield = zones.minTargetYieldPct;
+  const taxRate = zones.effectiveTaxRatePct ?? 0;
+  return (
+    <div className="mt-3 rounded-md border border-slate-700/40 bg-slate-950/40 p-3 text-xs">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-wide opacity-70">
+          Net-yield projection
+        </p>
+        {meets === true ? (
+          <span className="rounded-full border border-bergt-green/40 bg-bergt-green/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-bergt-green">
+            Meets {minYield?.toFixed(1)}% minimum
+          </span>
+        ) : meets === false ? (
+          <span className="rounded-full border border-amber-700/40 bg-amber-900/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+            Below {minYield?.toFixed(1)}% minimum
+          </span>
+        ) : null}
+      </div>
+      <ul className="mt-2 space-y-1 tabular-nums">
+        <YieldRow label="Gross target" value={gross} positive />
+        {fee != null ? <YieldRow label="Round-trip fees" value={-Math.abs(fee)} /> : null}
+        {tax != null && tax > 0 ? (
+          <YieldRow
+            label={`Tax @ ${taxRate.toFixed(2)}%`}
+            value={-Math.abs(tax)}
+          />
+        ) : null}
+        <li className="mt-1 flex items-baseline justify-between border-t border-slate-700/40 pt-1">
+          <span className="font-medium">Net target</span>
+          <span
+            className={
+              net >= 0 ? "font-semibold text-bergt-green" : "font-semibold text-red-400"
+            }
+          >
+            {net >= 0 ? "+" : ""}
+            {net.toFixed(2)}%
+          </span>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+function YieldRow({
+  label,
+  value,
+  positive,
+}: {
+  label: string;
+  value: number;
+  positive?: boolean;
+}) {
+  const cls = positive
+    ? "text-bergt-green"
+    : value <= 0
+    ? "text-red-300"
+    : "text-slate-300";
+  return (
+    <li className="flex items-baseline justify-between">
+      <span className="opacity-80">{label}</span>
+      <span className={cls}>
+        {value >= 0 && positive ? "+" : ""}
+        {value.toFixed(2)}%
+      </span>
+    </li>
   );
 }
 

@@ -14,6 +14,8 @@ type PortfolioSettings = {
   trade_fee_absolute: number;
   trade_fee_percent: number;
   min_target_yield: number;
+  capital_gains_tax_bps: number;
+  income_tax_bps: number;
 };
 
 type MfaSetup = {
@@ -154,12 +156,16 @@ function PortfolioSection() {
   const [feeAbsolute, setFeeAbsolute] = useState(0);
   const [feePercent, setFeePercent] = useState(0);
   const [minYield, setMinYield] = useState(0);
+  const [capitalGainsPct, setCapitalGainsPct] = useState(0);
+  const [incomeTaxPct, setIncomeTaxPct] = useState(0);
 
   useEffect(() => {
     if (query.data) {
       setFeeAbsolute(query.data.trade_fee_absolute);
       setFeePercent(query.data.trade_fee_percent);
       setMinYield(query.data.min_target_yield);
+      setCapitalGainsPct((query.data.capital_gains_tax_bps ?? 0) / 100);
+      setIncomeTaxPct((query.data.income_tax_bps ?? 0) / 100);
     }
   }, [query.data]);
 
@@ -180,19 +186,22 @@ function PortfolioSection() {
       trade_fee_absolute: Number(feeAbsolute) || 0,
       trade_fee_percent: Number(feePercent) || 0,
       min_target_yield: Number(minYield) || 0,
+      capital_gains_tax_bps: Math.round((Number(capitalGainsPct) || 0) * 100),
+      income_tax_bps: Math.round((Number(incomeTaxPct) || 0) * 100),
     });
   }
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Portfolio defaults</h2>
+      <h2 className="text-lg font-semibold">Portfolio defaults &amp; taxes</h2>
       <p className="text-sm text-slate-400">
-        Used by the scanner and (later) paper-trading to filter low-margin
-        opportunities.
+        Used to project net yield. The system only flags a trade as
+        actionable when the projected net return (after broker fees and
+        capital-gains tax) clears your minimum.
       </p>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-3">
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Fee absolute (per trade)</span>
+          <span className="mb-1 block text-slate-300">Fee absolute / trade</span>
           <input
             type="number"
             step="1"
@@ -215,7 +224,7 @@ function PortfolioSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Min target yield (%)</span>
+          <span className="mb-1 block text-slate-300">Min net yield (%)</span>
           <input
             type="number"
             step="1"
@@ -225,6 +234,41 @@ function PortfolioSection() {
             onChange={(event) => setMinYield(Number(event.target.value))}
           />
         </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-300">
+            Capital-gains tax (%)
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            className="input"
+            value={capitalGainsPct}
+            onChange={(event) => setCapitalGainsPct(Number(event.target.value))}
+            placeholder="e.g. 26.375 (DE Abgeltungssteuer)"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-300">
+            Income tax fallback (%)
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            className="input"
+            value={incomeTaxPct}
+            onChange={(event) => setIncomeTaxPct(Number(event.target.value))}
+            placeholder="0 if not applicable"
+          />
+        </label>
+        <div className="sm:col-span-3 text-xs text-slate-500">
+          Capital-gains rate dominates if both are set; income-tax fallback
+          is only used when the broker treats short-term gains as ordinary
+          income.
+        </div>
         <div className="sm:col-span-3 flex items-center gap-3">
           <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Save"}

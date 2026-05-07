@@ -10,7 +10,7 @@ class _FakePredictor:
     def train(self, df):
         self.last_train_size = len(df.index)
 
-    def predict_next_movement(self, df):
+    def predict_next_movement(self, df, *, user=None):  # accepts new kwarg
         return {"direction": "HOLD", "confidence": 0.0}
 
 

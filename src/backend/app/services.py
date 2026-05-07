@@ -222,8 +222,9 @@ class MarketDataService:
         try:
             # Train on the fetched data
             self.predictor.train(df_analyzed)
-            # Predict next move
-            prediction = self.predictor.predict_next_movement(df_analyzed)
+            # Predict next move (user passed through so the zone yield model
+            # can apply broker fees + tax rates per individual user)
+            prediction = self.predictor.predict_next_movement(df_analyzed, user=user)
             
             # Apply user-defined Target Yield threshold constraints
             if prediction and prediction.get('direction') == 'UP' and user:
