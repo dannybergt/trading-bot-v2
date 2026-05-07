@@ -13,19 +13,31 @@ import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumePr
 
 type FeatureContribution = {
   feature: string;
+  category: string;
   contribution: number;
   value: number;
+  direction: "up" | "down";
+};
+
+type CategoryContribution = {
+  category: string;
+  label: string;
+  contribution: number;
   direction: "up" | "down";
 };
 
 type Prediction = {
   direction?: "UP" | "DOWN" | "HOLD";
   confidence?: number;
+  probabilityUp?: number;
+  probabilityDown?: number;
   reason?: string;
+  reasoning?: string;
   explanation?: {
     baseline: number;
     method: string;
     topFeatures: FeatureContribution[];
+    categories?: CategoryContribution[];
   } | null;
   zones?: ChartZones | null;
 };
@@ -259,12 +271,16 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
   if (!prediction || !prediction.direction) return null;
   const dir = prediction.direction;
   const confidence = prediction.confidence ?? 0;
+  const pUp = prediction.probabilityUp ?? (dir === "UP" ? confidence : 1 - confidence);
+  const pDown = prediction.probabilityDown ?? (dir === "DOWN" ? confidence : 1 - confidence);
   const baseCls =
     dir === "UP"
       ? "border-bergt-green/40 bg-bergt-green/10 text-bergt-green"
       : dir === "DOWN"
       ? "border-red-700/50 bg-red-900/40 text-red-200"
       : "border-slate-700 bg-slate-900 text-slate-300";
+
+  const categories = prediction.explanation?.categories ?? [];
 
   return (
     <section className={`rounded-lg border p-3 text-sm ${baseCls}`}>
@@ -279,6 +295,12 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
         ) : null}
       </header>
 
+      <ProbabilityBars probabilityUp={pUp} probabilityDown={pDown} />
+
+      {prediction.reasoning ? (
+        <p className="mt-2 text-xs opacity-90">{prediction.reasoning}</p>
+      ) : null}
+
       {prediction.zones ? (
         <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
           <ZoneCell
@@ -291,18 +313,45 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
         </div>
       ) : null}
 
-      {prediction.explanation && prediction.explanation.topFeatures.length > 0 ? (
+      {categories.length > 0 ? (
         <div className="mt-3">
           <p className="text-xs uppercase tracking-wide opacity-70">
-            Top contributing features
+            Where the signal comes from
           </p>
           <ul className="mt-1 space-y-1">
+            {categories.map((c) => (
+              <li
+                key={c.category}
+                className="flex items-center justify-between text-xs tabular-nums"
+              >
+                <span>{c.label}</span>
+                <CategoryBar contribution={c.contribution} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] uppercase tracking-wide opacity-50">
+            Categories: Fundamentals · News · Trend · Technical · Volume — combined via {prediction.explanation?.method}
+          </p>
+        </div>
+      ) : null}
+
+      {prediction.explanation && prediction.explanation.topFeatures.length > 0 ? (
+        <details className="mt-3 text-xs">
+          <summary className="cursor-pointer opacity-70 hover:opacity-100">
+            Top contributing features ({prediction.explanation.topFeatures.length})
+          </summary>
+          <ul className="mt-2 space-y-1">
             {prediction.explanation.topFeatures.map((f) => (
               <li
                 key={f.feature}
-                className="flex items-center justify-between text-xs tabular-nums"
+                className="flex items-center justify-between tabular-nums"
               >
-                <span className="font-mono">{f.feature}</span>
+                <span className="font-mono">
+                  <span className="mr-2 rounded-full border border-slate-600/40 bg-slate-900/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide opacity-70">
+                    {f.category}
+                  </span>
+                  {f.feature}
+                </span>
                 <span className="flex items-center gap-2">
                   <span className="opacity-70">val {fmtFeatureValue(f.value)}</span>
                   <span
@@ -317,16 +366,77 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-[10px] uppercase tracking-wide opacity-50">
-            method: {prediction.explanation.method}
-          </p>
-        </div>
+        </details>
       ) : null}
 
       {prediction.reason ? (
         <p className="mt-2 text-xs opacity-80">{prediction.reason}</p>
       ) : null}
     </section>
+  );
+}
+
+function ProbabilityBars({
+  probabilityUp,
+  probabilityDown,
+}: {
+  probabilityUp: number;
+  probabilityDown: number;
+}) {
+  const upPct = Math.max(0, Math.min(100, probabilityUp * 100));
+  const downPct = Math.max(0, Math.min(100, probabilityDown * 100));
+  return (
+    <div className="mt-3 space-y-2 text-xs">
+      <div>
+        <div className="flex items-baseline justify-between">
+          <span className="text-bergt-green">P(UP)</span>
+          <span className="tabular-nums">{upPct.toFixed(1)}%</span>
+        </div>
+        <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800/80">
+          <div
+            className="h-full rounded-full bg-bergt-green/70"
+            style={{ width: `${upPct}%` }}
+          />
+        </div>
+      </div>
+      <div>
+        <div className="flex items-baseline justify-between">
+          <span className="text-red-300">P(DOWN)</span>
+          <span className="tabular-nums">{downPct.toFixed(1)}%</span>
+        </div>
+        <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800/80">
+          <div
+            className="h-full rounded-full bg-red-500/70"
+            style={{ width: `${downPct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryBar({ contribution }: { contribution: number }) {
+  const magnitude = Math.min(1, Math.abs(contribution));
+  const widthPct = magnitude * 100;
+  const positive = contribution >= 0;
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className={positive ? "text-bergt-green" : "text-red-400"}
+      >
+        {positive ? "+" : ""}
+        {contribution.toFixed(2)}
+      </span>
+      <span className="relative inline-block h-1.5 w-24 rounded-full bg-slate-800/80">
+        <span
+          className={`absolute top-0 h-full rounded-full ${
+            positive ? "left-1/2 bg-bergt-green/70" : "right-1/2 bg-red-500/70"
+          }`}
+          style={{ width: `${widthPct / 2}%` }}
+        />
+        <span className="absolute left-1/2 top-0 h-full w-px bg-slate-600" />
+      </span>
+    </span>
   );
 }
 

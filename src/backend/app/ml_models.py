@@ -12,6 +12,42 @@ except ImportError:
     ML_AVAILABLE = False
     logger.warning("ml_dependencies_missing prediction_disabled=true")
 
+FEATURE_CATEGORIES: dict[str, str] = {
+    # Trend (moving averages)
+    "SMA_20": "trend",
+    "SMA_50": "trend",
+    "EMA_12": "trend",
+    "EMA_26": "trend",
+    # Technical (oscillators, bands, volatility)
+    "RSI": "technical",
+    "MACD_12_26_9": "technical",
+    "MACDh_12_26_9": "technical",
+    "MACDs_12_26_9": "technical",
+    "BBL_20_2.0": "technical",
+    "BBM_20_2.0": "technical",
+    "BBU_20_2.0": "technical",
+    "ATR": "technical",
+    "STOCH_K": "technical",
+    "STOCH_D": "technical",
+    # Volume
+    "Volume": "volume",
+    # News sentiment
+    "News_Sentiment": "news",
+    # Fundamentals
+    "PE_Ratio": "fundamentals",
+    "Forward_PE": "fundamentals",
+    "Price_To_Book": "fundamentals",
+}
+
+CATEGORY_LABELS = {
+    "trend": "Trend",
+    "technical": "Technical",
+    "volume": "Volume",
+    "news": "News",
+    "fundamentals": "Fundamentals",
+}
+
+
 class PricePredictor:
     def __init__(self):
         self.is_trained = False
@@ -106,16 +142,24 @@ class PricePredictor:
             proba = self.model.predict_proba(X_new)[0]
             direction = "UP" if prediction == 1 else "DOWN"
             confidence = float(max(proba))
+            # XGBoost sklearn-API exposes class labels in `classes_`. The
+            # convention is class 0 = DOWN (close <= prev), class 1 = UP.
+            probability_up = float(proba[1]) if len(proba) > 1 else float(proba[0])
+            probability_down = float(proba[0]) if len(proba) > 1 else 1.0 - probability_up
 
             explanation = self._explain_prediction(X_new, feature_cols)
             zones = self._compute_zones(latest, direction=direction, confidence=confidence)
+            reasoning = self._build_reasoning(direction, explanation)
 
             return {
                 'direction': direction,
                 'confidence': confidence,
+                'probabilityUp': probability_up,
+                'probabilityDown': probability_down,
                 'timestamp': str(latest.index[-1]) if not isinstance(latest.index, pd.RangeIndex) else None,
                 'explanation': explanation,
                 'zones': zones,
+                'reasoning': reasoning,
             }
         except Exception:
             logger.exception("model_prediction_failed")
@@ -148,18 +192,67 @@ class PricePredictor:
             for name, contribution, value in ranked[:6]:
                 top.append({
                     "feature": name,
+                    "category": FEATURE_CATEGORIES.get(name, "other"),
                     "contribution": float(contribution),
                     "value": float(value),
                     "direction": "up" if float(contribution) >= 0 else "down",
                 })
+
+            # Category-level contributions: sum SHAP values per category so the
+            # UI can show "Trend +0.42, News -0.05" without overwhelming the
+            # user with the full feature list.
+            category_totals: dict[str, float] = {}
+            for name, contribution, _value in zip(feature_cols, feature_values, X_new.iloc[0].tolist()):
+                category = FEATURE_CATEGORIES.get(name, "other")
+                category_totals[category] = category_totals.get(category, 0.0) + float(contribution)
+
+            categories = sorted(
+                (
+                    {
+                        "category": cat,
+                        "label": CATEGORY_LABELS.get(cat, cat.title()),
+                        "contribution": float(value),
+                        "direction": "up" if value >= 0 else "down",
+                    }
+                    for cat, value in category_totals.items()
+                ),
+                key=lambda item: abs(item["contribution"]),
+                reverse=True,
+            )
+
             return {
                 "baseline": bias,
                 "topFeatures": top,
+                "categories": categories,
                 "method": "xgboost_pred_contribs",
             }
         except Exception:
             logger.exception("model_explanation_failed")
             return None
+
+    @staticmethod
+    def _build_reasoning(direction: str, explanation: dict | None) -> str | None:
+        """Compose a one-sentence narrative from the top two SHAP categories.
+
+        Intentionally short — the cards already show the numbers; this gives
+        the user a "what's driving this signal" hook in plain English.
+        """
+        if not explanation or not explanation.get("categories"):
+            return None
+        cats = explanation["categories"][:2]
+        if not cats:
+            return None
+        leader = cats[0]
+        leader_label = leader["label"]
+        leader_contrib = leader["contribution"]
+        sign_word = "supports" if leader_contrib >= 0 else "weighs against"
+        narrative = f"{leader_label} {sign_word} the {direction} signal ({leader_contrib:+.2f})"
+        if len(cats) > 1:
+            secondary = cats[1]
+            sec_word = "reinforced by" if (secondary["contribution"] >= 0) == (leader_contrib >= 0) else "offset by"
+            narrative += f", {sec_word} {secondary['label']} ({secondary['contribution']:+.2f})"
+        narrative += "."
+        return narrative
 
     @staticmethod
     def _compute_zones(latest_row_df: pd.DataFrame, *, direction: str, confidence: float) -> dict | None:

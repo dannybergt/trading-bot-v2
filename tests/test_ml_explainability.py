@@ -70,6 +70,28 @@ class PricePredictorExplainabilityTests(unittest.TestCase):
             self.assertIn(feature["direction"], {"up", "down"})
             self.assertIn("contribution", feature)
             self.assertIn("value", feature)
+            self.assertIn("category", feature)
+            self.assertIn(
+                feature["category"],
+                {"trend", "technical", "volume", "news", "fundamentals", "other"},
+            )
+
+        # Category roll-up shows up alongside per-feature contributions.
+        self.assertIn("categories", explanation)
+        self.assertGreaterEqual(len(explanation["categories"]), 1)
+        for cat in explanation["categories"]:
+            self.assertIn("category", cat)
+            self.assertIn("label", cat)
+            self.assertIn("contribution", cat)
+
+        # Probabilities are explicit and sum to ~1.
+        self.assertAlmostEqual(
+            prediction["probabilityUp"] + prediction["probabilityDown"], 1.0, places=4
+        )
+
+        # Reasoning is a non-empty narrative referencing the top category.
+        self.assertIsNotNone(prediction["reasoning"])
+        self.assertGreater(len(prediction["reasoning"]), 0)
 
         zones = prediction["zones"]
         self.assertIsNotNone(zones)
