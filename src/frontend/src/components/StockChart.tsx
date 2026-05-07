@@ -8,6 +8,7 @@ import {
   createChart,
   createSeriesMarkers,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
   type SeriesMarker,
@@ -45,6 +46,17 @@ export type ChartPattern = {
   name: string;
   signal: "buy" | "sell" | "neutral";
   timestamp: string;
+};
+
+export type ChartZones = {
+  direction: "UP" | "DOWN";
+  currentPrice: number;
+  atr: number;
+  entryLow: number;
+  entryHigh: number;
+  stopLoss: number;
+  target: number;
+  riskReward: number | null;
 };
 
 type OverlayKey =
@@ -133,9 +145,11 @@ function patternMarkers(patterns: ChartPattern[]): SeriesMarker<Time>[] {
 export function StockChart({
   candles,
   patterns,
+  zones,
 }: {
   candles: ChartCandle[];
   patterns: ChartPattern[];
+  zones?: ChartZones | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -151,6 +165,8 @@ export function StockChart({
     lower?: ISeriesApi<"Line">;
   }>({});
   const markerPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const zoneLinesRef = useRef<IPriceLine[]>([]);
+  const [showZones, setShowZones] = useState(true);
 
   const [enabledOverlays, setEnabledOverlays] = useState<Set<OverlayKey>>(() => {
     const s = new Set<OverlayKey>();
@@ -317,6 +333,55 @@ export function StockChart({
     }
   }, [candles, enabledOverlays]);
 
+  // Manage zone price lines (entry / stop / target).
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const line of zoneLinesRef.current) {
+      series.removePriceLine(line);
+    }
+    zoneLinesRef.current = [];
+
+    if (!showZones || !zones) return;
+
+    const directionUp = zones.direction === "UP";
+    zoneLinesRef.current.push(
+      series.createPriceLine({
+        price: zones.entryLow,
+        color: directionUp ? "#22c55e" : "#ef4444",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: directionUp ? "Entry low" : "Entry high",
+      }),
+      series.createPriceLine({
+        price: zones.entryHigh,
+        color: directionUp ? "#22c55e" : "#ef4444",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: directionUp ? "Entry high" : "Entry low",
+      }),
+      series.createPriceLine({
+        price: zones.stopLoss,
+        color: "#ef4444",
+        lineWidth: 1,
+        lineStyle: 0,
+        axisLabelVisible: true,
+        title: "Stop",
+      }),
+      series.createPriceLine({
+        price: zones.target,
+        color: "#22c55e",
+        lineWidth: 1,
+        lineStyle: 0,
+        axisLabelVisible: true,
+        title: "Target",
+      }),
+    );
+  }, [zones, showZones, candles]);
+
   // Manage sub-panes (RSI, MACD).
   useEffect(() => {
     const chart = chartRef.current;
@@ -422,6 +487,22 @@ export function StockChart({
             </button>
           );
         })}
+        {zones ? (
+          <>
+            <span className="ml-2 text-slate-400">Zones:</span>
+            <button
+              type="button"
+              onClick={() => setShowZones((v) => !v)}
+              className={`rounded-full border px-2 py-0.5 transition ${
+                showZones
+                  ? "border-bergt-green/50 bg-bergt-green/10 text-bergt-green"
+                  : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500"
+              }`}
+            >
+              {showZones ? "Hide" : "Show"} entry/stop/target
+            </button>
+          </>
+        ) : null}
         <span className="ml-2 text-slate-400">Panes:</span>
         {SUB_PANE_DEFS.map((def) => {
           const active = enabledSubPanes.has(def.key);

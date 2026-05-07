@@ -7,12 +7,26 @@ import {
   StockChart,
   type ChartCandle,
   type ChartPattern,
+  type ChartZones,
 } from "../components/StockChart";
+
+type FeatureContribution = {
+  feature: string;
+  contribution: number;
+  value: number;
+  direction: "up" | "down";
+};
 
 type Prediction = {
   direction?: "UP" | "DOWN" | "HOLD";
   confidence?: number;
   reason?: string;
+  explanation?: {
+    baseline: number;
+    method: string;
+    topFeatures: FeatureContribution[];
+  } | null;
+  zones?: ChartZones | null;
 };
 
 type StockResponse = {
@@ -221,7 +235,11 @@ export function AnalysisPage() {
       ) : candles.length === 0 ? (
         <p className="text-sm text-slate-500">No chart data available.</p>
       ) : (
-        <StockChart candles={candles} patterns={patterns} />
+        <StockChart
+          candles={candles}
+          patterns={patterns}
+          zones={stock?.prediction?.zones ?? null}
+        />
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
@@ -236,22 +254,106 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
   if (!prediction || !prediction.direction) return null;
   const dir = prediction.direction;
   const confidence = prediction.confidence ?? 0;
-  const cls =
+  const baseCls =
     dir === "UP"
       ? "border-bergt-green/40 bg-bergt-green/10 text-bergt-green"
       : dir === "DOWN"
       ? "border-red-700/50 bg-red-900/40 text-red-200"
       : "border-slate-700 bg-slate-900 text-slate-300";
+
   return (
-    <section className={`rounded-lg border p-3 text-sm ${cls}`}>
-      <p className="font-medium">
-        ML signal: {dir} ({(confidence * 100).toFixed(1)}% confidence)
-      </p>
+    <section className={`rounded-lg border p-3 text-sm ${baseCls}`}>
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-medium">
+          ML signal: {dir} ({(confidence * 100).toFixed(1)}% confidence)
+        </p>
+        {prediction.zones?.riskReward != null ? (
+          <p className="text-xs opacity-80">
+            R:R = {prediction.zones.riskReward.toFixed(2)}
+          </p>
+        ) : null}
+      </header>
+
+      {prediction.zones ? (
+        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+          <ZoneCell
+            label="Entry"
+            value={`${prediction.zones.entryLow.toFixed(2)} – ${prediction.zones.entryHigh.toFixed(2)}`}
+          />
+          <ZoneCell label="Stop" value={prediction.zones.stopLoss.toFixed(2)} accent="red" />
+          <ZoneCell label="Target" value={prediction.zones.target.toFixed(2)} accent="green" />
+          <ZoneCell label="ATR" value={prediction.zones.atr.toFixed(3)} />
+        </div>
+      ) : null}
+
+      {prediction.explanation && prediction.explanation.topFeatures.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-xs uppercase tracking-wide opacity-70">
+            Top contributing features
+          </p>
+          <ul className="mt-1 space-y-1">
+            {prediction.explanation.topFeatures.map((f) => (
+              <li
+                key={f.feature}
+                className="flex items-center justify-between text-xs tabular-nums"
+              >
+                <span className="font-mono">{f.feature}</span>
+                <span className="flex items-center gap-2">
+                  <span className="opacity-70">val {fmtFeatureValue(f.value)}</span>
+                  <span
+                    className={
+                      f.direction === "up" ? "text-bergt-green" : "text-red-400"
+                    }
+                  >
+                    {f.contribution >= 0 ? "+" : ""}
+                    {f.contribution.toFixed(3)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] uppercase tracking-wide opacity-50">
+            method: {prediction.explanation.method}
+          </p>
+        </div>
+      ) : null}
+
       {prediction.reason ? (
-        <p className="mt-1 text-xs opacity-80">{prediction.reason}</p>
+        <p className="mt-2 text-xs opacity-80">{prediction.reason}</p>
       ) : null}
     </section>
   );
+}
+
+function ZoneCell({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "red" | "green";
+}) {
+  const cls =
+    accent === "red"
+      ? "text-red-300"
+      : accent === "green"
+      ? "text-bergt-green"
+      : "";
+  return (
+    <div className="rounded-md border border-slate-700/40 bg-slate-950/40 px-2 py-1.5">
+      <p className="text-[10px] uppercase tracking-wide opacity-60">{label}</p>
+      <p className={`mt-0.5 text-sm font-medium tabular-nums ${cls}`}>{value}</p>
+    </div>
+  );
+}
+
+function fmtFeatureValue(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return value.toFixed(0);
+  if (abs >= 10) return value.toFixed(2);
+  if (abs >= 1) return value.toFixed(3);
+  return value.toFixed(4);
 }
 
 function PatternsCard({ patterns }: { patterns: ChartPattern[] }) {
