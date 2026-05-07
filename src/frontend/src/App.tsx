@@ -7,6 +7,7 @@ import { AlertsPage } from "./pages/AlertsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ScannerPage } from "./pages/ScannerPage";
@@ -45,6 +46,7 @@ function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/watchlists" element={<WatchlistsPage />} />
         <Route path="/scanner" element={<ScannerPage />} />
         <Route

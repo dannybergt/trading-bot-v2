@@ -31,7 +31,9 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await register(email, password);
-      navigate("/", { replace: true });
+      // Send freshly-registered users straight into onboarding so the
+      // required broker / fees / tax inputs are captured up front.
+      navigate("/onboarding", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

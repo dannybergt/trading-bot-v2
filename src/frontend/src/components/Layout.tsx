@@ -15,6 +15,7 @@ const NAV_LINKS: NavLinkSpec[] = [
   { to: "/scanner", label: "Scanner" },
   { to: "/alerts", label: "Alerts" },
   { to: "/settings", label: "Settings" },
+  { to: "/onboarding", label: "Setup" },
   { to: "/admin", label: "Admin", adminOnly: true },
 ];
 

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "../api/client";
+import { useOnboarding } from "../auth/useOnboarding";
 
 type WatchlistItem = {
   symbol: string;
@@ -120,6 +121,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingCard />
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
@@ -188,6 +190,42 @@ export function DashboardPage() {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function OnboardingCard() {
+  const { steps, completedCount, total, isComplete, requiredOpenCount } = useOnboarding();
+  if (isComplete) return null;
+  const pct = total === 0 ? 0 : (completedCount / total) * 100;
+  const openLabels = steps.filter((s) => !s.completed).map((s) => s.label);
+  return (
+    <section className="card border-bergt-green/40">
+      <header className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Setup progress</h2>
+          <p className="text-sm text-slate-400">
+            {completedCount} / {total} configured
+            {requiredOpenCount > 0
+              ? ` · ${requiredOpenCount} required step${requiredOpenCount === 1 ? "" : "s"} open`
+              : " · all required done"}
+          </p>
+        </div>
+        <Link to="/onboarding" className="btn btn-primary">
+          Continue setup
+        </Link>
+      </header>
+      <div className="mt-3 h-2 w-full rounded-full bg-slate-800">
+        <div
+          className="h-full rounded-full bg-bergt-green/70 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {openLabels.length > 0 ? (
+        <p className="mt-2 text-xs text-slate-400">
+          Still open: {openLabels.join(" · ")}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
