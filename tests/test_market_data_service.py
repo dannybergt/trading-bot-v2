@@ -216,5 +216,103 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertEqual(payload["provider"]["quote"]["price"], 510.12)
 
 
+class FmpFallbackTests(unittest.TestCase):
+    def test_get_ticker_info_falls_back_to_fmp_when_yfinance_empty(self):
+        service = MarketDataService()
+        service.fmp = type(
+            "FakeFmp",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(
+                    lambda symbol: {
+                        "shortName": "Apple Inc.",
+                        "sector": "Technology",
+                        "marketCap": 3_000_000_000_000,
+                        "fmp_source": True,
+                    }
+                ),
+            },
+        )()
+
+        with patch("app.services.acquire_rate_limit", return_value=True), patch(
+            "app.services.yf.Ticker"
+        ) as ticker_ctor:
+            ticker_ctor.return_value.info = {}
+            payload = service.get_ticker_info("AAPL", asset_profile={"isCrypto": False})
+
+        self.assertEqual("Apple Inc.", payload["shortName"])
+        self.assertEqual("Technology", payload["sector"])
+        self.assertTrue(payload["fmp_source"])
+
+    def test_get_ticker_info_does_not_call_fmp_when_yfinance_returned_data(self):
+        service = MarketDataService()
+        called = []
+        service.fmp = type(
+            "FakeFmp",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(
+                    lambda symbol: called.append(symbol) or {"shortName": "should not be used"}
+                ),
+            },
+        )()
+
+        with patch("app.services.acquire_rate_limit", return_value=True), patch(
+            "app.services.yf.Ticker"
+        ) as ticker_ctor:
+            ticker_ctor.return_value.info = {
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "marketCap": 1_000,
+                "trailingPE": 25.0,
+            }
+            payload = service.get_ticker_info("AAPL", asset_profile={"isCrypto": False})
+
+        self.assertEqual("Technology", payload["sector"])
+        self.assertEqual([], called)
+
+    def test_get_market_news_falls_back_to_fmp_when_alpaca_empty(self):
+        service = MarketDataService(alpaca_service=None)
+        service.fmp = type(
+            "FakeFmp",
+            (),
+            {
+                "configured": True,
+                "normalized_news_items": staticmethod(
+                    lambda symbol, *, limit: [
+                        {
+                            "title": "FMP headline",
+                            "summary": "Backup provider",
+                            "url": "https://example.com",
+                            "timestamp": "2026-05-07T12:00:00Z",
+                            "source": "Reuters",
+                        }
+                    ]
+                ),
+            },
+        )()
+
+        with patch(
+            "app.services.analyze_news",
+            return_value=[
+                {
+                    "title": "FMP headline",
+                    "summary": "Backup provider",
+                    "score": 0.3,
+                    "label": "bullish",
+                    "timestamp": "2026-05-07T12:00:00Z",
+                    "url": "https://example.com",
+                    "source": "Reuters",
+                }
+            ],
+        ):
+            payload = service.get_market_news("AAPL", limit=5)
+
+        self.assertEqual("Reuters", payload["provider"]["source"])
+        self.assertEqual("bullish", payload["aggregate_label"])
+
+
 if __name__ == "__main__":
     unittest.main()

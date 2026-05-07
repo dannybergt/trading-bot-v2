@@ -17,8 +17,16 @@ errors=0
 
 # 1. Block staging of files that should never be committed.
 for path in "${staged_files[@]}"; do
+  # Allow .example/.template/.sample documentation files even if their basename
+  # would otherwise match a secret-bearing pattern.
   case "$path" in
-    .env.local|.env.local.*|.env|.env.*.local|*.pem|*.key|*.pfx|*/credentials.json|*/secrets.json)
+    *.example|*.template|*.sample)
+      continue
+      ;;
+  esac
+
+  case "$path" in
+    .env|.env.local|.env.*.local|.env.local.*|*.pem|*.key|*.pfx|*/credentials.json|*/secrets.json)
       echo "pre-commit: refusing to commit secret-bearing path: $path" >&2
       errors=1
       ;;

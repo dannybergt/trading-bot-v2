@@ -7,6 +7,8 @@ import yfinance as yf
 from app.analysis import calculate_indicators, detect_patterns
 from app.alpha_vantage_service import AlphaVantageService
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
+from app.fmp_service import FmpService
+from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_news
 from app.ml_models import PricePredictor
 
@@ -16,10 +18,11 @@ TICKER_INFO_TTL_SECONDS = 5 * 60
 NEWS_CACHE_TTL_SECONDS = 60
 
 class MarketDataService:
-    def __init__(self, alpaca_service=None, alpha_vantage_service=None):
+    def __init__(self, alpaca_service=None, alpha_vantage_service=None, fmp_service=None):
         self.predictor = PricePredictor()
         self.alpaca = alpaca_service
         self.alpha_vantage = alpha_vantage_service or AlphaVantageService()
+        self.fmp = fmp_service or FmpService()
         self._ticker_info_cache: dict[str, dict] = {}
         self._news_cache: dict[str, dict] = {}
 
@@ -104,17 +107,34 @@ class MarketDataService:
             logger.debug("fundamentals_skipped_crypto symbol=%s", symbol)
             return self._set_cached_payload(self._ticker_info_cache, target_symbol, {}, TICKER_INFO_TTL_SECONDS)
 
-        ticker_info = {}
-        try:
-            ticker_info = yf.Ticker(to_yfinance_symbol(symbol)).info or {}
-        except Exception:
-            logger.exception("fundamentals_fetch_failed symbol=%s", symbol)
+        ticker_info: dict = {}
+        if acquire_rate_limit("yfinance", timeout=4.0):
+            try:
+                ticker_info = yf.Ticker(to_yfinance_symbol(symbol)).info or {}
+            except Exception:
+                logger.exception("fundamentals_fetch_failed symbol=%s", symbol)
+                ticker_info = {}
+        else:
+            logger.warning("fundamentals_yfinance_rate_limit_skip symbol=%s", symbol)
+
+        if not isinstance(ticker_info, dict):
             ticker_info = {}
+
+        # FMP fallback: yfinance returned nothing useful (rate-limited, empty
+        # quoteSummary, or symbol not covered). Only chain when the result is
+        # genuinely empty so we don't waste FMP quota when yfinance is healthy.
+        meaningful_keys = {"sector", "industry", "marketCap", "trailingPE"}
+        if not (ticker_info and any(ticker_info.get(k) for k in meaningful_keys)):
+            if self.fmp.configured:
+                fmp_info = self.fmp.normalized_ticker_info(symbol)
+                if fmp_info:
+                    logger.info("fundamentals_fmp_fallback symbol=%s", symbol)
+                    ticker_info = {**ticker_info, **fmp_info}
 
         return self._set_cached_payload(
             self._ticker_info_cache,
             target_symbol,
-            ticker_info if isinstance(ticker_info, dict) else {},
+            ticker_info,
             TICKER_INFO_TTL_SECONDS,
         )
         
@@ -360,6 +380,21 @@ class MarketDataService:
                  'source': item.get('source', ''),
              })
 
+        # FMP fallback for news when Alpaca returned nothing — same surface for
+        # downstream sentiment scoring.
+        if not normalized and self.fmp.configured:
+            fmp_items = self.fmp.normalized_news_items(target_symbol, limit=limit)
+            for item in fmp_items:
+                normalized.append({
+                    "title": item.get("title", ""),
+                    "summary": item.get("summary", ""),
+                    "providerPublishTime": item.get("timestamp", ""),
+                    "url": item.get("url", ""),
+                    "source": item.get("source", "FMP"),
+                })
+            if normalized:
+                logger.info("market_news_fmp_fallback symbol=%s items=%d", symbol, len(normalized))
+
         analyzed_news = analyze_news(normalized)
 
         # Calculate aggregate sentiment
@@ -367,13 +402,22 @@ class MarketDataService:
         if analyzed_news:
             avg_score = sum(item['score'] for item in analyzed_news) / len(analyzed_news)
 
+        # If we ended up using FMP, report it as the source so downstream UIs
+        # can show provenance accurately.
+        sources = {item.get("source") for item in normalized if item.get("source")}
+        primary_source = "Alpaca" if "Alpaca" in sources or any(
+            s in sources for s in ("alpaca",)
+        ) else next(iter(sources), None)
+        if primary_source is None and analyzed_news:
+            primary_source = "FMP"
+
         payload = {
             'items': analyzed_news,
             'aggregate_score': avg_score,
             'aggregate_label': 'bullish' if avg_score > 0.1 else 'bearish' if avg_score < -0.1 else 'neutral',
             'provider': {
                 'status': 'live' if analyzed_news else 'unavailable',
-                'source': 'Alpaca' if analyzed_news else None,
+                'source': primary_source if analyzed_news else None,
                 'assetClass': profile.get("assetClass"),
                 'lastUpdated': analyzed_news[0].get('timestamp') if analyzed_news else None,
             },

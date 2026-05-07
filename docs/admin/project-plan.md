@@ -40,7 +40,7 @@ Erledigt seit `v2026.05.07-1`:
 
 ### Phase 1: Live-Daten, Watchlists, Assetklassen
 
-Status: funktional und releasefaehig, produktive Datenabdeckung noch auszubauen.
+Status: weitgehend abgeschlossen; Provider-Breite und Rate-Limit-Strategie sind eingebaut, optionale WebSocket-In-App-Zustellung bleibt bewusst spaeter.
 
 Erledigt:
 
@@ -53,11 +53,14 @@ Erledigt:
 - Alert-Management-Panel im Dashboard
 - serverseitiger Watchlist-Push-Dispatcher
 - deduplizierte Delivery-Historie in `watchlist_alert_deliveries`
+- zentraler Token-Bucket-Rate-Limiter (`app/rate_limit.py`) fuer Alpha Vantage, FMP und yfinance
+- FMP-Adapter (`app/fmp_service.py`) mit Profil/Key-Metrics/Ratios/ETF-Holdings/News
+- `MarketDataService` chained yfinance -> FMP fuer Stocks-Fundamentals und Alpaca-News -> FMP fuer News-Sentiment
+- `tests/run-fmp-live-smoke.sh` als FMP-Live-Smoke (analog zum Alpha-Vantage-Smoke)
+- produktive Push-/VAPID-Haertung
 
 Offen:
 
-- produktive Push-/VAPID-Haertung
-- breitere Provider-Fallbacks, Rate-Limit-Strategie und Live-Smokes je Assetklasse
 - nutzergebundene In-App-/WebSocket-Zustellung optional nach Push-Haertung
 
 ### Phase 2: Analyse und Research
