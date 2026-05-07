@@ -1613,6 +1613,9 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
         except Exception:
             logger.exception("analysis_push_notification_failed symbol=%s user_id=%s", symbol, current_user.id)
 
+    from app.analysis import compute_volume_profile
+    volume_profile = compute_volume_profile(df, bins=24)
+
     return {
         'symbol': symbol,
         **asset_response_fields(result['asset']),
@@ -1620,7 +1623,8 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
         'provider': result.get('provider'),
         'chart_data': chart_data,
         'patterns': result['patterns'],
-        'prediction': prediction
+        'prediction': prediction,
+        'volume_profile': volume_profile,
     }
 
 

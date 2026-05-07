@@ -9,6 +9,7 @@ import {
   type ChartPattern,
   type ChartZones,
 } from "../components/StockChart";
+import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumeProfile";
 
 type FeatureContribution = {
   feature: string;
@@ -53,6 +54,7 @@ type StockResponse = {
   chart_data: ChartCandle[];
   patterns: ChartPattern[];
   prediction: Prediction | null;
+  volume_profile?: VolumeProfilePayload | null;
 };
 
 type ResearchPayload = {
@@ -235,11 +237,14 @@ export function AnalysisPage() {
       ) : candles.length === 0 ? (
         <p className="text-sm text-slate-500">No chart data available.</p>
       ) : (
-        <StockChart
-          candles={candles}
-          patterns={patterns}
-          zones={stock?.prediction?.zones ?? null}
-        />
+        <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+          <StockChart
+            candles={candles}
+            patterns={patterns}
+            zones={stock?.prediction?.zones ?? null}
+          />
+          <VolumeProfile profile={stock?.volume_profile ?? null} />
+        </div>
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />

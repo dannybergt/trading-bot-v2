@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import ta
 
@@ -47,6 +48,58 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['VWAP'] = (typical_price * df['Volume']).cumsum() / cumulative_volume
 
     return df
+
+def compute_volume_profile(df: pd.DataFrame, *, bins: int = 24) -> dict:
+    """Bin OHLCV history by close price and sum the volume per bin.
+
+    Returns a list of `{priceLow, priceHigh, volume}` plus the point-of-control
+    (the bin with the most traded volume). The point of control is the price
+    level that traders most-revisited inside the timeframe — useful as a
+    natural support/resistance level even before the explicit detection layer
+    in wave 4.
+    """
+    empty = {"bins": [], "minPrice": None, "maxPrice": None, "totalVolume": 0.0,
+             "pointOfControl": None, "pointOfControlVolume": 0.0}
+    if df.empty or "Close" not in df.columns or "Volume" not in df.columns:
+        return empty
+
+    prices = df["Close"].dropna()
+    if prices.empty:
+        return empty
+
+    volumes = df["Volume"].reindex(prices.index).fillna(0.0)
+    min_price = float(prices.min())
+    max_price = float(prices.max())
+    if not np.isfinite(min_price) or not np.isfinite(max_price) or max_price <= min_price:
+        return {**empty, "minPrice": min_price, "maxPrice": max_price,
+                "totalVolume": float(volumes.sum())}
+
+    edges = np.linspace(min_price, max_price, bins + 1)
+    indices = np.clip(np.searchsorted(edges, prices.to_numpy(), side="right") - 1, 0, bins - 1)
+    bin_volumes = np.zeros(bins, dtype=float)
+    np.add.at(bin_volumes, indices, volumes.to_numpy(dtype=float))
+
+    poc_idx = int(np.argmax(bin_volumes))
+    poc_price = float((edges[poc_idx] + edges[poc_idx + 1]) / 2)
+
+    bin_data = [
+        {
+            "priceLow": float(edges[i]),
+            "priceHigh": float(edges[i + 1]),
+            "volume": float(bin_volumes[i]),
+        }
+        for i in range(bins)
+    ]
+
+    return {
+        "bins": bin_data,
+        "minPrice": min_price,
+        "maxPrice": max_price,
+        "totalVolume": float(bin_volumes.sum()),
+        "pointOfControl": poc_price,
+        "pointOfControlVolume": float(bin_volumes[poc_idx]),
+    }
+
 
 def detect_patterns(df: pd.DataFrame) -> list:
     """

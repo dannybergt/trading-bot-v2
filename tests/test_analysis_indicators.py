@@ -18,7 +18,7 @@ if not (BACKEND_ROOT / "app").exists():
     BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.analysis import calculate_indicators  # noqa: E402
+from app.analysis import calculate_indicators, compute_volume_profile  # noqa: E402
 
 
 def _synthetic_ohlcv(n: int = 250) -> pd.DataFrame:
@@ -80,6 +80,36 @@ class IndicatorTests(unittest.TestCase):
         self.assertIn("VWAP", result.columns)
         # Tail should still be finite.
         self.assertFalse(np.isinf(result["VWAP"].iloc[-1]))
+
+
+class VolumeProfileTests(unittest.TestCase):
+    def test_bins_sum_to_total_volume(self):
+        df = _synthetic_ohlcv(120)
+        profile = compute_volume_profile(df, bins=20)
+        self.assertEqual(20, len(profile["bins"]))
+        bin_sum = sum(b["volume"] for b in profile["bins"])
+        self.assertAlmostEqual(profile["totalVolume"], bin_sum, places=2)
+        self.assertAlmostEqual(df["Volume"].sum(), profile["totalVolume"], places=2)
+
+    def test_point_of_control_falls_inside_price_range(self):
+        df = _synthetic_ohlcv(120)
+        profile = compute_volume_profile(df)
+        self.assertIsNotNone(profile["pointOfControl"])
+        self.assertGreaterEqual(profile["pointOfControl"], profile["minPrice"])
+        self.assertLessEqual(profile["pointOfControl"], profile["maxPrice"])
+
+    def test_handles_flat_price_series(self):
+        # All closes equal -> max <= min path; should not crash.
+        df = pd.DataFrame({
+            "Open": [100.0] * 5,
+            "High": [100.0] * 5,
+            "Low": [100.0] * 5,
+            "Close": [100.0] * 5,
+            "Volume": [1000.0] * 5,
+        }, index=pd.date_range("2025-01-01", periods=5, freq="D"))
+        profile = compute_volume_profile(df)
+        self.assertEqual([], profile["bins"])
+        self.assertEqual(5000.0, profile["totalVolume"])
 
 
 if __name__ == "__main__":
