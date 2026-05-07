@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import { useOnboarding } from "../auth/useOnboarding";
@@ -75,6 +76,7 @@ type WatchlistNewsPayload = {
 };
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
     queryFn: () => apiFetch<Watchlist[]>("/api/watchlists"),
@@ -124,14 +126,12 @@ export function DashboardPage() {
       <OnboardingCard />
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-slate-400">
-            Overview of watchlists, asset coverage, and open alerts.
-          </p>
+          <h1 className="text-2xl font-semibold">{t("dashboard.title")}</h1>
+          <p className="text-sm text-slate-400">{t("dashboard.subtitle")}</p>
         </div>
         {watchlists.length > 0 ? (
           <label className="text-sm">
-            <span className="mr-2 text-slate-400">Active watchlist</span>
+            <span className="mr-2 text-slate-400">{t("dashboard.activeWatchlist")}</span>
             <select
               className="input inline-block w-auto"
               value={activeId}
@@ -149,15 +149,15 @@ export function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="Watchlists"
+          label={t("dashboard.stats.watchlists")}
           value={watchlistsQuery.isLoading ? "…" : String(watchlists.length)}
         />
         <Stat
-          label="Tracked symbols"
+          label={t("dashboard.stats.trackedSymbols")}
           value={watchlistsQuery.isLoading ? "…" : String(totalSymbols)}
         />
         <Stat
-          label="Alert rules"
+          label={t("dashboard.stats.alertRules")}
           value={
             alertsSummaryQuery.isLoading
               ? "…"
@@ -165,12 +165,14 @@ export function DashboardPage() {
           }
           hint={
             alertsSummaryQuery.data
-              ? `${alertsSummaryQuery.data.summary.enabledRules} enabled`
+              ? t("dashboard.stats.enabled", {
+                  count: alertsSummaryQuery.data.summary.enabledRules,
+                })
               : undefined
           }
         />
         <Stat
-          label="Open events"
+          label={t("dashboard.stats.openEvents")}
           value={
             alertsSummaryQuery.isLoading
               ? "…"
@@ -194,24 +196,30 @@ export function DashboardPage() {
 }
 
 function OnboardingCard() {
+  const { t } = useTranslation();
   const { steps, completedCount, total, isComplete, requiredOpenCount } = useOnboarding();
   if (isComplete) return null;
   const pct = total === 0 ? 0 : (completedCount / total) * 100;
   const openLabels = steps.filter((s) => !s.completed).map((s) => s.label);
+  const requiredText =
+    requiredOpenCount === 0
+      ? t("dashboard.onboarding.allRequiredDone")
+      : requiredOpenCount === 1
+      ? t("dashboard.onboarding.requiredOpenOne")
+      : t("dashboard.onboarding.requiredOpen", { count: requiredOpenCount });
   return (
     <section className="card border-bergt-green/40">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Setup progress</h2>
+          <h2 className="text-lg font-semibold">{t("dashboard.onboarding.title")}</h2>
           <p className="text-sm text-slate-400">
-            {completedCount} / {total} configured
-            {requiredOpenCount > 0
-              ? ` · ${requiredOpenCount} required step${requiredOpenCount === 1 ? "" : "s"} open`
-              : " · all required done"}
+            {t("dashboard.onboarding.configured", { completed: completedCount, total })}
+            {" · "}
+            {requiredText}
           </p>
         </div>
         <Link to="/onboarding" className="btn btn-primary">
-          Continue setup
+          {t("dashboard.onboarding.continue")}
         </Link>
       </header>
       <div className="mt-3 h-2 w-full rounded-full bg-slate-800">
@@ -222,7 +230,7 @@ function OnboardingCard() {
       </div>
       {openLabels.length > 0 ? (
         <p className="mt-2 text-xs text-slate-400">
-          Still open: {openLabels.join(" · ")}
+          {t("dashboard.onboarding.stillOpen", { labels: openLabels.join(" · ") })}
         </p>
       ) : null}
     </section>

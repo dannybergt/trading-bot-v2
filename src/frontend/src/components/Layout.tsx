@@ -1,25 +1,28 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../auth/AuthContext";
+import { LanguageToggle } from "./LanguageToggle";
 
 type NavLinkSpec = {
   to: string;
-  label: string;
+  labelKey: string;
   end?: boolean;
   adminOnly?: boolean;
 };
 
 const NAV_LINKS: NavLinkSpec[] = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/watchlists", label: "Watchlists" },
-  { to: "/scanner", label: "Scanner" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/settings", label: "Settings" },
-  { to: "/onboarding", label: "Setup" },
-  { to: "/admin", label: "Admin", adminOnly: true },
+  { to: "/", labelKey: "nav.dashboard", end: true },
+  { to: "/watchlists", labelKey: "nav.watchlists" },
+  { to: "/scanner", labelKey: "nav.scanner" },
+  { to: "/alerts", labelKey: "nav.alerts" },
+  { to: "/settings", labelKey: "nav.settings" },
+  { to: "/onboarding", labelKey: "nav.setup" },
+  { to: "/admin", labelKey: "nav.admin", adminOnly: true },
 ];
 
 export function Layout() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const visibleLinks = NAV_LINKS.filter(
@@ -32,7 +35,7 @@ export function Layout() {
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2 font-semibold">
             <span className="inline-block h-2 w-2 rounded-full bg-bergt-green" />
-            <span>NexusPulse Trade</span>
+            <span>{t("app.title")}</span>
           </Link>
           <nav className="flex items-center gap-1">
             {visibleLinks.map((link) => (
@@ -48,11 +51,12 @@ export function Layout() {
                   }`
                 }
               >
-                {link.label}
+                {t(link.labelKey)}
               </NavLink>
             ))}
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-400">
+            <LanguageToggle compact />
             {user ? (
               <>
                 <span className="hidden sm:inline">{user.email}</span>
@@ -64,7 +68,7 @@ export function Layout() {
                   }}
                   className="btn"
                 >
-                  Logout
+                  {t("nav.logout")}
                 </button>
               </>
             ) : null}

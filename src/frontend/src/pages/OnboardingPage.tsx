@@ -9,17 +9,19 @@
  */
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 
 import { useOnboarding, type OnboardingStep } from "../auth/useOnboarding";
 
 const STEP_ORDER: OnboardingStep["id"][] = ["mfa", "alpaca", "trading", "taxes"];
 
 export function OnboardingPage() {
+  const { t } = useTranslation();
   const { steps, completedCount, total, allRequiredDone, isLoading } = useOnboarding();
   const [stepIndex, setStepIndex] = useState(0);
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">Loading onboarding state…</p>;
+    return <p className="text-sm text-slate-400">{t("app.loading")}</p>;
   }
 
   const orderedSteps = STEP_ORDER.map((id) => steps.find((s) => s.id === id)!).filter(
@@ -30,13 +32,8 @@ export function OnboardingPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Welcome — let's get set up</h1>
-        <p className="text-sm text-slate-400">
-          We'll walk through the inputs that drive every buy / sell signal:
-          fundamentals, news, market trend, technical analysis, AI — combined
-          into a probability-weighted recommendation that only fires when the
-          NET return (after fees and capital-gains tax) clears your minimum.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("onboarding.headline")}</h1>
+        <p className="text-sm text-slate-400">{t("onboarding.intro")}</p>
       </header>
 
       <ProgressIndicator completed={completedCount} total={total} />
@@ -55,12 +52,12 @@ export function OnboardingPage() {
             onClick={() => setStepIndex(idx)}
           >
             <p className="text-xs uppercase tracking-wide opacity-60">
-              Step {idx + 1}
-              {s.required ? " · Required" : " · Optional"}
+              {t("onboarding.step", { index: idx + 1 })}
+              {s.required ? ` · ${t("onboarding.required")}` : ` · ${t("onboarding.optional")}`}
             </p>
             <p className="mt-0.5 font-medium">
               {s.completed ? "✓ " : ""}
-              {s.label}
+              {translateStepLabel(t, s.id) ?? s.label}
             </p>
           </li>
         ))}
@@ -75,7 +72,7 @@ export function OnboardingPage() {
           disabled={stepIndex === 0}
           onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
         >
-          Back
+          {t("app.back")}
         </button>
         {stepIndex < orderedSteps.length - 1 ? (
           <button
@@ -83,7 +80,7 @@ export function OnboardingPage() {
             className="btn btn-primary"
             onClick={() => setStepIndex((i) => Math.min(orderedSteps.length - 1, i + 1))}
           >
-            Next
+            {t("app.next")}
           </button>
         ) : (
           <Link
@@ -92,21 +89,41 @@ export function OnboardingPage() {
               allRequiredDone ? "" : "opacity-60 hover:opacity-80"
             }`}
           >
-            {allRequiredDone ? "Continue to dashboard" : "Skip for now"}
+            {allRequiredDone
+              ? t("onboarding.continueDashboard")
+              : t("onboarding.skip")}
           </Link>
         )}
       </div>
 
       <p className="text-xs text-slate-500">
-        You can revisit and change every value later under{" "}
-        <Link to="/settings" className="text-bergt-green hover:underline">
-          Settings
-        </Link>
-        . The dashboard shows your remaining steps so you can finish at any
-        time.
+        <Trans
+          i18nKey="onboarding.revisitHint"
+          values={{ settingsLink: "" }}
+          components={{
+            // eslint-disable-next-line jsx-a11y/anchor-has-content
+            a: <Link to="/settings" className="text-bergt-green hover:underline" />,
+          }}
+        >
+          You can revisit and change every value later under{" "}
+          <Link to="/settings" className="text-bergt-green hover:underline">
+            Settings
+          </Link>
+          . The dashboard shows your remaining steps so you can finish at any
+          time.
+        </Trans>
       </p>
     </div>
   );
+}
+
+function translateStepLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  id: OnboardingStep["id"],
+): string | null {
+  const key = `onboarding.steps.${id}.label`;
+  const translated = t(key);
+  return translated && translated !== key ? translated : null;
 }
 
 function ProgressIndicator({
@@ -116,12 +133,16 @@ function ProgressIndicator({
   completed: number;
   total: number;
 }) {
+  const { t } = useTranslation();
   const pct = total === 0 ? 0 : (completed / total) * 100;
   return (
     <div>
       <div className="flex items-baseline justify-between text-xs">
         <span className="text-slate-300">
-          Setup progress: {completed} / {total}
+          {t("dashboard.onboarding.title")}: {t("dashboard.onboarding.configured", {
+            completed,
+            total,
+          })}
         </span>
         <span className="text-slate-500">{pct.toFixed(0)}%</span>
       </div>
@@ -136,16 +157,35 @@ function ProgressIndicator({
 }
 
 function StepDetail({ step }: { step: OnboardingStep }) {
+  const { t } = useTranslation();
   const target = step.id === "mfa" ? "/settings#mfa" : "/settings";
+  const labelKey = `onboarding.steps.${step.id}.label`;
+  const descKey = `onboarding.steps.${step.id}.description`;
+  const ctaKey = step.completed
+    ? `onboarding.steps.${step.id}.ctaConfigured`
+    : `onboarding.steps.${step.id}.ctaOpen`;
+  const fallbackCtaKey = `onboarding.steps.${step.id}.cta`;
+  const translatedLabel = t(labelKey);
+  const translatedDesc = t(descKey);
+  const translatedCta = t(ctaKey);
+  const ctaText =
+    translatedCta && translatedCta !== ctaKey
+      ? translatedCta
+      : (() => {
+          const fallback = t(fallbackCtaKey);
+          return fallback && fallback !== fallbackCtaKey ? fallback : step.cta;
+        })();
   return (
     <article className="card">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">
             {step.completed ? "✓ " : ""}
-            {step.label}
+            {translatedLabel && translatedLabel !== labelKey ? translatedLabel : step.label}
           </h2>
-          <p className="text-sm text-slate-400">{step.description}</p>
+          <p className="text-sm text-slate-400">
+            {translatedDesc && translatedDesc !== descKey ? translatedDesc : step.description}
+          </p>
         </div>
         <span
           className={`rounded-full border px-2 py-0.5 text-xs ${
@@ -154,18 +194,17 @@ function StepDetail({ step }: { step: OnboardingStep }) {
               : "border-amber-700/40 bg-amber-900/20 text-amber-200"
           }`}
         >
-          {step.completed ? "Configured" : step.required ? "Required" : "Optional"}
+          {step.completed
+            ? t("onboarding.configured")
+            : step.required
+            ? t("onboarding.required")
+            : t("onboarding.optional")}
         </span>
       </header>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <Link to={target} className="btn btn-primary">
-          {step.cta}
+          {ctaText}
         </Link>
-        {step.completed ? (
-          <span className="text-xs text-slate-500">
-            You can revise this in Settings later.
-          </span>
-        ) : null}
       </div>
     </article>
   );

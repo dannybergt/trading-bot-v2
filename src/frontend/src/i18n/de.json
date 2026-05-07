@@ -1,0 +1,114 @@
+{
+  "app": {
+    "title": "NexusPulse Trade",
+    "loading": "Lade…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "language": "Sprache",
+    "languageEnglish": "English",
+    "languageGerman": "Deutsch"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "watchlists": "Watchlists",
+    "scanner": "Scanner",
+    "alerts": "Alerts",
+    "settings": "Einstellungen",
+    "setup": "Einrichtung",
+    "admin": "Admin",
+    "logout": "Abmelden"
+  },
+  "auth": {
+    "loginTitle": "NexusPulse Trade",
+    "loginSubtitle": "Anmelden, um fortzufahren.",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "newPassword": "Neues Passwort",
+    "confirmPassword": "Passwort bestätigen",
+    "mfaCode": "MFA-Code",
+    "signIn": "Anmelden",
+    "signingIn": "Anmeldung läuft…",
+    "register": "Registrieren",
+    "registering": "Wird angelegt…",
+    "noAccount": "Noch kein Konto?",
+    "haveAccount": "Bereits ein Konto?",
+    "forgotPassword": "Passwort vergessen?",
+    "registerTitle": "Konto erstellen",
+    "registerSubtitle": "Der erste registrierte Nutzer wird Administrator.",
+    "passwordsMismatch": "Passwörter stimmen nicht überein.",
+    "loginFailed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "registerFailed": "Registrierung fehlgeschlagen. Bitte erneut versuchen.",
+    "forgotTitle": "Passwort vergessen",
+    "forgotSubtitle": "Wir senden einen Reset-Link, wenn die Adresse ein Konto hat.",
+    "forgotSubmit": "Reset-Link senden",
+    "forgotRequesting": "Wird angefordert…",
+    "forgotSuccess": "Falls die E-Mail-Adresse existiert, ist eine Anleitung unterwegs.",
+    "resetTitle": "Passwort zurücksetzen",
+    "resetSubtitle": "Token aus der Reset-E-Mail eintragen und neues Passwort wählen.",
+    "resetToken": "Reset-Token",
+    "resetSubmit": "Passwort zurücksetzen",
+    "resetting": "Wird gesetzt…",
+    "resetSuccess": "Passwort wurde zurückgesetzt.",
+    "backToLogin": "Zurück zum Login"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Übersicht über Watchlists, Asset-Abdeckung und offene Alerts.",
+    "activeWatchlist": "Aktive Watchlist",
+    "stats": {
+      "watchlists": "Watchlists",
+      "trackedSymbols": "Beobachtete Symbole",
+      "alertRules": "Alert-Regeln",
+      "openEvents": "Offene Events",
+      "enabled": "{{count}} aktiv"
+    },
+    "onboarding": {
+      "title": "Einrichtungs-Fortschritt",
+      "configured": "{{completed}} / {{total}} konfiguriert",
+      "requiredOpen": "{{count}} Pflicht-Schritte offen",
+      "requiredOpenOne": "1 Pflicht-Schritt offen",
+      "allRequiredDone": "alle Pflicht-Schritte erledigt",
+      "continue": "Einrichtung fortsetzen",
+      "stillOpen": "Noch offen: {{labels}}"
+    }
+  },
+  "onboarding": {
+    "headline": "Willkommen — lass uns einrichten",
+    "intro": "Wir gehen die Eingaben durch, die jedes Kauf-/Verkaufs-Signal beeinflussen: Fundamentaldaten, News, Markttrends, technische Analyse, KI — kombiniert zu einer wahrscheinlichkeitsbewerteten Empfehlung, die nur ausgelöst wird, wenn der NETTO-Ertrag (nach Gebühren und Kapitalertragssteuer) dein Minimum erreicht.",
+    "step": "Schritt {{index}}",
+    "required": "Pflicht",
+    "optional": "Optional",
+    "configured": "Konfiguriert",
+    "continueDashboard": "Weiter zum Dashboard",
+    "skip": "Vorerst überspringen",
+    "revisitHint": "Du kannst jeden Wert später unter <a>Einstellungen</a> ändern. Das Dashboard zeigt offene Schritte, damit du jederzeit fortsetzen kannst.",
+    "steps": {
+      "mfa": {
+        "label": "Zwei-Faktor-Authentifizierung",
+        "description": "Schützt das Konto, in dem Broker-Credentials und Trading-Aktionen liegen.",
+        "ctaConfigured": "Konfiguriert",
+        "ctaOpen": "MFA einrichten"
+      },
+      "alpaca": {
+        "label": "Broker (Alpaca)",
+        "description": "Erforderlich für Portfolio-Reads und (später) automatische Ausführung.",
+        "ctaConfigured": "Konfiguriert",
+        "ctaOpen": "Alpaca verbinden"
+      },
+      "trading": {
+        "label": "Trading-Defaults",
+        "description": "Broker-Gebühren und dein minimaler Netto-Ertrag steuern jede Empfehlung.",
+        "cta": "Gebühren und Mindest-Yield setzen"
+      },
+      "taxes": {
+        "label": "Kapitalertragssteuer",
+        "description": "Wird vom projizierten Gewinn abgezogen, damit Empfehlungen nur auslösen, wenn der NETTO-Ertrag dein Minimum erreicht.",
+        "cta": "Steuersatz setzen"
+      }
+    }
+  }
+}

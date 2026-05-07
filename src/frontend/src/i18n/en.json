@@ -1,0 +1,114 @@
+{
+  "app": {
+    "title": "NexusPulse Trade",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "delete": "Delete",
+    "remove": "Remove",
+    "language": "Language",
+    "languageEnglish": "English",
+    "languageGerman": "Deutsch"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "watchlists": "Watchlists",
+    "scanner": "Scanner",
+    "alerts": "Alerts",
+    "settings": "Settings",
+    "setup": "Setup",
+    "admin": "Admin",
+    "logout": "Logout"
+  },
+  "auth": {
+    "loginTitle": "NexusPulse Trade",
+    "loginSubtitle": "Sign in to continue.",
+    "email": "Email",
+    "password": "Password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "mfaCode": "MFA code",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "register": "Register",
+    "registering": "Creating…",
+    "noAccount": "No account?",
+    "haveAccount": "Already have an account?",
+    "forgotPassword": "Forgot password?",
+    "registerTitle": "Create account",
+    "registerSubtitle": "First registered user becomes admin.",
+    "passwordsMismatch": "Passwords do not match.",
+    "loginFailed": "Login failed. Try again.",
+    "registerFailed": "Registration failed. Try again.",
+    "forgotTitle": "Forgot password",
+    "forgotSubtitle": "We email a reset link if the address has an account.",
+    "forgotSubmit": "Send reset link",
+    "forgotRequesting": "Requesting…",
+    "forgotSuccess": "If the email exists, reset instructions are on their way.",
+    "resetTitle": "Reset password",
+    "resetSubtitle": "Use the token from your reset email and choose a new password.",
+    "resetToken": "Reset token",
+    "resetSubmit": "Reset password",
+    "resetting": "Resetting…",
+    "resetSuccess": "Password reset.",
+    "backToLogin": "Back to login"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overview of watchlists, asset coverage, and open alerts.",
+    "activeWatchlist": "Active watchlist",
+    "stats": {
+      "watchlists": "Watchlists",
+      "trackedSymbols": "Tracked symbols",
+      "alertRules": "Alert rules",
+      "openEvents": "Open events",
+      "enabled": "{{count}} enabled"
+    },
+    "onboarding": {
+      "title": "Setup progress",
+      "configured": "{{completed}} / {{total}} configured",
+      "requiredOpen": "{{count}} required steps open",
+      "requiredOpenOne": "1 required step open",
+      "allRequiredDone": "all required done",
+      "continue": "Continue setup",
+      "stillOpen": "Still open: {{labels}}"
+    }
+  },
+  "onboarding": {
+    "headline": "Welcome — let's get set up",
+    "intro": "We'll walk through the inputs that drive every buy / sell signal: fundamentals, news, market trend, technical analysis, AI — combined into a probability-weighted recommendation that only fires when the NET return (after fees and capital-gains tax) clears your minimum.",
+    "step": "Step {{index}}",
+    "required": "Required",
+    "optional": "Optional",
+    "configured": "Configured",
+    "continueDashboard": "Continue to dashboard",
+    "skip": "Skip for now",
+    "revisitHint": "You can revisit and change every value later under <a>Settings</a>. The dashboard shows your remaining steps so you can finish at any time.",
+    "steps": {
+      "mfa": {
+        "label": "Two-factor authentication",
+        "description": "Protects the account that holds broker credentials and trading actions.",
+        "ctaConfigured": "Configured",
+        "ctaOpen": "Set up MFA"
+      },
+      "alpaca": {
+        "label": "Broker (Alpaca)",
+        "description": "Required for portfolio reads and (later) automated execution.",
+        "ctaConfigured": "Configured",
+        "ctaOpen": "Connect Alpaca"
+      },
+      "trading": {
+        "label": "Trading defaults",
+        "description": "Broker fees and your minimum net yield drive every recommendation.",
+        "cta": "Set fees and minimum yield"
+      },
+      "taxes": {
+        "label": "Capital-gains tax",
+        "description": "Subtracted from projected gains so recommendations only fire when the NET return clears your minimum.",
+        "cta": "Set tax rate"
+      }
+    }
+  }
+}

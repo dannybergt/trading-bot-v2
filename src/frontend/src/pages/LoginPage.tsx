@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import { LanguageToggle } from "../components/LanguageToggle";
 
 type LocationState = { from?: { pathname?: string } };
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const { user, login, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,7 +45,7 @@ export function LoginPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("Login failed. Try again.");
+        setError(t("auth.loginFailed"));
       }
     } finally {
       setSubmitting(false);
@@ -56,12 +59,15 @@ export function LoginPage() {
         className="card w-full max-w-sm space-y-4"
         aria-label="login form"
       >
-        <div>
-          <h1 className="text-xl font-semibold">NexusPulse Trade</h1>
-          <p className="text-sm text-slate-400">Sign in to continue.</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">{t("auth.loginTitle")}</h1>
+            <p className="text-sm text-slate-400">{t("auth.loginSubtitle")}</p>
+          </div>
+          <LanguageToggle compact />
         </div>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Email</span>
+          <span className="mb-1 block text-slate-300">{t("auth.email")}</span>
           <input
             type="email"
             autoComplete="email"
@@ -72,7 +78,7 @@ export function LoginPage() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Password</span>
+          <span className="mb-1 block text-slate-300">{t("auth.password")}</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -84,7 +90,7 @@ export function LoginPage() {
         </label>
         {mfaRequired ? (
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">MFA code</span>
+            <span className="mb-1 block text-slate-300">{t("auth.mfaCode")}</span>
             <input
               type="text"
               inputMode="numeric"
@@ -103,16 +109,16 @@ export function LoginPage() {
           </p>
         ) : null}
         <button type="submit" className="btn btn-primary w-full" disabled={submitting}>
-          {submitting ? "Signing in..." : "Sign in"}
+          {submitting ? t("auth.signingIn") : t("auth.signIn")}
         </button>
         <p className="text-center text-sm text-slate-400">
-          No account?{" "}
+          {t("auth.noAccount")}{" "}
           <Link to="/register" className="text-bergt-green hover:underline">
-            Register
+            {t("auth.register")}
           </Link>{" "}
           ·{" "}
           <Link to="/forgot-password" className="text-bergt-green hover:underline">
-            Forgot password?
+            {t("auth.forgotPassword")}
           </Link>
         </p>
       </form>
