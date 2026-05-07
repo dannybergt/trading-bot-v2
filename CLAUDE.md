@@ -27,6 +27,14 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 - `state/current-focus.md` haelt den aktuellen Wiedereinstiegspunkt; `state/project-status.md` listet "Gesichert verifiziert" + "Offene Punkte" + "Naechste Schritte".
 - Doku ist gleichberechtigt mit Code. Eine Aenderung ist erst fertig, wenn die Entscheidungsregel aus `docs/admin/project-plan.md` erfuellt ist (Phase passt, keine neue Security-Schuld, lokal verifiziert, Backup/Export/Import angepasst falls Persistenz beruehrt, GitHub Actions gruen, Rehearsal bei Release).
 
+## UX-Direktive (verbindlich)
+
+- Uebersichtlich + einfach: Menues, Dropdowns, klare Aktionen, keine versteckten Icon-Pfade
+- DE/EN parallel; Sprach-Toggle auf Login + im Layout, Auswahl persistiert
+- Empfehlungen und Wahrscheinlichkeiten muessen ihre Quellen zeigen
+- Werte (Preise/Erloese/Steuern/Gebuehren/P(UP)/P(DOWN)) immer mit Einheit, Vorzeichen, Vergleichswert
+- Onboarding-Restschritte sichtbar im Dashboard
+
 ## Sicherheits-Guardrails (immer aktiv)
 
 - Keine Secrets in Code, Logs, Tests, Exceptions, Tool-Output oder Commit-Messages.

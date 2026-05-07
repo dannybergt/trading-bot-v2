@@ -120,6 +120,17 @@ Vorbedingungen:
 - Broker-Fehlerpfade und Recovery getestet
 - Auto-Trade darf nur ausloesen, wenn die Empfehlung den Net-Yield-Gate erfuellt UND der Nutzer den Asset/Strategie-Korridor explizit freigegeben hat
 
+## UX-Direktive
+
+Verbindlich fuer alle Frontend-Arbeit:
+
+- Bedienung muss uebersichtlich, einfach und schnell wirken — Menues, Dropdowns, klare Aktionen, keine versteckten Pfade.
+- Jede Empfehlung, Zone, Wahrscheinlichkeit muss vom Nutzer auf ihre Quellen zurueckfuehrbar sein (Fundamentals/News/Trend/Technical/AI), nicht nur als Confidence-Zahl.
+- Mehrere Aktionen pro Element gehoeren in eindeutige Buttons oder Dropdowns; keine geheimen Icon-Klicks ohne Beschriftung/Tooltip.
+- Sprachen: Deutsch und Englisch werden parallel unterstuetzt; Toggle ist auf der Login-Seite und im eingeloggten Layout erreichbar; Auswahl persistiert per Nutzer.
+- Wichtige Werte (Preise, Erloese, Steuern, Gebuehren, P(UP)/P(DOWN)) immer mit Einheit, Vorzeichen und Vergleichswert anzeigen, damit Interpretation nicht beim Nutzer haengen bleibt.
+- Onboarding und Setup-Status sind Teil der Hauptnavigation, nicht versteckt; das Dashboard zeigt Restschritte und stellt sie per Klick wieder zustellbar.
+
 ## Sicherheitsachsen
 
 Immer mitzudenken:

@@ -61,7 +61,7 @@ Der operative Gesamtplan und der aktuelle Release-Stand sind in `docs/admin/proj
 ### Phase 3: Paper-Trading
 
 - Orders und simulierte Ausfuehrung mit Paper-Geld
-- Transaktionsjournal mit absolutem und prozentualem PnL
+- Vollstaendiges chronologisches Trade-Journal: jede ausgeloeste Order wird persistent erfasst (kein Verlust), pro Position absoluter und prozentualer PnL, summierte Gebuehren und Steuerlast, Backup/Export/Import wie alle anderen Persistenz-Tabellen
 - Visualisierung von Orders und Exits direkt im Chart
 - Net-Yield-Gate aus Phase 2 als Filter: Empfehlung wird nur als Order vorgeschlagen, wenn Netto-Ertrag >= `min_target_yield`
 - Plausibilitaetsansicht fuer jede KI-Entscheidung mit Kategorie- und Feature-Erklaerbarkeit
