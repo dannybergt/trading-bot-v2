@@ -5,7 +5,9 @@ import { useAuth } from "../auth/AuthContext";
 const NAV_LINKS = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/watchlists", label: "Watchlists" },
+  { to: "/scanner", label: "Scanner" },
   { to: "/alerts", label: "Alerts" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export function Layout() {
