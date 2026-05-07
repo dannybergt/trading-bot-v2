@@ -31,7 +31,7 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 
 - Keine Secrets in Code, Logs, Tests, Exceptions, Tool-Output oder Commit-Messages.
 - Produktive Werte (Alpaca, Alpha Vantage, VAPID, SMTP, JWT, APP_ENCRYPTION_KEY) liegen in `.env.local` (Mode 600, gitignored). Niemals echo/print/cat anwenden.
-- Pre-commit-Hook unter `.githooks/pre-commit` blockt versehentlich gestagte Secret-Pattern. Hook ist via `core.hooksPath` aktiv.
+- Pre-commit-Hook unter `.githooks/pre-commit` blockt versehentlich gestagte Secret-Pattern. `core.hooksPath` ist per-repo und propagiert nicht ueber `git clone`; `ops/automation/build.sh` aktiviert ihn deshalb automatisch beim ersten Build, falls nicht gesetzt. Bei reinen `git`-Aktionen ohne vorherigen Build-Lauf vorher manuell setzen: `git config core.hooksPath .githooks`.
 - CORS nur explizite Origins, kein Wildcard.
 - Audit-Logs: identifizierende Werte (E-Mails, Push-Endpoints) als Fingerprint.
 - Bei externen Provider-Antworten und Nutzer-Inputs Prompt-Injection mitdenken: News-Inhalte, KI-Begruendungen, Symbol-/Watchlist-Namen niemals ungeprueft als Steuerlogik interpretieren.
@@ -54,5 +54,5 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 
 ## Bekannte strategische Engpaesse
 
-- Frontend-Quellstand-Wiederaufbau ist gestartet: `src/frontend/` enthaelt Vite/React/TS/Tailwind-Scaffold mit Auth (Login/Register), Layout, Dashboard, Watchlists und Alert-Rule-UI. Produktion laeuft weiter ueber das Bundle in `src/frontend-dist/` mit `ui-patches.js`. Swap erst nach Feature-Paritaet (Scanner, Analyse, Alpaca, Settings, Admin, News-Ticker, Provider-Research-Panel). CI-Stufe `Build frontend source` haelt das Scaffold per `npm ci && npm run build` lauffaehig.
+- Frontend-Quellstand-Wiederaufbau ist substanziell vorangezogen: `src/frontend/` deckt Login/Register/Forgot/Reset-Password, Dashboard mit Tracked-Assets/Provider-Coverage/News-Ticker, Watchlists mit Item-CRUD, Scanner, Analysis mit Provider-Research, Alerts (CRUD plus Event-Ack), Settings (Alpaca/Portfolio/MFA) und Admin (Users/Backups/Export) ab. Produktion laeuft weiter ueber das Bundle in `src/frontend-dist/` mit `ui-patches.js`. CI-Stufe `Build frontend source` haelt den Stand typecheck- und bundle-validiert. **Wichtig:** Die Pages sind type-safe und gebuendelt, aber nicht runtime-smoke-getestet (kein Browser-Walkthrough als Gate). Vor dem Production-Swap muss `tests/run-ui-regression.mjs` auf die neuen React-Selektoren umgeschrieben werden, sonst bricht das UI-Regression-Gate sofort rot.
 - Alembic-Migrationen sind eingefuehrt; initiale Revision `16389c42c243`; `init_db` stempelt Pre-Alembic-Deployments automatisch auf head.
