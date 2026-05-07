@@ -79,7 +79,7 @@ Offen:
 
 ### Phase 2: Analyse und Research
 
-Status: laeuft. Charts-Welle, Events-Welle, Erklaerbarkeit-Welle und Net-Yield-Welle abgeschlossen; Auto-Support/Resistance offen.
+Status: vollstaendig (sechs Wellen abgeschlossen). Tiefere Fundamentals-Anbindung (Cashflow/Debt/Guidance/Ratings) bleibt als optionaler Tiefe-Schritt vor Phase 3.
 
 Erledigt:
 
@@ -89,12 +89,12 @@ Erledigt:
 - Welle 3 (Volume-Profile): `compute_volume_profile` mit Point-of-Control; SVG-Component neben dem Chart
 - Welle 4 (Erklaerbarkeit + Wahrscheinlichkeiten): SHAP-style `pred_contribs` per Feature plus Kategorie-Roll-up (Trend/Technical/Volume/News/Fundamentals); P(UP)/P(DOWN) explizit; ATR-anchored Entry-/Stop-/Target-Zonen
 - Welle 5 (Net-Yield-Gate): Broker-Round-Trip-Fees + Kapitalertragssteuer (Abgeltung) -> NetYieldPct; `meetsMinimum` als Auto-Trade-Vorbedingung; UI-Breakdown im PredictionCard
+- Welle 6 (Auto-Support/Resistance): `detect_support_resistance` in `analysis.py` mit Swing-Pivot-Clustering und Stärke-Score; horizontale Linien im Chart mit Opacity nach Stärke; Flip-Zonen markiert
 - Onboarding-Wizard `/onboarding`; Dashboard-Karte mit Fortschritt N/M
 
 Offen:
 
-- Auto-Support/Resistance (Pivot-Detection, horizontale Linien im Chart, Stärke-Score)
-- breitere Fundamentals-Anbindung jenseits Sector/Ratios (Cashflow, Debt, Guidance, Ratings)
+- breitere Fundamentals-Anbindung jenseits Sector/Ratios (Cashflow, Debt, Guidance, Ratings) als optionaler Tiefe-Schritt vor Phase 3
 
 ### Phase 3: Paper-Trading
 
@@ -162,12 +162,11 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 ## Naechste Prioritaeten
 
-1. Phase-2-Welle 6: Auto-Support/Resistance.
-2. Frontend-UI-Regression auf neue React-Selektoren umschreiben.
-3. Frontend-Dockerfile-Swap (`ops/docker/frontend.Dockerfile`) auf Vite-Multi-Stage-Build, Bundle entfernen.
-4. Phase-2-Tiefe: breitere Fundamentals (Cashflow, Debt, Guidance, Ratings).
-5. Phase 3 Paper-Trading sauber modellieren — Order-Lebenszyklus, Transaktionsjournal, PnL, Net-Yield-Gate als Filter.
-6. Phase 4 Auto-Execution erst nach Paper-Trading-Stabilitaet und Risk-Hardening.
+1. Frontend-UI-Regression auf neue React-Selektoren umschreiben.
+2. Frontend-Dockerfile-Swap (`ops/docker/frontend.Dockerfile`) auf Vite-Multi-Stage-Build, Bundle entfernen.
+3. Phase-2-Tiefe (optional vor Phase 3): breitere Fundamentals (Cashflow, Debt, Guidance, Ratings).
+4. Phase 3 Paper-Trading sauber modellieren — Order-Lebenszyklus, Transaktionsjournal, PnL, Net-Yield-Gate als Filter.
+5. Phase 4 Auto-Execution erst nach Paper-Trading-Stabilitaet und Risk-Hardening.
 
 ## Entscheidungsregel
 
