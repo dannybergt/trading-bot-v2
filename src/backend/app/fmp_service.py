@@ -142,6 +142,122 @@ class FmpService:
             return payload
         return []
 
+    def get_cash_flow(self, symbol: str, *, period: str = "annual", limit: int = 4) -> list[dict[str, Any]]:
+        """Recent cash-flow statements for the symbol."""
+        if not symbol:
+            return []
+        payload = self._request(
+            f"/cash-flow-statement/{symbol.upper()}",
+            params={"period": period, "limit": max(1, min(limit, 12))},
+        )
+        return payload if isinstance(payload, list) else []
+
+    def get_balance_sheet(self, symbol: str, *, period: str = "annual", limit: int = 4) -> list[dict[str, Any]]:
+        """Recent balance-sheet statements (debt + equity highlights)."""
+        if not symbol:
+            return []
+        payload = self._request(
+            f"/balance-sheet-statement/{symbol.upper()}",
+            params={"period": period, "limit": max(1, min(limit, 12))},
+        )
+        return payload if isinstance(payload, list) else []
+
+    def get_rating(self, symbol: str) -> dict[str, Any] | None:
+        """Latest aggregate analyst rating snapshot for the symbol."""
+        if not symbol:
+            return None
+        payload = self._request(f"/rating/{symbol.upper()}")
+        if isinstance(payload, list) and payload:
+            return payload[0]
+        return None
+
+    def get_analyst_estimates(self, symbol: str, *, period: str = "annual", limit: int = 4) -> list[dict[str, Any]]:
+        """Forward analyst estimates (revenue + EPS guidance)."""
+        if not symbol:
+            return []
+        payload = self._request(
+            f"/analyst-estimates/{symbol.upper()}",
+            params={"period": period, "limit": max(1, min(limit, 12))},
+        )
+        return payload if isinstance(payload, list) else []
+
+    def normalized_research_depth(self, symbol: str) -> dict[str, Any]:
+        """Bundle the deeper fundamentals (cashflow, debt highlights, rating,
+        forward estimates) into a single payload for /api/research extension.
+        """
+        cashflow_raw = self.get_cash_flow(symbol)
+        balance_raw = self.get_balance_sheet(symbol)
+        rating_raw = self.get_rating(symbol)
+        estimates_raw = self.get_analyst_estimates(symbol)
+
+        cashflow = []
+        for row in cashflow_raw[:6]:
+            if not isinstance(row, dict):
+                continue
+            cashflow.append({
+                "date": row.get("date"),
+                "operatingCashFlow": row.get("operatingCashFlow"),
+                "capitalExpenditure": row.get("capitalExpenditure"),
+                "freeCashFlow": row.get("freeCashFlow"),
+                "netCashUsedForInvestingActivities": row.get("netCashUsedForInvestingActivites")
+                    or row.get("netCashUsedForInvestingActivities"),
+                "netCashUsedProvidedByFinancingActivities": row.get(
+                    "netCashUsedProvidedByFinancingActivities"
+                ),
+            })
+
+        debt = []
+        for row in balance_raw[:6]:
+            if not isinstance(row, dict):
+                continue
+            debt.append({
+                "date": row.get("date"),
+                "totalDebt": row.get("totalDebt"),
+                "longTermDebt": row.get("longTermDebt"),
+                "shortTermDebt": row.get("shortTermDebt"),
+                "totalEquity": row.get("totalStockholdersEquity") or row.get("totalEquity"),
+                "cashAndShortTermInvestments": row.get("cashAndShortTermInvestments"),
+                "netDebt": row.get("netDebt"),
+            })
+
+        rating = None
+        if isinstance(rating_raw, dict):
+            rating = {
+                "date": rating_raw.get("date"),
+                "rating": rating_raw.get("rating"),
+                "ratingScore": rating_raw.get("ratingScore"),
+                "ratingRecommendation": rating_raw.get("ratingRecommendation"),
+                "ratingDetailsDcfRecommendation": rating_raw.get("ratingDetailsDCFRecommendation"),
+                "ratingDetailsRoeRecommendation": rating_raw.get("ratingDetailsROERecommendation"),
+                "ratingDetailsRoaRecommendation": rating_raw.get("ratingDetailsROARecommendation"),
+                "ratingDetailsDeRecommendation": rating_raw.get("ratingDetailsDERecommendation"),
+                "ratingDetailsPeRecommendation": rating_raw.get("ratingDetailsPERecommendation"),
+                "ratingDetailsPbRecommendation": rating_raw.get("ratingDetailsPBRecommendation"),
+            }
+
+        estimates = []
+        for row in estimates_raw[:6]:
+            if not isinstance(row, dict):
+                continue
+            estimates.append({
+                "date": row.get("date"),
+                "estimatedRevenueAvg": row.get("estimatedRevenueAvg"),
+                "estimatedRevenueLow": row.get("estimatedRevenueLow"),
+                "estimatedRevenueHigh": row.get("estimatedRevenueHigh"),
+                "estimatedEpsAvg": row.get("estimatedEpsAvg"),
+                "estimatedEpsLow": row.get("estimatedEpsLow"),
+                "estimatedEpsHigh": row.get("estimatedEpsHigh"),
+                "numberAnalystEstimatedRevenue": row.get("numberAnalystEstimatedRevenue"),
+                "numberAnalystsEstimatedEps": row.get("numberAnalystsEstimatedEps"),
+            })
+
+        return {
+            "cashflow": cashflow,
+            "debt": debt,
+            "rating": rating,
+            "estimates": estimates,
+        }
+
     def get_news(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         if not symbol:
             return []

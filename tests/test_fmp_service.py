@@ -113,6 +113,62 @@ class FmpServiceTests(unittest.TestCase):
         self.assertEqual("Reuters", items[0]["source"])
         self.assertEqual("https://example.com/x", items[0]["url"])
 
+    def test_normalized_research_depth_aggregates_four_endpoints(self):
+        service = FmpService(api_key="k")
+        cashflow_payload = [
+            {
+                "date": "2025-12-31",
+                "operatingCashFlow": 100_000_000,
+                "capitalExpenditure": -10_000_000,
+                "freeCashFlow": 90_000_000,
+            }
+        ]
+        balance_payload = [
+            {
+                "date": "2025-12-31",
+                "totalDebt": 50_000_000,
+                "longTermDebt": 40_000_000,
+                "shortTermDebt": 10_000_000,
+                "totalStockholdersEquity": 250_000_000,
+                "netDebt": 20_000_000,
+            }
+        ]
+        rating_payload = [
+            {
+                "date": "2026-04-01",
+                "rating": "S+",
+                "ratingScore": 5,
+                "ratingRecommendation": "Strong Buy",
+            }
+        ]
+        estimates_payload = [
+            {
+                "date": "2026-12-31",
+                "estimatedRevenueAvg": 1_200_000_000,
+                "estimatedEpsAvg": 5.10,
+                "numberAnalystsEstimatedEps": 18,
+            }
+        ]
+        responses = iter([
+            _response(cashflow_payload),
+            _response(balance_payload),
+            _response(rating_payload),
+            _response(estimates_payload),
+        ])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(responses)
+        ):
+            depth = service.normalized_research_depth("AAPL")
+
+        self.assertEqual(1, len(depth["cashflow"]))
+        self.assertEqual(90_000_000, depth["cashflow"][0]["freeCashFlow"])
+        self.assertEqual(1, len(depth["debt"]))
+        self.assertEqual(250_000_000, depth["debt"][0]["totalEquity"])
+        self.assertIsNotNone(depth["rating"])
+        self.assertEqual("Strong Buy", depth["rating"]["ratingRecommendation"])
+        self.assertEqual(1, len(depth["estimates"]))
+        self.assertAlmostEqual(5.10, depth["estimates"][0]["estimatedEpsAvg"])
+
     def test_normalized_events_unwraps_historical_payloads(self):
         service = FmpService(api_key="k")
         dividends_payload = {

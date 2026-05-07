@@ -1666,6 +1666,12 @@ def get_symbol_research(
         "priceToBook": ticker_info.get("priceToBook"),
     }
 
+    research_depth = (
+        service.fmp.normalized_research_depth(asset_profile["symbol"])
+        if service.fmp.configured and not asset_profile.get("isCrypto")
+        else {"cashflow": [], "debt": [], "rating": None, "estimates": []}
+    )
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1675,6 +1681,7 @@ def get_symbol_research(
         "quote": provider_quote,
         "research": provider_research,
         "fundamentals": fundamentals,
+        "researchDepth": research_depth,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),

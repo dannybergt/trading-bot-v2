@@ -77,6 +77,38 @@ type ResearchPayload = {
   research?: {
     holdings?: Array<{ symbol?: string; name?: string; weight?: number }>;
   };
+  researchDepth?: {
+    cashflow?: Array<{
+      date?: string;
+      operatingCashFlow?: number | null;
+      capitalExpenditure?: number | null;
+      freeCashFlow?: number | null;
+    }>;
+    debt?: Array<{
+      date?: string;
+      totalDebt?: number | null;
+      longTermDebt?: number | null;
+      shortTermDebt?: number | null;
+      totalEquity?: number | null;
+      netDebt?: number | null;
+    }>;
+    rating?: {
+      date?: string;
+      rating?: string;
+      ratingScore?: number;
+      ratingRecommendation?: string;
+    } | null;
+    estimates?: Array<{
+      date?: string;
+      estimatedRevenueAvg?: number | null;
+      estimatedRevenueLow?: number | null;
+      estimatedRevenueHigh?: number | null;
+      estimatedEpsAvg?: number | null;
+      estimatedEpsLow?: number | null;
+      estimatedEpsHigh?: number | null;
+      numberAnalystsEstimatedEps?: number;
+    }>;
+  };
   news?: {
     items?: Array<{
       title?: string;
@@ -263,6 +295,7 @@ export function AnalysisPage() {
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
+      <ResearchDepthSection depth={research?.researchDepth} />
       <EventsSection events={eventsQuery.data?.events} provider={eventsQuery.data?.provider} />
       <HoldingsSection research={research?.research} />
       <NewsSection news={research?.news} />
@@ -623,6 +656,156 @@ function FundamentalsSection({
         ))}
       </div>
     </section>
+  );
+}
+
+function ResearchDepthSection({
+  depth,
+}: {
+  depth: ResearchPayload["researchDepth"];
+}) {
+  if (!depth) return null;
+  const cashflow = depth.cashflow ?? [];
+  const debt = depth.debt ?? [];
+  const rating = depth.rating;
+  const estimates = depth.estimates ?? [];
+  const hasAnything =
+    cashflow.length > 0 || debt.length > 0 || estimates.length > 0 || !!rating;
+  if (!hasAnything) return null;
+
+  return (
+    <section className="card">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">Research depth</h2>
+        <span className="text-xs text-slate-500">via FMP</span>
+      </header>
+      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        {rating ? <RatingCard rating={rating} /> : null}
+        {estimates.length > 0 ? <EstimatesTable rows={estimates} /> : null}
+        {cashflow.length > 0 ? <CashflowTable rows={cashflow} /> : null}
+        {debt.length > 0 ? <DebtTable rows={debt} /> : null}
+      </div>
+    </section>
+  );
+}
+
+function RatingCard({
+  rating,
+}: {
+  rating: NonNullable<NonNullable<ResearchPayload["researchDepth"]>["rating"]>;
+}) {
+  const recommendation = rating.ratingRecommendation || rating.rating || "—";
+  const tone = recommendation.toLowerCase();
+  const cls = tone.includes("buy")
+    ? "border-bergt-green/40 bg-bergt-green/10 text-bergt-green"
+    : tone.includes("sell")
+    ? "border-red-700/50 bg-red-900/40 text-red-200"
+    : "border-slate-700 bg-slate-900 text-slate-300";
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Analyst rating</p>
+      <div className={`mt-1 rounded-md border px-3 py-2 text-sm ${cls}`}>
+        <p className="font-semibold">{recommendation}</p>
+        <p className="text-xs opacity-80">
+          {rating.rating ? `${rating.rating}` : ""}
+          {rating.ratingScore != null ? ` · score ${rating.ratingScore}/5` : ""}
+          {rating.date ? ` · ${rating.date}` : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EstimatesTable({
+  rows,
+}: {
+  rows: NonNullable<NonNullable<ResearchPayload["researchDepth"]>["estimates"]>;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Forward estimates</p>
+      <ul className="mt-1 space-y-1 text-sm tabular-nums">
+        {rows.slice(0, 4).map((row, idx) => (
+          <li
+            key={`${row.date ?? idx}-${idx}`}
+            className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          >
+            <span className="text-xs text-slate-400">{row.date ?? "—"}</span>
+            <span className="text-xs">
+              EPS {row.estimatedEpsAvg != null ? row.estimatedEpsAvg.toFixed(2) : "—"}
+              {row.numberAnalystsEstimatedEps
+                ? ` · n=${row.numberAnalystsEstimatedEps}`
+                : ""}
+            </span>
+            <span className="text-xs">
+              Rev {row.estimatedRevenueAvg ? formatLarge(row.estimatedRevenueAvg) : "—"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CashflowTable({
+  rows,
+}: {
+  rows: NonNullable<NonNullable<ResearchPayload["researchDepth"]>["cashflow"]>;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Cash flow</p>
+      <ul className="mt-1 space-y-1 text-sm tabular-nums">
+        {rows.slice(0, 4).map((row, idx) => (
+          <li
+            key={`${row.date ?? idx}-${idx}`}
+            className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          >
+            <span className="text-xs text-slate-400">{row.date ?? "—"}</span>
+            <span className="text-xs">
+              FCF {row.freeCashFlow ? formatLarge(row.freeCashFlow) : "—"}
+            </span>
+            <span className="text-xs text-slate-500">
+              CapEx {row.capitalExpenditure ? formatLarge(Math.abs(row.capitalExpenditure)) : "—"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function DebtTable({
+  rows,
+}: {
+  rows: NonNullable<NonNullable<ResearchPayload["researchDepth"]>["debt"]>;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Debt &amp; equity</p>
+      <ul className="mt-1 space-y-1 text-sm tabular-nums">
+        {rows.slice(0, 4).map((row, idx) => {
+          const ratio =
+            row.totalDebt != null && row.totalEquity != null && row.totalEquity > 0
+              ? row.totalDebt / row.totalEquity
+              : null;
+          return (
+            <li
+              key={`${row.date ?? idx}-${idx}`}
+              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+            >
+              <span className="text-xs text-slate-400">{row.date ?? "—"}</span>
+              <span className="text-xs">
+                Debt {row.totalDebt ? formatLarge(row.totalDebt) : "—"}
+              </span>
+              <span className="text-xs text-slate-500">
+                D/E {ratio != null ? ratio.toFixed(2) : "—"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
