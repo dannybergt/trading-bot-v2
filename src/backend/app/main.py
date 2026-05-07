@@ -1678,6 +1678,41 @@ def get_symbol_research(
     }
 
 
+@app.get("/api/events/{symbol:path}")
+def get_symbol_events(
+    symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return historical earnings, dividends, and splits for a symbol.
+
+    Sourced from FMP (Free tier covers most of this). When `FMP_API_KEY` is
+    unset or the provider returns nothing, every list is empty so the
+    frontend can render a neutral "no data" state.
+    """
+    fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
+    asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
+    canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
+
+    if not service.fmp.configured or asset_profile.get("isCrypto"):
+        events = {"dividends": [], "splits": [], "earnings": []}
+        provider_status = "unavailable"
+    else:
+        events = service.fmp.normalized_events(canonical)
+        any_data = any(events[k] for k in ("dividends", "splits", "earnings"))
+        provider_status = "live" if any_data else "unavailable"
+
+    return {
+        "symbol": canonical,
+        **asset_response_fields(asset_profile),
+        "events": events,
+        "provider": {
+            "status": provider_status,
+            "source": "FMP" if provider_status == "live" else None,
+        },
+    }
+
+
 @app.get("/api/search/{query:path}")
 def search_symbols(query: str, current_user: User = Depends(get_current_user)):
     """

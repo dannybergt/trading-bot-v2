@@ -61,6 +61,34 @@ type ResearchPayload = {
   };
 };
 
+type EventsPayload = {
+  symbol: string;
+  events: {
+    dividends: Array<{
+      date?: string;
+      amount?: number | null;
+      adjAmount?: number | null;
+      paymentDate?: string;
+      label?: string;
+    }>;
+    splits: Array<{
+      date?: string;
+      numerator?: number | null;
+      denominator?: number | null;
+      label?: string;
+    }>;
+    earnings: Array<{
+      date?: string;
+      epsEstimate?: number | null;
+      epsActual?: number | null;
+      revenueEstimate?: number | null;
+      revenueActual?: number | null;
+      time?: string;
+    }>;
+  };
+  provider?: { status?: string; source?: string | null };
+};
+
 const TIMEFRAMES = [
   { value: "1M", label: "1M" },
   { value: "3M", label: "3M" },
@@ -88,6 +116,14 @@ export function AnalysisPage() {
     queryFn: () =>
       apiFetch<ResearchPayload>(`/api/research/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ["events", decoded],
+    queryFn: () =>
+      apiFetch<EventsPayload>(`/api/events/${encodeURIComponent(decoded)}`),
+    enabled: !!decoded,
+    staleTime: 5 * 60_000,
   });
 
   if (!decoded) {
@@ -189,6 +225,7 @@ export function AnalysisPage() {
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
+      <EventsSection events={eventsQuery.data?.events} provider={eventsQuery.data?.provider} />
       <HoldingsSection research={research?.research} />
       <NewsSection news={research?.news} />
     </div>
@@ -288,6 +325,175 @@ function FundamentalsSection({
         ))}
       </div>
     </section>
+  );
+}
+
+function EventsSection({
+  events,
+  provider,
+}: {
+  events: EventsPayload["events"] | undefined;
+  provider: EventsPayload["provider"] | undefined;
+}) {
+  if (!events) return null;
+  const { earnings, dividends, splits } = events;
+  if (earnings.length === 0 && dividends.length === 0 && splits.length === 0) {
+    if (provider?.status === "unavailable") {
+      return (
+        <section className="card">
+          <h2 className="text-lg font-semibold">Events</h2>
+          <p className="mt-2 text-xs text-slate-500">
+            No earnings/dividend/split history available for this symbol
+            (provider returned nothing or FMP_API_KEY is unset).
+          </p>
+        </section>
+      );
+    }
+    return null;
+  }
+  return (
+    <section className="card">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">Events</h2>
+        {provider?.source ? (
+          <span className="text-xs text-slate-500">via {provider.source}</span>
+        ) : null}
+      </header>
+      <div className="mt-3 grid gap-4 lg:grid-cols-3">
+        <EarningsTable rows={earnings} />
+        <DividendsTable rows={dividends} />
+        <SplitsTable rows={splits} />
+      </div>
+    </section>
+  );
+}
+
+function EarningsTable({ rows }: { rows: EventsPayload["events"]["earnings"] }) {
+  if (rows.length === 0) {
+    return <EmptyEvents label="Earnings" />;
+  }
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Earnings</p>
+      <ul className="space-y-1 text-sm">
+        {rows.slice(0, 8).map((row, idx) => {
+          const beat =
+            row.epsActual != null && row.epsEstimate != null
+              ? row.epsActual - row.epsEstimate
+              : null;
+          return (
+            <li
+              key={`${row.date ?? idx}-${idx}`}
+              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+            >
+              <div>
+                <p className="font-medium tabular-nums">{row.date ?? "—"}</p>
+                {row.time ? (
+                  <p className="text-xs uppercase text-slate-500">{row.time}</p>
+                ) : null}
+              </div>
+              <div className="text-right text-xs tabular-nums">
+                <p>
+                  EPS:{" "}
+                  {row.epsActual != null ? row.epsActual.toFixed(2) : "—"}
+                  {row.epsEstimate != null ? (
+                    <span className="ml-1 text-slate-500">
+                      (est {row.epsEstimate.toFixed(2)})
+                    </span>
+                  ) : null}
+                </p>
+                {beat != null ? (
+                  <p
+                    className={
+                      beat >= 0 ? "text-bergt-green" : "text-red-400"
+                    }
+                  >
+                    {beat >= 0 ? "beat" : "miss"} {Math.abs(beat).toFixed(2)}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function DividendsTable({
+  rows,
+}: {
+  rows: EventsPayload["events"]["dividends"];
+}) {
+  if (rows.length === 0) {
+    return <EmptyEvents label="Dividends" />;
+  }
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Dividends</p>
+      <ul className="space-y-1 text-sm">
+        {rows.slice(0, 8).map((row, idx) => (
+          <li
+            key={`${row.date ?? idx}-${idx}`}
+            className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          >
+            <div>
+              <p className="font-medium tabular-nums">{row.date ?? "—"}</p>
+              {row.label ? (
+                <p className="text-xs text-slate-500">{row.label}</p>
+              ) : null}
+            </div>
+            <div className="text-right text-xs tabular-nums">
+              <p className="font-medium">
+                ${row.amount != null ? row.amount.toFixed(4) : "—"}
+              </p>
+              {row.paymentDate ? (
+                <p className="text-slate-500">paid {row.paymentDate}</p>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SplitsTable({
+  rows,
+}: {
+  rows: EventsPayload["events"]["splits"];
+}) {
+  if (rows.length === 0) {
+    return <EmptyEvents label="Splits" />;
+  }
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Splits</p>
+      <ul className="space-y-1 text-sm">
+        {rows.slice(0, 6).map((row, idx) => (
+          <li
+            key={`${row.date ?? idx}-${idx}`}
+            className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          >
+            <p className="font-medium tabular-nums">{row.date ?? "—"}</p>
+            <p className="text-sm tabular-nums">
+              {row.numerator != null && row.denominator != null
+                ? `${row.numerator}-for-${row.denominator}`
+                : row.label ?? "—"}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function EmptyEvents({ label }: { label: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs text-slate-600">No data.</p>
+    </div>
   );
 }
 

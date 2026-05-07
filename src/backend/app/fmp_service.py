@@ -98,6 +98,50 @@ class FmpService:
             return payload
         return []
 
+    def get_dividends(self, symbol: str) -> list[dict[str, Any]]:
+        """Recent dividend history for the symbol.
+
+        FMP returns the payload nested as `{"symbol": ..., "historical": [...]}`
+        on this endpoint; we unwrap and return only the inner list so callers
+        get a uniform list-of-events shape.
+        """
+        if not symbol:
+            return []
+        payload = self._request(f"/historical-price-full/stock_dividend/{symbol.upper()}")
+        if isinstance(payload, dict):
+            historical = payload.get("historical")
+            if isinstance(historical, list):
+                return historical
+        if isinstance(payload, list):
+            return payload
+        return []
+
+    def get_splits(self, symbol: str) -> list[dict[str, Any]]:
+        """Recent stock-split history for the symbol."""
+        if not symbol:
+            return []
+        payload = self._request(f"/historical-price-full/stock_split/{symbol.upper()}")
+        if isinstance(payload, dict):
+            historical = payload.get("historical")
+            if isinstance(historical, list):
+                return historical
+        if isinstance(payload, list):
+            return payload
+        return []
+
+    def get_earnings(self, symbol: str, *, limit: int = 12) -> list[dict[str, Any]]:
+        """Past earnings reports with EPS actual/estimate. FMP free tier
+        coverage varies; an empty list is a normal "no data" signal."""
+        if not symbol:
+            return []
+        payload = self._request(
+            f"/historical/earning_calendar/{symbol.upper()}",
+            params={"limit": max(1, min(limit, 50))},
+        )
+        if isinstance(payload, list):
+            return payload
+        return []
+
     def get_news(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         if not symbol:
             return []
@@ -140,6 +184,61 @@ class FmpService:
             "fmp_source": True,
         }
         return {k: v for k, v in info.items() if v is not None}
+
+    def normalized_events(self, symbol: str) -> dict[str, list[dict[str, Any]]]:
+        """Aggregate dividends/splits/earnings into a single shape consumed by
+        `/api/events/{symbol}`. Each list contains the raw provider rows
+        normalized to camelCase keys the frontend expects.
+        """
+        dividends_raw = self.get_dividends(symbol)
+        splits_raw = self.get_splits(symbol)
+        earnings_raw = self.get_earnings(symbol)
+
+        dividends = []
+        for row in dividends_raw[:60]:
+            if not isinstance(row, dict):
+                continue
+            dividends.append({
+                "date": row.get("date"),
+                "amount": row.get("dividend") or row.get("adjDividend"),
+                "adjAmount": row.get("adjDividend"),
+                "recordDate": row.get("recordDate"),
+                "paymentDate": row.get("paymentDate"),
+                "declarationDate": row.get("declarationDate"),
+                "label": row.get("label"),
+            })
+
+        splits = []
+        for row in splits_raw[:30]:
+            if not isinstance(row, dict):
+                continue
+            splits.append({
+                "date": row.get("date"),
+                "numerator": row.get("numerator"),
+                "denominator": row.get("denominator"),
+                "label": row.get("label"),
+            })
+
+        earnings = []
+        for row in earnings_raw[:30]:
+            if not isinstance(row, dict):
+                continue
+            earnings.append({
+                "date": row.get("date"),
+                "epsEstimate": row.get("epsEstimated"),
+                "epsActual": row.get("eps"),
+                "revenueEstimate": row.get("revenueEstimated"),
+                "revenueActual": row.get("revenue"),
+                "fiscalDateEnding": row.get("fiscalDateEnding"),
+                "time": row.get("time"),
+                "updatedFromDate": row.get("updatedFromDate"),
+            })
+
+        return {
+            "dividends": dividends,
+            "splits": splits,
+            "earnings": earnings,
+        }
 
     def normalized_news_items(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         items = self.get_news(symbol, limit=limit)

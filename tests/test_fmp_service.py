@@ -113,6 +113,56 @@ class FmpServiceTests(unittest.TestCase):
         self.assertEqual("Reuters", items[0]["source"])
         self.assertEqual("https://example.com/x", items[0]["url"])
 
+    def test_normalized_events_unwraps_historical_payloads(self):
+        service = FmpService(api_key="k")
+        dividends_payload = {
+            "symbol": "AAPL",
+            "historical": [
+                {
+                    "date": "2026-02-09",
+                    "dividend": 0.24,
+                    "adjDividend": 0.24,
+                    "recordDate": "2026-02-12",
+                    "paymentDate": "2026-02-16",
+                    "declarationDate": "2026-02-01",
+                    "label": "Q4 2025",
+                }
+            ],
+        }
+        splits_payload = {
+            "symbol": "AAPL",
+            "historical": [
+                {"date": "2020-08-31", "numerator": 4, "denominator": 1, "label": "4-for-1"}
+            ],
+        }
+        earnings_payload = [
+            {
+                "date": "2026-02-01",
+                "epsEstimated": 2.10,
+                "eps": 2.18,
+                "revenueEstimated": 1.18e11,
+                "revenue": 1.20e11,
+                "fiscalDateEnding": "2025-12-31",
+                "time": "amc",
+            }
+        ]
+        responses = iter([
+            _response(dividends_payload),
+            _response(splits_payload),
+            _response(earnings_payload),
+        ])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(responses)
+        ):
+            events = service.normalized_events("AAPL")
+
+        self.assertEqual(1, len(events["dividends"]))
+        self.assertEqual(0.24, events["dividends"][0]["amount"])
+        self.assertEqual(1, len(events["splits"]))
+        self.assertEqual(4, events["splits"][0]["numerator"])
+        self.assertEqual(1, len(events["earnings"]))
+        self.assertEqual(2.18, events["earnings"][0]["epsActual"])
+
     def test_http_error_returns_empty_without_raising(self):
         service = FmpService(api_key="k")
         bad_response = MagicMock()
