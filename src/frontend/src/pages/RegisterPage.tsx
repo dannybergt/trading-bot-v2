@@ -18,7 +18,9 @@ export function RegisterPage() {
     return null;
   }
   if (user) {
-    return <Navigate to="/" replace />;
+    // Fresh registrations should land in onboarding; users who land here
+    // already authenticated were redirected here for that reason too.
+    return <Navigate to="/onboarding" replace />;
   }
 
   async function handleSubmit(event: FormEvent) {

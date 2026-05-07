@@ -5,7 +5,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 test -f "${PROJECT_ROOT}/src/backend/app/main.py"
 test -f "${PROJECT_ROOT}/src/backend/requirements.txt"
-test -f "${PROJECT_ROOT}/src/frontend-dist/index.html"
+test -f "${PROJECT_ROOT}/src/frontend/index.html"
+test -f "${PROJECT_ROOT}/src/frontend/package.json"
 test -f "${PROJECT_ROOT}/src/backend/app/migrate_watchlists.py"
 
 for file in "${PROJECT_ROOT}"/src/backend/app/*.py; do
