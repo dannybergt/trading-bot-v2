@@ -14,6 +14,37 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
+## Naechster Einstieg 2026-05-08: Phase 3 Paper-Trading
+
+Letzte Sitzung hat Phase 0/1/2 vollstaendig geschlossen, Frontend auf React-Source geswapt, UX-Direktive verankert, i18n-DE/EN-Base eingebaut, Phase-2-Tiefe (Cashflow/Debt/Rating/Estimates) als optionalen Schritt hinzugefuegt. Naechster nummerierter Schritt aus der Roadmap-Reihenfolge ist **Punkt 4: Phase 3 Paper-Trading inklusive chronologisches Trade-Journal**.
+
+Konkret an dieser Stelle weiter machen:
+
+1. Schema fuer Paper-Trading anlegen (Alembic-Revision auf `a3c1d4f5e6b7` aufsetzen):
+   - `paper_orders`: id, user_id, symbol, side (buy/sell), qty, limit_price, status (pending/filled/cancelled), placed_at, filled_at, source ("manual" oder "auto-recommendation")
+   - `paper_transactions`: id, user_id, order_id, symbol, side, qty, price, fee_absolute, fee_percent_amount, tax_amount, executed_at
+   - `paper_positions` (optional Materialized View; alternativ on-the-fly aggregiert)
+2. Backend-Endpunkte:
+   - `POST /api/paper-trading/orders` (placeOrder, validiert gegen Net-Yield-Gate)
+   - `GET /api/paper-trading/orders` (Liste, sortiert)
+   - `GET /api/paper-trading/transactions` (Journal, chronologisch)
+   - `GET /api/paper-trading/positions` (offene Positionen mit unrealisiertem PnL)
+   - `GET /api/paper-trading/summary` (realised PnL, fee_total, tax_total, current_exposure)
+3. Order-Lifecycle-Service: simulierte Ausfuehrung gegen letzte Marktdaten + Slippage-Modell, Net-Yield-Gate-Check vor Annahme.
+4. Backup/Export/Import: alle drei neuen Tabellen mitfuehren.
+5. Frontend: neue Page `/paper-trading` mit Tab-/Dropdown-Navigation (Open Orders, Transactions, Positions, Summary) gem. UX-Direktive.
+6. Trade-Journal: chronologisch, lueckenlos, %-PnL UND nominal, summierte Steuerlast + Gebuehren je Position und in Summe (Nutzerdirektive 2026-05-07).
+7. Tests: Unit-Tests pro Service-Klasse, API-Regression um Paper-Trading-Pfade erweitern, UI-Regression neue `/paper-trading`-Page checken.
+8. Doku: `docs/admin/project-plan.md` Phase 3 Status auf "in Arbeit" setzen, Decision-Block fuer Order-Schema/Net-Yield-Gate-Anbindung anlegen.
+
+Vorbedingungen sind alle erfuellt: Net-Yield-Gate (Welle 2.6), Erklaerbarkeit (Welle 2.5), Auto-S/R (Welle 4) sind verbaut; FMP/Alpha-Vantage-Provider-Chain liefert Live-Daten; Alembic ist eingerichtet.
+
+Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
+
+- `docs/admin/project-plan.md` Sektion "Produktvision" + "Phase 3" + "UX-Direktive"
+- `state/decisions.md` letzte Decision-Bloecke zu Net-Yield + UX-Direktive
+- `src/backend/app/ml_models.py::_enrich_with_yield_model` als verbindliches Eingangsfilter-Beispiel
+
 ## Stand Beim Letzten Handover
 
 - Aktueller Release-Stand: `v2026.05.07-1` auf Commit `878fcff` (`Record VAPID hardening publish status`) ist gepusht, GitHub-Actions-`publish` run `#21` lief erfolgreich und synchronisierte die versionierten Docker-Hub-Tags.
