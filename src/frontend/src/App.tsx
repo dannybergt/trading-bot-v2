@@ -1,10 +1,9 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
-import { AdminPage } from "./pages/AdminPage";
 import { AlertsPage } from "./pages/AlertsPage";
-import { AnalysisPage } from "./pages/AnalysisPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -13,6 +12,23 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ScannerPage } from "./pages/ScannerPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { WatchlistsPage } from "./pages/WatchlistsPage";
+
+// AnalysisPage pulls in the heavy lightweight-charts bundle; lazy so the
+// initial Login/Dashboard route stays fast.
+const AnalysisPage = lazy(() =>
+  import("./pages/AnalysisPage").then((m) => ({ default: m.AnalysisPage })),
+);
+const AdminPage = lazy(() =>
+  import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })),
+);
+
+function ChartFallback() {
+  return (
+    <div className="flex h-64 items-center justify-center text-sm text-slate-400">
+      Loading chart…
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -31,11 +47,32 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="/watchlists" element={<WatchlistsPage />} />
         <Route path="/scanner" element={<ScannerPage />} />
-        <Route path="/analysis/:symbol" element={<AnalysisPage />} />
-        <Route path="/analysis/:symbol/*" element={<AnalysisPage />} />
+        <Route
+          path="/analysis/:symbol"
+          element={
+            <Suspense fallback={<ChartFallback />}>
+              <AnalysisPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/analysis/:symbol/*"
+          element={
+            <Suspense fallback={<ChartFallback />}>
+              <AnalysisPage />
+            </Suspense>
+          }
+        />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route
+          path="/admin"
+          element={
+            <Suspense fallback={<ChartFallback />}>
+              <AdminPage />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

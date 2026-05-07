@@ -38,7 +38,14 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     stoch = ta.momentum.StochasticOscillator(df['High'], df['Low'], df['Close'], window=14, smooth_window=3)
     df['STOCH_K'] = stoch.stoch()
     df['STOCH_D'] = stoch.stoch_signal()
-    
+
+    # VWAP (cumulative volume-weighted average price). On daily series this is
+    # a running session-style VWAP across the full window; for intraday with a
+    # real session boundary the chart layer can reset by date if needed.
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3.0
+    cumulative_volume = df['Volume'].cumsum().replace(0, pd.NA)
+    df['VWAP'] = (typical_price * df['Volume']).cumsum() / cumulative_volume
+
     return df
 
 def detect_patterns(df: pd.DataFrame) -> list:

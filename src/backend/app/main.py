@@ -1591,6 +1591,12 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
             'bb_upper': safe_float(row.get('BBU_20_2.0')),
             'bb_lower': safe_float(row.get('BBL_20_2.0')),
             'bb_mid': safe_float(row.get('BBM_20_2.0')),
+            'ema_12': safe_float(row.get('EMA_12')),
+            'ema_26': safe_float(row.get('EMA_26')),
+            'atr': safe_float(row.get('ATR')),
+            'vwap': safe_float(row.get('VWAP')),
+            'stoch_k': safe_float(row.get('STOCH_K')),
+            'stoch_d': safe_float(row.get('STOCH_D')),
         }
         chart_data.append(item)
         
