@@ -58,6 +58,17 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Ebenfalls fuer `df6f0fa` erfolgreich: `ci` run `24461808223`, `codeql` run `24461808224`
 - Der Parserfix-Stand `sha-f826304a7850` wurde live-smoke- und upgrade-/restore-validiert; der nachfolgende Script-/Doku-Follow-up und der Provider-Coverage-Produktschnitt sind gepusht und durch Actions bestaetigt.
 
+## Aktueller Unterbrechungspunkt 2026-05-07 Frontend-Paritaetsschub
+
+- Nach erfolgreicher Codex-Uebergabe, Alert-Rule-Migration aus Sandbox, und Alembic-Einfuehrung wurde der Frontend-Quellstand-Wiederaufbau substanziell vorangezogen.
+- Neuer `src/frontend/`-Quellstand deckt jetzt zehn Pages ab (Login, Register, ForgotPassword, ResetPassword, Dashboard, Watchlists, Scanner, Analysis, Alerts, Settings, Admin).
+- Production laeuft unveraendert ueber `src/frontend-dist`-Bundle; Swap des `ops/docker/frontend.Dockerfile` wartet bewusst auf koordinierte UI-Regression-Umschrift.
+- Naechster sinnvoller Schritt:
+  - Bei Bedarf weitere Pages (Alpaca-Account/-Positions, Watchlist-Alert-Settings-UI) ergaenzen
+  - Danach koordinierter Swap: `ops/docker/frontend.Dockerfile` auf Vite-Multi-Stage-Build umstellen UND `tests/run-ui-regression.mjs` auf neue React-Selektoren umschreiben (gleicher Commit, damit der Swap nicht im Voraus rotbricht)
+  - `src/frontend-dist`-Bundle nach erfolgreichem Swap entfernen
+  - Erst danach: Phase-3 Paper-Trading beginnen
+
 ## Aktueller Unterbrechungspunkt 2026-05-07 Uebergabe Codex -> Claude
 
 - Vollstaendige Projektuebernahme abgeschlossen; Architektur, Phasenposition und State-Pflegeworkflow uebernommen.
