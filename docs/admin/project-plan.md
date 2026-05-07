@@ -33,7 +33,10 @@ Erledigt:
 Offen:
 
 - jeder neue Release-Tag muss denselben Upgrade-/Restore-Rehearsal-Pfad bestehen
-- formale DB-Migrationen statt reiner `create_all`-Weiterentwicklung einfuehren
+
+Erledigt seit `v2026.05.07-1`:
+
+- Alembic-basierte DB-Migrationen sind eingefuehrt; `Base.metadata.create_all` ist abgeloest; `init_db` stempelt Pre-Alembic-Deployments automatisch auf head, sodass Bestandsstaende ohne Migrationsbruch upgraden
 
 ### Phase 1: Live-Daten, Watchlists, Assetklassen
 
