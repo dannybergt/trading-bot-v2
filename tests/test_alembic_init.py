@@ -81,7 +81,8 @@ class AlembicInitTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
         self.assertIn("OK ", result.stdout)
 
-    def test_pre_alembic_schema_is_stamped_not_recreated(self):
+    def test_pre_alembic_full_schema_is_stamped_at_head(self):
+        """All 10 tables present, no alembic_version: stamp at head only."""
         script = textwrap.dedent(
             """
             import sqlite3, os
@@ -95,13 +96,58 @@ class AlembicInitTests(unittest.TestCase):
             )}
             assert 'alembic_version' not in tables_before, tables_before
             assert 'users' in tables_before, tables_before
+            assert 'alert_rules' in tables_before, tables_before
             con.close()
             database.init_db()
             con = sqlite3.connect(db_path)
             row = con.execute('SELECT version_num FROM alembic_version').fetchone()
             assert row and row[0], 'should be stamped at head'
-            # Idempotent re-init must not throw.
+            database.init_db()  # idempotent
+            print('OK', row[0])
+            """
+        )
+        result = _run_in_subprocess(script, self.db_path)
+        self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
+        self.assertIn("OK ", result.stdout)
+
+    def test_pre_alembic_baseline_schema_is_stamped_then_upgraded(self):
+        """v2026.05.07-1 schema (8 tables) gets stamped at baseline, then
+        migration 0002 applies to add alert_rules + alert_events."""
+        script = textwrap.dedent(
+            """
+            import sqlite3, os
+            from alembic import command
+            from app import database
+            db_path = os.environ['DATABASE_URL'].removeprefix('sqlite:///')
+
+            # Apply 0001 only via alembic, then drop alembic_version to
+            # simulate a deployment that ran create_all at the old release
+            # (8 tables, no alembic_version).
+            config = database._alembic_config()
+            command.upgrade(config, database.BASELINE_REVISION)
+            con = sqlite3.connect(db_path)
+            con.execute('DROP TABLE alembic_version')
+            con.commit()
+            tables_before = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            assert 'alert_rules' not in tables_before, tables_before
+            assert 'alert_events' not in tables_before, tables_before
+            assert 'users' in tables_before, tables_before
+            con.close()
+
             database.init_db()
+
+            con = sqlite3.connect(db_path)
+            tables_after = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            assert 'alert_rules' in tables_after, tables_after
+            assert 'alert_events' in tables_after, tables_after
+            row = con.execute('SELECT version_num FROM alembic_version').fetchone()
+            assert row and row[0] != database.BASELINE_REVISION, (
+                f'should be at HEAD, got {row}'
+            )
             print('OK', row[0])
             """
         )

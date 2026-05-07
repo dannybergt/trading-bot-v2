@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 16389c42c243
+Revision ID: b97b927c8690
 Revises: 
-Create Date: 2026-05-07 16:23:29.218607
+Create Date: 2026-05-07 18:07:29.387087
 """
 from typing import Sequence, Union
 
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '16389c42c243'
+revision: str = 'b97b927c8690'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -73,30 +73,6 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_watchlists_id'), 'watchlists', ['id'], unique=False)
     op.create_index(op.f('ix_watchlists_user_id'), 'watchlists', ['user_id'], unique=False)
-    op.create_table('alert_rules',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('watchlist_id', sa.String(), nullable=False),
-    sa.Column('symbol', sa.String(), nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
-    sa.Column('rule_type', sa.String(), nullable=False),
-    sa.Column('threshold_value', sa.Float(), nullable=True),
-    sa.Column('direction', sa.String(), nullable=True),
-    sa.Column('tag', sa.String(), nullable=True),
-    sa.Column('enabled', sa.Boolean(), nullable=False),
-    sa.Column('snoozed_until', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('last_triggered_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['watchlist_id'], ['watchlists.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_alert_rules_id'), 'alert_rules', ['id'], unique=False)
-    op.create_index(op.f('ix_alert_rules_rule_type'), 'alert_rules', ['rule_type'], unique=False)
-    op.create_index(op.f('ix_alert_rules_symbol'), 'alert_rules', ['symbol'], unique=False)
-    op.create_index(op.f('ix_alert_rules_user_id'), 'alert_rules', ['user_id'], unique=False)
-    op.create_index(op.f('ix_alert_rules_watchlist_id'), 'alert_rules', ['watchlist_id'], unique=False)
     op.create_table('watchlist_alert_deliveries',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -148,34 +124,6 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_watchlist_items_id'), 'watchlist_items', ['id'], unique=False)
     op.create_index(op.f('ix_watchlist_items_watchlist_id'), 'watchlist_items', ['watchlist_id'], unique=False)
-    op.create_table('alert_events',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('alert_rule_id', sa.Integer(), nullable=False),
-    sa.Column('watchlist_id', sa.String(), nullable=False),
-    sa.Column('symbol', sa.String(), nullable=False),
-    sa.Column('event_type', sa.String(), nullable=False),
-    sa.Column('severity', sa.String(), nullable=False),
-    sa.Column('status', sa.String(), nullable=False),
-    sa.Column('title', sa.String(), nullable=False),
-    sa.Column('message', sa.String(), nullable=False),
-    sa.Column('payload_json', sa.Text(), nullable=False),
-    sa.Column('triggered_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
-    sa.Column('acknowledged_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['alert_rule_id'], ['alert_rules.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['watchlist_id'], ['watchlists.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_alert_events_alert_rule_id'), 'alert_events', ['alert_rule_id'], unique=False)
-    op.create_index(op.f('ix_alert_events_event_type'), 'alert_events', ['event_type'], unique=False)
-    op.create_index(op.f('ix_alert_events_id'), 'alert_events', ['id'], unique=False)
-    op.create_index(op.f('ix_alert_events_severity'), 'alert_events', ['severity'], unique=False)
-    op.create_index(op.f('ix_alert_events_status'), 'alert_events', ['status'], unique=False)
-    op.create_index(op.f('ix_alert_events_symbol'), 'alert_events', ['symbol'], unique=False)
-    op.create_index(op.f('ix_alert_events_triggered_at'), 'alert_events', ['triggered_at'], unique=False)
-    op.create_index(op.f('ix_alert_events_user_id'), 'alert_events', ['user_id'], unique=False)
-    op.create_index(op.f('ix_alert_events_watchlist_id'), 'alert_events', ['watchlist_id'], unique=False)
     op.create_table('watchlist_item_tags',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('watchlist_item_id', sa.Integer(), nullable=False),
@@ -194,16 +142,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_watchlist_item_tags_watchlist_item_id'), table_name='watchlist_item_tags')
     op.drop_index(op.f('ix_watchlist_item_tags_id'), table_name='watchlist_item_tags')
     op.drop_table('watchlist_item_tags')
-    op.drop_index(op.f('ix_alert_events_watchlist_id'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_user_id'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_triggered_at'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_symbol'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_status'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_severity'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_id'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_event_type'), table_name='alert_events')
-    op.drop_index(op.f('ix_alert_events_alert_rule_id'), table_name='alert_events')
-    op.drop_table('alert_events')
     op.drop_index(op.f('ix_watchlist_items_watchlist_id'), table_name='watchlist_items')
     op.drop_index(op.f('ix_watchlist_items_id'), table_name='watchlist_items')
     op.drop_table('watchlist_items')
@@ -219,12 +157,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_watchlist_alert_deliveries_channel'), table_name='watchlist_alert_deliveries')
     op.drop_index(op.f('ix_watchlist_alert_deliveries_alert_key'), table_name='watchlist_alert_deliveries')
     op.drop_table('watchlist_alert_deliveries')
-    op.drop_index(op.f('ix_alert_rules_watchlist_id'), table_name='alert_rules')
-    op.drop_index(op.f('ix_alert_rules_user_id'), table_name='alert_rules')
-    op.drop_index(op.f('ix_alert_rules_symbol'), table_name='alert_rules')
-    op.drop_index(op.f('ix_alert_rules_rule_type'), table_name='alert_rules')
-    op.drop_index(op.f('ix_alert_rules_id'), table_name='alert_rules')
-    op.drop_table('alert_rules')
     op.drop_index(op.f('ix_watchlists_user_id'), table_name='watchlists')
     op.drop_index(op.f('ix_watchlists_id'), table_name='watchlists')
     op.drop_table('watchlists')

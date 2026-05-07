@@ -47,13 +47,27 @@ def _alembic_config():
     return config
 
 
+BASELINE_REVISION = "b97b927c8690"  # 0001_initial_schema (matches v2026.05.07-1)
+
+
 def init_db():
     """Bring the schema to head via Alembic.
 
-    For pre-Alembic deployments where the schema was bootstrapped via the legacy
-    `Base.metadata.create_all` path, `users` already exists but `alembic_version`
-    does not. In that case stamp at head so subsequent migrations have a clean
-    starting point. Fresh databases run `upgrade head` normally.
+    Three startup paths are supported:
+
+    1. Fresh database (`users` does not exist): run `upgrade head`. Alembic
+       applies all migrations from scratch.
+    2. Pre-Alembic deployment at the v2026.05.07-1 schema (`users` exists,
+       no `alembic_version`, no `alert_rules`): stamp at the BASELINE
+       revision and run `upgrade head` so migration 0002+ apply on top.
+    3. Pre-Alembic deployment that was already at the new schema (`users`
+       and `alert_rules` exist, no `alembic_version`): stamp at head and
+       skip pending upgrades. This catches the rare case where Codex's
+       earlier in-place create_all run produced the 10-table schema before
+       Alembic was wired in.
+
+    All other shapes hit the default `upgrade head` path which fails fast
+    if the schema diverges in unexpected ways.
     """
     # Ensure every model is registered on Base.metadata before alembic inspects.
     from app.models import (  # noqa: F401
@@ -74,11 +88,19 @@ def init_db():
     inspector = inspect(engine)
     has_users = inspector.has_table("users")
     has_alembic_version = inspector.has_table("alembic_version")
+    has_alert_rules = inspector.has_table("alert_rules")
 
     config = _alembic_config()
-    if has_users and not has_alembic_version:
-        logger.info("alembic_stamp_pre_existing_schema")
-        command.stamp(config, "head")
-    else:
+    if has_alembic_version:
         logger.info("alembic_upgrade_head")
+        command.upgrade(config, "head")
+    elif has_users and has_alert_rules:
+        logger.info("alembic_stamp_head_pre_existing_full_schema")
+        command.stamp(config, "head")
+    elif has_users:
+        logger.info("alembic_stamp_baseline_then_upgrade revision=%s", BASELINE_REVISION)
+        command.stamp(config, BASELINE_REVISION)
+        command.upgrade(config, "head")
+    else:
+        logger.info("alembic_upgrade_head_fresh")
         command.upgrade(config, "head")
