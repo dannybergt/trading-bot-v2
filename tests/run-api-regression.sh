@@ -449,6 +449,72 @@ for alert_item in (crypto_alert_item, etf_alert_item):
     assert alert_item["notification"]["pushEligible"] is True
 print("watchlist alerts priority feed ok")
 
+create_alert_rule = requests.post(
+    f"{base}/api/alerts/rules",
+    headers=headers,
+    json={
+        "watchlistId": watchlist_id,
+        "symbol": "BTC/USD",
+        "name": "BTC priority watch",
+        "ruleType": "tag_priority",
+        "threshold": 0,
+        "tag": "priority",
+    },
+    timeout=30,
+)
+create_alert_rule.raise_for_status()
+alert_rule_payload = create_alert_rule.json()
+alert_rule_id = alert_rule_payload["id"]
+assert alert_rule_payload["watchlistId"] == watchlist_id
+assert alert_rule_payload["symbol"] == "BTC/USD"
+assert alert_rule_payload["ruleType"] == "tag_priority"
+assert alert_rule_payload["tag"] == "priority"
+print("alert rule create ok")
+
+alert_rules = requests.get(f"{base}/api/alerts/rules", headers=headers, timeout=30)
+alert_rules.raise_for_status()
+assert any(item["id"] == alert_rule_id for item in alert_rules.json()["items"])
+print("alert rule list ok")
+
+alerts_evaluation = requests.get(f"{base}/api/alerts", headers=headers, timeout=60)
+alerts_evaluation.raise_for_status()
+alerts_payload = alerts_evaluation.json()
+assert alerts_payload["summary"]["rules"] >= 1
+assert alerts_payload["summary"]["createdEvents"] == 1
+alert_event = next(item for item in alerts_payload["events"] if item["ruleId"] == alert_rule_id)
+alert_event_id = alert_event["id"]
+assert alert_event["symbol"] == "BTC/USD"
+assert alert_event["eventType"] == "tag_priority"
+assert alert_event["status"] == "open"
+assert alert_event["payload"]["trigger"]["tag"] == "priority"
+print("alert evaluation event ok")
+
+alert_events = requests.get(f"{base}/api/alerts/events", headers=headers, timeout=30)
+alert_events.raise_for_status()
+assert any(item["id"] == alert_event_id for item in alert_events.json()["items"])
+print("alert event list ok")
+
+ack_alert_event = requests.post(
+    f"{base}/api/alerts/events/{alert_event_id}/ack",
+    headers=headers,
+    timeout=30,
+)
+ack_alert_event.raise_for_status()
+acked_event_payload = ack_alert_event.json()
+assert acked_event_payload["status"] == "acknowledged"
+assert acked_event_payload["acknowledgedAt"]
+print("alert event ack ok")
+
+acknowledged_events = requests.get(
+    f"{base}/api/alerts/events",
+    headers=headers,
+    params={"status": "acknowledged"},
+    timeout=30,
+)
+acknowledged_events.raise_for_status()
+assert any(item["id"] == alert_event_id for item in acknowledged_events.json()["items"])
+print("acknowledged alert event list ok")
+
 watchlist_remove_etf_item = requests.delete(
     f"{base}/api/watchlists/{watchlist_id}/items/VOO",
     headers=headers,
@@ -527,6 +593,8 @@ assert any(
     for setting in backup_payload["data"].get("watchlist_alert_settings", [])
 )
 assert isinstance(backup_payload["data"].get("watchlist_alert_deliveries"), list)
+assert any(rule["id"] == alert_rule_id for rule in backup_payload["data"].get("alert_rules", []))
+assert any(event["id"] == alert_event_id for event in backup_payload["data"].get("alert_events", []))
 print("backup download ok")
 
 export_state = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
@@ -540,6 +608,8 @@ assert any(
     for setting in export_payload["data"].get("watchlist_alert_settings", [])
 )
 assert isinstance(export_payload["data"].get("watchlist_alert_deliveries"), list)
+assert any(rule["id"] == alert_rule_id for rule in export_payload["data"].get("alert_rules", []))
+assert any(event["id"] == alert_event_id for event in export_payload["data"].get("alert_events", []))
 print("export ok")
 
 platform_import = requests.post(

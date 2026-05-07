@@ -32,6 +32,8 @@ def get_db():
 def init_db():
     """Create all tables."""
     from app.models import (  # noqa: F401
+        AlertEvent,
+        AlertRule,
         PasswordResetToken,
         PushSubscription,
         User,

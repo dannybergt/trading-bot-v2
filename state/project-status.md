@@ -8,6 +8,8 @@
 
 ## Gesichert verifiziert
 
+- Persistente Alert-Domaene `alert_rules`/`alert_events` lokal umgesetzt mit Regeltypen `provider_move`, `news_sentiment`, `signal_direction`, `tag_priority`; Endpunkte `/api/alerts/rules`, `/api/alerts`, `/api/alerts/events`, `/api/alerts/events/{id}/ack`; Backup/Export/Import decken Regeln und Events mit ab; API-Regression prueft Anlage, Auswertung, Acknowledge und Backup-/Export-Coverage erfolgreich
+- `CLAUDE.md` als Repo-Orientierung sowie `.githooks/pre-commit` (aktiviert per `core.hooksPath`) gegen versehentliche Secret-Leaks (`.env.local`, `*.pem`, AWS-/GitHub-/Slack-Token, Private-Key-Bloecke, High-Entropy-Zuweisungen) sind eingebaut und mit AWS-Key- und Private-Key-Sample verifiziert
 - `dbergt/trading-bot-frontend:latest` und `dbergt/trading-bot-backend:latest` sind am 2026-03-18 lokal verifiziert und aktuell
 - interner Compose-Name in beiden Images: `trading-bot-v2`
 - Backend-Quellcode konnte aus dem Image extrahiert werden

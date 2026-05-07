@@ -1,5 +1,25 @@
 # Entscheidungen
 
+- Datum: 2026-05-07
+  Entscheidung: Persistente Alert-Domaene (`AlertRule` + `AlertEvent`) wird zusaetzlich zum bestehenden `WatchlistAlertSetting`-/`WatchlistAlertDelivery`-Stack eingefuehrt; beide Mechanismen koexistieren komplementaer.
+  Begruendung: `WatchlistAlertSetting` regelt globale Watchlist-Toggles (Popup/Push, Min-Prio, Min-Score) und `WatchlistAlertDelivery` haelt Push-Zustellhistorie zur Deduplizierung. `AlertRule` adressiert eine andere Achse: granulare per-Symbol-Regeln mit Threshold/Direction/Tag/Snooze, deren Treffer als persistente `AlertEvent`-Records (open/acknowledged) festgehalten werden. Diese WIP-Arbeit lag in der ehemaligen Sandbox `trading-bot-v2-work` und wurde inhaltlich uebernommen, an die in `-v2` zwischenzeitlich angepasste `build_watchlist_alert_payload`-Signatur angeglichen und mit Backup/Export/Import + API-Regression abgesichert.
+  Konsequenzen: Vier Regeltypen liegen vor (`provider_move`, `news_sentiment`, `signal_direction`, `tag_priority`). Neue Endpunkte `/api/alerts/rules` (CRUD), `/api/alerts` (Auswertung), `/api/alerts/events` (Liste), `/api/alerts/events/{id}/ack` (Acknowledge). Frontend-Anbindung steht aus und gehoert in den geplanten React-Quellstand-Wiederaufbau. Bekannter Design-Punkt: `GET /api/alerts` hat bewusst Side-Effects (Event-Erzeugung mit DB-Commit, Dedup ueber `existing_open`), um den Frontend-Polling-Pfad einfach zu halten; spaeter bei UI-Anbindung zu `POST` migrierbar.
+
+- Datum: 2026-05-07
+  Entscheidung: Verbindliche Sicherheits-Guardrails werden in `CLAUDE.md` im Repo-Root verankert und durch einen Pre-commit-Hook unter `.githooks/pre-commit` (aktiviert per `core.hooksPath`) als Defense-in-depth flankiert.
+  Begruendung: Bei jedem Sitzungswechsel (Codex/Claude) muss der Workflow ohne erneute Komplettanalyse wiederherstellbar sein, und zentrale Sicherheits-Regeln (keine Secrets, Prompt-Injection-Bewusstsein, CORS, Audit-Fingerprints, Test-Pipeline-Pflicht vor jedem Push) duerfen nicht in einer einzelnen Sitzung verlorengehen.
+  Konsequenzen: Resume-Codewort bleibt `resume trading-bot-v2`. Pre-commit blockt versehentlich gestagete `.env.local`/`*.pem`/`*.key`/AWS-/GitHub-/Slack-Token-Pattern, `BEGIN PRIVATE KEY`-Bloecke und High-Entropy-`SECRET=`/`API_KEY=`-Zuweisungen ab 32 Zeichen. Hook ist gegen falsche grep-Flag-Interpretation des Dash-Prefix gehaertet (Dash-Dash-Trenner) und mit AWS-Key- + Private-Key-Sample geprueft.
+
+- Datum: 2026-05-07
+  Entscheidung: Sync nach `origin/main` und Docker Hub erfolgt voll automatisch ohne separates User-OK; auch versionierte Release-Tags `v*` werden direkt nach erfolgreichem Upgrade-/Restore-Rehearsal gesetzt.
+  Begruendung: Nutzer hat Sync-Autonomie explizit auf "voll automatisch, alles" gesetzt. Disziplin bleibt durch die bestehenden Pre-Push-Gates (Build, Unit, API-Regression, UI-Regression, bei Persistenz-Aenderungen Rehearsal) und die GitHub-Actions-Gates erhalten.
+  Konsequenzen: Jeder sinnvolle Codeschnitt geht direkt nach `main`; `latest`+`sha-<commit>` werden automatisch nach Docker Hub publiziert. Release-Tags duerfen erst nach gruenem Rehearsal gesetzt werden — diese Sicherheitslinie bleibt erhalten.
+
+- Datum: 2026-05-07
+  Entscheidung: Frontend-Strategie wechselt von "Patch-Schicht weiter ausbauen" auf "echten Vite/React-Quellstand neu aufbauen".
+  Begruendung: Die patch-basierte UI in `src/frontend-dist/ui-patches.js` (2.132 Zeilen) blockt langfristig das Wachstum, weil neue Features wie das jetzt vorhandene Alert-Rule-System keine echte React-Komponentenflaeche haben. Der ausgelieferte Build-Bundle-Ansatz war legitime Ueberbrueckung, ist aber nicht dauerhaft tragfaehig.
+  Konsequenzen: Neuer Frontend-Quellstand wird unter `src/frontend/` als Vite/React/TypeScript/Tailwind-Projekt aufgebaut, am bestehenden Bundle orientiert. `ui-patches.js`-Funktionalitaet wird als erste Welle in echte Komponenten ueberfuehrt; Alert-Rule-UI ist erster echter Neubaustein, der nie als DOM-Patch existieren musste.
+
 - Datum: 2026-05-05
   Entscheidung: `docs/admin/project-plan.md` ist ab jetzt die kanonische Kurzverankerung fuer Gesamtstand, Phasenposition, Sicherheitsachsen und naechste Prioritaeten.
   Begruendung: Nach `v2026.05.05-1` ist das Projekt nicht mehr nur ein rekonstruiertes MVP, sondern ein releasefaehiger Phase-1-Stand mit begonnener Research-Schicht und aktivem Alert-Dispatcher. Der Gesamtplan muss deshalb explizit sichtbar bleiben, damit einzelne Folgeaufgaben nicht vom Produkt-, Betriebs- oder Sicherheitsziel abweichen.

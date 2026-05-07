@@ -58,6 +58,22 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 - Ebenfalls fuer `df6f0fa` erfolgreich: `ci` run `24461808223`, `codeql` run `24461808224`
 - Der Parserfix-Stand `sha-f826304a7850` wurde live-smoke- und upgrade-/restore-validiert; der nachfolgende Script-/Doku-Follow-up und der Provider-Coverage-Produktschnitt sind gepusht und durch Actions bestaetigt.
 
+## Aktueller Unterbrechungspunkt 2026-05-07 Uebergabe Codex -> Claude
+
+- Vollstaendige Projektuebernahme abgeschlossen; Architektur, Phasenposition und State-Pflegeworkflow uebernommen.
+- Ehemals divergente Sandbox `/root/trading-bot-v2-work` enthielt eine WIP-Alert-Domaene; Inhalt wurde an `-v2`'s zwischenzeitlich erweiterte Alert-Setting-Schicht angepasst und integriert.
+- Lokale Verifikation: `bash ops/automation/test.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh` und `CHROME_BIN=/usr/bin/google-chrome SKIP_BUILD=1 bash tests/run-ui-regression.sh` erfolgreich (UI-Lauf nach einem transienten Yahoo-429-Reset).
+- Vom Nutzer freigegebene neue Arbeitsweise:
+  - voll automatischer Sync nach `origin/main` UND Docker Hub inklusive Release-Tags `v*` (nach Rehearsal)
+  - Frontend-Strategie wechselt von Patch-Schicht auf echten Vite/React-Quellstand-Wiederaufbau
+  - security-review als Standardschritt nach jedem nicht-trivialen Code-Schnitt
+  - `CLAUDE.md` und Pre-commit-Hook als Sicherheits-Guardrails verankert
+- Naechster sinnvoller Schritt:
+  - Sandbox `/root/trading-bot-v2-work` nach erfolgreicher Push-Bestaetigung loeschen
+  - Alembic-Migrationen einfuehren (Phase-0-Restpunkt)
+  - Vite/React-Quellstand unter `src/frontend/` neu aufbauen, am bestehenden Bundle orientiert; Alert-Rule-UI als erste Komponente
+  - Provider-Abdeckung fuer ETF/Krypto/Stocks weiter ausbauen
+
 ## Aktueller Fokus
 
 - Nicht mehr am Build-Hook, an den Regressionen oder am Docker-Hub-Login arbeiten; diese Huerden sind fuer den aktuellen Stand genommen.

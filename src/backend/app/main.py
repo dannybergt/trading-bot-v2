@@ -35,6 +35,8 @@ from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.migrate_watchlists import migrate as migrate_watchlists
 from app.models import (
+    AlertEvent as AlertEventRecord,
+    AlertRule as AlertRuleRecord,
     User,
     Watchlist as WatchlistRecord,
     WatchlistAlertDelivery,
@@ -56,6 +58,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Trading Bot API")
 ALERT_PRIORITY_RANKS = {"low": 1, "medium": 2, "high": 3}
+ALERT_RULE_TYPES = {"provider_move", "news_sentiment", "signal_direction", "tag_priority"}
 WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS", "300"))
 WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS", "90"))
 WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
@@ -397,6 +400,265 @@ def record_watchlist_alert_delivery(
     return delivery
 
 
+def normalize_rule_type(rule_type: str) -> str:
+    normalized = str(rule_type or "").strip().lower()
+    if normalized not in ALERT_RULE_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported alert rule type")
+    return normalized
+
+
+def normalize_rule_direction(rule_type: str, direction: str | None) -> str | None:
+    if direction is None:
+        return None
+    normalized = str(direction).strip()
+    if not normalized:
+        return None
+    if rule_type == "signal_direction":
+        normalized = normalized.upper()
+        if normalized not in {"UP", "DOWN", "HOLD"}:
+            raise HTTPException(status_code=400, detail="Unsupported signal direction")
+        return normalized
+    if rule_type == "news_sentiment":
+        normalized = normalized.lower()
+        if normalized not in {"bullish", "bearish", "neutral"}:
+            raise HTTPException(status_code=400, detail="Unsupported news sentiment direction")
+        return normalized
+    return normalized
+
+
+def normalize_rule_tag(tag: str | None) -> str | None:
+    normalized_tags = normalize_tags([tag] if tag is not None else [])
+    return normalized_tags[0] if normalized_tags else None
+
+
+def get_watchlist_item_symbol_or_400(record: WatchlistRecord, symbol: str) -> str:
+    canonical_symbol = canonicalize_symbol(symbol)
+    for item in record.items:
+        if canonicalize_symbol(item.symbol) == canonical_symbol:
+            return item.symbol
+    raise HTTPException(status_code=400, detail="Alert rule symbol must exist in the watchlist")
+
+
+def get_alert_rule_or_404(db: Session, user: User, rule_id: int) -> AlertRuleRecord:
+    rule = (
+        db.query(AlertRuleRecord)
+        .filter(AlertRuleRecord.user_id == user.id, AlertRuleRecord.id == rule_id)
+        .first()
+    )
+    if not rule:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+    return rule
+
+
+def serialize_alert_rule(rule: AlertRuleRecord) -> dict:
+    return {
+        "id": rule.id,
+        "watchlistId": rule.watchlist_id,
+        "symbol": rule.symbol,
+        "name": rule.name,
+        "ruleType": rule.rule_type,
+        "threshold": rule.threshold_value,
+        "direction": rule.direction,
+        "tag": rule.tag,
+        "enabled": rule.enabled,
+        "snoozedUntil": rule.snoozed_until.isoformat() if rule.snoozed_until else None,
+        "lastTriggeredAt": rule.last_triggered_at.isoformat() if rule.last_triggered_at else None,
+        "createdAt": rule.created_at.isoformat() if rule.created_at else None,
+    }
+
+
+def serialize_alert_event(event: AlertEventRecord) -> dict:
+    payload = {}
+    try:
+        payload = json.loads(event.payload_json or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "id": event.id,
+        "ruleId": event.alert_rule_id,
+        "watchlistId": event.watchlist_id,
+        "symbol": event.symbol,
+        "eventType": event.event_type,
+        "severity": event.severity,
+        "status": event.status,
+        "title": event.title,
+        "message": event.message,
+        "payload": payload,
+        "triggeredAt": event.triggered_at.isoformat() if event.triggered_at else None,
+        "acknowledgedAt": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+    }
+
+
+def build_alert_event_payload(rule: AlertRuleRecord, alert_item: dict) -> dict | None:
+    rule_type = rule.rule_type
+    symbol = alert_item.get("symbol") or rule.symbol
+    threshold = rule.threshold_value
+
+    if rule_type == "provider_move":
+        provider_context = alert_item.get("providerContext") or {}
+        change_percent = provider_context.get("changePercent")
+        if change_percent is None:
+            return None
+        threshold_value = 1.0 if threshold is None else float(threshold)
+        if abs(float(change_percent)) < threshold_value:
+            return None
+        severity = "high" if abs(float(change_percent)) >= 5 else "medium" if abs(float(change_percent)) >= 2 else "low"
+        return {
+            "severity": severity,
+            "title": f"{symbol} provider move",
+            "message": f"{symbol} moved {float(change_percent):+.2f}% on provider data.",
+            "trigger": {
+                "changePercent": change_percent,
+                "threshold": threshold_value,
+                "source": provider_context.get("source"),
+            },
+        }
+
+    if rule_type == "news_sentiment":
+        news = alert_item.get("news") or {}
+        label = news.get("aggregateLabel")
+        score = abs(float(news.get("aggregateScore") or 0.0))
+        threshold_value = 0.1 if threshold is None else float(threshold)
+        direction = rule.direction
+        if direction and label != direction:
+            return None
+        if not direction and label == "neutral":
+            return None
+        if score < threshold_value:
+            return None
+        return {
+            "severity": "medium" if score < 0.4 else "high",
+            "title": f"{symbol} news sentiment",
+            "message": f"{symbol} has {label} watchlist news sentiment.",
+            "trigger": {"label": label, "score": score, "threshold": threshold_value},
+        }
+
+    if rule_type == "signal_direction":
+        signal = alert_item.get("signal") or {}
+        direction = rule.direction or "UP"
+        confidence = float(signal.get("confidence") or 0.0)
+        threshold_value = 0.75 if threshold is None else float(threshold)
+        if signal.get("direction") != direction or confidence < threshold_value:
+            return None
+        return {
+            "severity": "high" if confidence >= 0.85 else "medium",
+            "title": f"{symbol} {direction} signal",
+            "message": f"{symbol} signal direction is {direction} with {confidence * 100:.1f}% confidence.",
+            "trigger": {"direction": direction, "confidence": confidence, "threshold": threshold_value},
+        }
+
+    if rule_type == "tag_priority":
+        tags = {str(tag).lower() for tag in alert_item.get("tags") or []}
+        if rule.tag and rule.tag not in tags:
+            return None
+        priority_score = int(alert_item.get("priorityScore") or 0)
+        threshold_value = 45 if threshold is None else int(threshold)
+        if priority_score < threshold_value:
+            return None
+        return {
+            "severity": alert_item.get("priorityLabel") or "medium",
+            "title": f"{symbol} watchlist priority",
+            "message": f"{symbol} reached watchlist priority score {priority_score}.",
+            "trigger": {
+                "priorityScore": priority_score,
+                "threshold": threshold_value,
+                "tag": rule.tag,
+            },
+        }
+
+    return None
+
+
+def rule_is_snoozed(rule: AlertRuleRecord) -> bool:
+    if not rule.snoozed_until:
+        return False
+    snoozed_until = rule.snoozed_until
+    if snoozed_until.tzinfo is None:
+        snoozed_until = snoozed_until.replace(tzinfo=timezone.utc)
+    return snoozed_until > datetime.now(timezone.utc)
+
+
+def evaluate_alert_rules(db: Session, user: User) -> list[AlertEventRecord]:
+    rules = (
+        db.query(AlertRuleRecord)
+        .filter(AlertRuleRecord.user_id == user.id, AlertRuleRecord.enabled == True)
+        .all()
+    )
+    watchlist_payloads: dict[str, dict] = {}
+    created_events: list[AlertEventRecord] = []
+
+    for rule in rules:
+        if rule_is_snoozed(rule):
+            continue
+
+        if rule.watchlist_id not in watchlist_payloads:
+            record = get_watchlist_record_or_404(db, user, rule.watchlist_id)
+            watchlist_payloads[rule.watchlist_id] = build_watchlist_alert_payload(
+                db,
+                user,
+                record,
+                limit=max(10, len(record.items)),
+                news_limit=2,
+            )
+
+        payload = watchlist_payloads[rule.watchlist_id]
+        alert_item = next(
+            (
+                item
+                for item in payload.get("items", [])
+                if canonicalize_symbol(item.get("symbol")) == canonicalize_symbol(rule.symbol)
+            ),
+            None,
+        )
+        if not alert_item:
+            continue
+
+        event_payload = build_alert_event_payload(rule, alert_item)
+        if not event_payload:
+            continue
+
+        existing_open = (
+            db.query(AlertEventRecord)
+            .filter(
+                AlertEventRecord.user_id == user.id,
+                AlertEventRecord.alert_rule_id == rule.id,
+                AlertEventRecord.status == "open",
+            )
+            .first()
+        )
+        if existing_open:
+            continue
+
+        rule.last_triggered_at = datetime.now(timezone.utc)
+        event = AlertEventRecord(
+            user_id=user.id,
+            alert_rule_id=rule.id,
+            watchlist_id=rule.watchlist_id,
+            symbol=rule.symbol,
+            event_type=rule.rule_type,
+            severity=event_payload["severity"],
+            status="open",
+            title=event_payload["title"],
+            message=event_payload["message"],
+            payload_json=json.dumps(
+                {
+                    "rule": serialize_alert_rule(rule),
+                    "trigger": event_payload["trigger"],
+                    "alert": alert_item,
+                },
+                default=str,
+            ),
+        )
+        db.add(event)
+        created_events.append(event)
+
+    if created_events:
+        db.commit()
+        for event in created_events:
+            db.refresh(event)
+    return created_events
+
+
 def build_push_alert_payload(watchlist: WatchlistRecord, alert_item: dict) -> dict:
     symbol = alert_item.get("symbol") or "watchlist item"
     priority = str(alert_item.get("priorityLabel") or "alert").upper()
@@ -540,6 +802,27 @@ class Watchlist(BaseModel):
     id: str
     name: str
     items: List[WatchlistItem]
+
+class AlertRuleRequest(BaseModel):
+    watchlistId: str
+    symbol: str
+    ruleType: str
+    name: str = ""
+    threshold: float | None = None
+    direction: str | None = None
+    tag: str | None = None
+    enabled: bool = True
+    snoozedUntil: datetime | None = None
+
+
+class UpdateAlertRuleRequest(BaseModel):
+    name: str | None = None
+    threshold: float | None = None
+    direction: str | None = None
+    tag: str | None = None
+    enabled: bool | None = None
+    snoozedUntil: datetime | None = None
+
 
 class CreateWatchlistRequest(BaseModel):
     name: str
@@ -1023,6 +1306,148 @@ def get_watchlist_alerts(
         limit=limit,
         news_limit=news_limit,
     )
+
+
+# --- ALERT RULES / EVENTS ---
+
+@app.get("/api/alerts/rules")
+def list_alert_rules(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rules = (
+        db.query(AlertRuleRecord)
+        .filter(AlertRuleRecord.user_id == current_user.id)
+        .order_by(AlertRuleRecord.id.asc())
+        .all()
+    )
+    return {"items": [serialize_alert_rule(rule) for rule in rules]}
+
+
+@app.post("/api/alerts/rules")
+def create_alert_rule(
+    request: AlertRuleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = get_watchlist_record_or_404(db, current_user, request.watchlistId)
+    rule_type = normalize_rule_type(request.ruleType)
+    symbol = get_watchlist_item_symbol_or_400(record, request.symbol)
+    direction = normalize_rule_direction(rule_type, request.direction)
+    tag = normalize_rule_tag(request.tag)
+    rule = AlertRuleRecord(
+        user_id=current_user.id,
+        watchlist_id=record.id,
+        symbol=symbol,
+        name=request.name.strip() or f"{symbol} {rule_type.replace('_', ' ')}",
+        rule_type=rule_type,
+        threshold_value=request.threshold,
+        direction=direction,
+        tag=tag,
+        enabled=request.enabled,
+        snoozed_until=request.snoozedUntil,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return serialize_alert_rule(rule)
+
+
+@app.put("/api/alerts/rules/{rule_id}")
+def update_alert_rule(
+    rule_id: int,
+    request: UpdateAlertRuleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rule = get_alert_rule_or_404(db, current_user, rule_id)
+    if request.name is not None:
+        rule.name = request.name.strip() or rule.name
+    if request.threshold is not None:
+        rule.threshold_value = request.threshold
+    if request.direction is not None:
+        rule.direction = normalize_rule_direction(rule.rule_type, request.direction)
+    if request.tag is not None:
+        rule.tag = normalize_rule_tag(request.tag)
+    if request.enabled is not None:
+        rule.enabled = request.enabled
+    if request.snoozedUntil is not None:
+        rule.snoozed_until = request.snoozedUntil
+    db.commit()
+    db.refresh(rule)
+    return serialize_alert_rule(rule)
+
+
+@app.delete("/api/alerts/rules/{rule_id}")
+def delete_alert_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rule = get_alert_rule_or_404(db, current_user, rule_id)
+    db.delete(rule)
+    db.commit()
+    return {"status": "deleted", "id": rule_id}
+
+
+@app.get("/api/alerts")
+def evaluate_alerts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    created_events = evaluate_alert_rules(db, current_user)
+    rules = (
+        db.query(AlertRuleRecord)
+        .filter(AlertRuleRecord.user_id == current_user.id)
+        .order_by(AlertRuleRecord.id.asc())
+        .all()
+    )
+    open_events = (
+        db.query(AlertEventRecord)
+        .filter(AlertEventRecord.user_id == current_user.id, AlertEventRecord.status == "open")
+        .order_by(AlertEventRecord.triggered_at.desc(), AlertEventRecord.id.desc())
+        .limit(50)
+        .all()
+    )
+    return {
+        "rules": [serialize_alert_rule(rule) for rule in rules],
+        "events": [serialize_alert_event(event) for event in open_events],
+        "summary": {
+            "rules": len(rules),
+            "enabledRules": sum(1 for rule in rules if rule.enabled),
+            "openEvents": len(open_events),
+            "createdEvents": len(created_events),
+        },
+    }
+
+
+@app.get("/api/alerts/events")
+def list_alert_events(
+    status: str = Query(default="open", pattern="^(open|acknowledged|all)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(AlertEventRecord).filter(AlertEventRecord.user_id == current_user.id)
+    if status != "all":
+        query = query.filter(AlertEventRecord.status == status)
+    events = query.order_by(AlertEventRecord.triggered_at.desc(), AlertEventRecord.id.desc()).limit(limit).all()
+    return {"items": [serialize_alert_event(event) for event in events]}
+
+
+@app.post("/api/alerts/events/{event_id}/ack")
+def acknowledge_alert_event(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(AlertEventRecord)
+        .filter(AlertEventRecord.user_id == current_user.id, AlertEventRecord.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Alert event not found")
+    event.status = "acknowledged"
+    event.acknowledged_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(event)
+    return serialize_alert_event(event)
+
 
 # --- SCANNER ---
 

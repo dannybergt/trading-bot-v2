@@ -1,7 +1,7 @@
 """
 Database models for user management.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Float, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -30,6 +30,8 @@ class User(Base):
     watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
     alert_settings = relationship("WatchlistAlertSetting", back_populates="user", cascade="all, delete-orphan")
     alert_deliveries = relationship("WatchlistAlertDelivery", back_populates="user", cascade="all, delete-orphan")
+    alert_rules = relationship("AlertRule", back_populates="user", cascade="all, delete-orphan")
+    alert_events = relationship("AlertEvent", back_populates="user", cascade="all, delete-orphan")
 
 
 class PasswordResetToken(Base):
@@ -67,6 +69,8 @@ class Watchlist(Base):
     items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
     alert_settings = relationship("WatchlistAlertSetting", back_populates="watchlist", cascade="all, delete-orphan")
     alert_deliveries = relationship("WatchlistAlertDelivery", back_populates="watchlist", cascade="all, delete-orphan")
+    alert_rules = relationship("AlertRule", back_populates="watchlist", cascade="all, delete-orphan")
+    alert_events = relationship("AlertEvent", back_populates="watchlist", cascade="all, delete-orphan")
 
 
 class WatchlistAlertSetting(Base):
@@ -127,3 +131,48 @@ class WatchlistItemTag(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     watchlist_item = relationship("WatchlistItem", back_populates="tags")
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    watchlist_id = Column(String, ForeignKey("watchlists.id"), index=True, nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False, default="")
+    rule_type = Column(String, index=True, nullable=False)
+    threshold_value = Column(Float, nullable=True)
+    direction = Column(String, nullable=True)
+    tag = Column(String, nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+    snoozed_until = Column(DateTime(timezone=True), nullable=True)
+    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="alert_rules")
+    watchlist = relationship("Watchlist", back_populates="alert_rules")
+    events = relationship("AlertEvent", back_populates="rule", cascade="all, delete-orphan")
+
+
+class AlertEvent(Base):
+    __tablename__ = "alert_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    alert_rule_id = Column(Integer, ForeignKey("alert_rules.id"), index=True, nullable=False)
+    watchlist_id = Column(String, ForeignKey("watchlists.id"), index=True, nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    event_type = Column(String, index=True, nullable=False)
+    severity = Column(String, index=True, nullable=False, default="medium")
+    status = Column(String, index=True, nullable=False, default="open")
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    payload_json = Column(Text, nullable=False, default="{}")
+    triggered_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="alert_events")
+    rule = relationship("AlertRule", back_populates="events")
+    watchlist = relationship("Watchlist", back_populates="alert_events")

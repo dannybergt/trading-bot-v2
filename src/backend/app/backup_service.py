@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import (
+    AlertEvent,
+    AlertRule,
     PasswordResetToken,
     PushSubscription,
     User,
@@ -41,6 +43,8 @@ class BackupService:
         watchlist_item_tags = db.query(WatchlistItemTag).all()
         watchlist_alert_settings = db.query(WatchlistAlertSetting).all()
         watchlist_alert_deliveries = db.query(WatchlistAlertDelivery).all()
+        alert_rules = db.query(AlertRule).all()
+        alert_events = db.query(AlertEvent).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -126,6 +130,42 @@ class BackupService:
                     }
                     for delivery in watchlist_alert_deliveries
                 ],
+                "alert_rules": [
+                    {
+                        "id": rule.id,
+                        "user_id": rule.user_id,
+                        "watchlist_id": rule.watchlist_id,
+                        "symbol": rule.symbol,
+                        "name": rule.name,
+                        "rule_type": rule.rule_type,
+                        "threshold_value": rule.threshold_value,
+                        "direction": rule.direction,
+                        "tag": rule.tag,
+                        "enabled": rule.enabled,
+                        "snoozed_until": rule.snoozed_until.isoformat() if rule.snoozed_until else None,
+                        "last_triggered_at": rule.last_triggered_at.isoformat() if rule.last_triggered_at else None,
+                        "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                    }
+                    for rule in alert_rules
+                ],
+                "alert_events": [
+                    {
+                        "id": event.id,
+                        "user_id": event.user_id,
+                        "alert_rule_id": event.alert_rule_id,
+                        "watchlist_id": event.watchlist_id,
+                        "symbol": event.symbol,
+                        "event_type": event.event_type,
+                        "severity": event.severity,
+                        "status": event.status,
+                        "title": event.title,
+                        "message": event.message,
+                        "payload_json": event.payload_json,
+                        "triggered_at": event.triggered_at.isoformat() if event.triggered_at else None,
+                        "acknowledged_at": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+                    }
+                    for event in alert_events
+                ],
                 "push_subscriptions": [
                     {
                         "id": subscription.id,
@@ -188,6 +228,8 @@ class BackupService:
         payload = snapshot.get("data", snapshot)
 
         if replace_existing:
+            db.query(AlertEvent).delete()
+            db.query(AlertRule).delete()
             db.query(WatchlistItemTag).delete()
             db.query(WatchlistAlertDelivery).delete()
             db.query(WatchlistAlertSetting).delete()
@@ -283,6 +325,63 @@ class BackupService:
                     priority_label=record.get("priority_label", "low"),
                     priority_score=record.get("priority_score", 0),
                     sent_at=datetime.fromisoformat(record["sent_at"]) if record.get("sent_at") else None,
+                )
+            )
+
+        db.flush()
+
+        for record in payload.get("alert_rules", []):
+            db.add(
+                AlertRule(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    watchlist_id=record["watchlist_id"],
+                    symbol=record["symbol"],
+                    name=record.get("name", ""),
+                    rule_type=record["rule_type"],
+                    threshold_value=record.get("threshold_value"),
+                    direction=record.get("direction"),
+                    tag=record.get("tag"),
+                    enabled=record.get("enabled", True),
+                    snoozed_until=(
+                        datetime.fromisoformat(record["snoozed_until"])
+                        if record.get("snoozed_until")
+                        else None
+                    ),
+                    last_triggered_at=(
+                        datetime.fromisoformat(record["last_triggered_at"])
+                        if record.get("last_triggered_at")
+                        else None
+                    ),
+                )
+            )
+
+        db.flush()
+
+        for record in payload.get("alert_events", []):
+            db.add(
+                AlertEvent(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    alert_rule_id=record["alert_rule_id"],
+                    watchlist_id=record["watchlist_id"],
+                    symbol=record["symbol"],
+                    event_type=record["event_type"],
+                    severity=record.get("severity", "medium"),
+                    status=record.get("status", "open"),
+                    title=record["title"],
+                    message=record["message"],
+                    payload_json=record.get("payload_json") or "{}",
+                    triggered_at=(
+                        datetime.fromisoformat(record["triggered_at"])
+                        if record.get("triggered_at")
+                        else None
+                    ),
+                    acknowledged_at=(
+                        datetime.fromisoformat(record["acknowledged_at"])
+                        if record.get("acknowledged_at")
+                        else None
+                    ),
                 )
             )
 
