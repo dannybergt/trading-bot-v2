@@ -2,17 +2,28 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 
-const NAV_LINKS = [
+type NavLinkSpec = {
+  to: string;
+  label: string;
+  end?: boolean;
+  adminOnly?: boolean;
+};
+
+const NAV_LINKS: NavLinkSpec[] = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/watchlists", label: "Watchlists" },
   { to: "/scanner", label: "Scanner" },
   { to: "/alerts", label: "Alerts" },
   { to: "/settings", label: "Settings" },
+  { to: "/admin", label: "Admin", adminOnly: true },
 ];
 
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const visibleLinks = NAV_LINKS.filter(
+    (link) => !link.adminOnly || user?.is_admin,
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -23,7 +34,7 @@ export function Layout() {
             <span>NexusPulse Trade</span>
           </Link>
           <nav className="flex items-center gap-1">
-            {NAV_LINKS.map((link) => (
+            {visibleLinks.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
