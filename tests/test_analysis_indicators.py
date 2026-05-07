@@ -18,7 +18,11 @@ if not (BACKEND_ROOT / "app").exists():
     BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.analysis import calculate_indicators, compute_volume_profile  # noqa: E402
+from app.analysis import (  # noqa: E402
+    calculate_indicators,
+    compute_volume_profile,
+    detect_support_resistance,
+)
 
 
 def _synthetic_ohlcv(n: int = 250) -> pd.DataFrame:
@@ -110,6 +114,55 @@ class VolumeProfileTests(unittest.TestCase):
         profile = compute_volume_profile(df)
         self.assertEqual([], profile["bins"])
         self.assertEqual(5000.0, profile["totalVolume"])
+
+
+class SupportResistanceTests(unittest.TestCase):
+    def _double_top_series(self) -> pd.DataFrame:
+        # Construct a synthetic series with two clear swing highs near 110
+        # and two swing lows near 90 so the detector should produce one
+        # resistance cluster around 110 and one support cluster around 90.
+        base = np.array(
+            [100, 102, 104, 105, 108, 110, 108, 105, 100, 95, 92, 90, 92, 95, 100,
+             103, 106, 108, 110, 109, 105, 100, 97, 92, 90, 91, 93, 96, 99, 102]
+        ).astype(float)
+        df = pd.DataFrame(
+            {
+                "Open": base,
+                "High": base + 1.0,
+                "Low": base - 1.0,
+                "Close": base,
+                "Volume": np.full(len(base), 1_000_000.0),
+            },
+            index=pd.date_range("2025-01-01", periods=len(base), freq="D"),
+        )
+        return df
+
+    def test_detects_resistance_and_support_clusters(self):
+        df = self._double_top_series()
+        levels = detect_support_resistance(df, lookback=2, tolerance_pct=2.0)
+
+        kinds = {level["kind"] for level in levels}
+        self.assertIn("resistance", kinds)
+        self.assertIn("support", kinds)
+
+        resistance_prices = [lvl["price"] for lvl in levels if lvl["kind"] == "resistance"]
+        support_prices = [lvl["price"] for lvl in levels if lvl["kind"] == "support"]
+        self.assertTrue(any(108.0 <= p <= 113.0 for p in resistance_prices))
+        self.assertTrue(any(87.0 <= p <= 92.0 for p in support_prices))
+
+    def test_strength_increases_with_touches(self):
+        df = self._double_top_series()
+        levels = detect_support_resistance(df, lookback=2, tolerance_pct=2.0)
+        # The double-top resistance cluster should aggregate >= 2 touches.
+        for lvl in levels:
+            if lvl["kind"] == "resistance" and 108.0 <= lvl["price"] <= 113.0:
+                self.assertGreaterEqual(lvl["strength"], 2)
+                return
+        self.fail("No clustered resistance level found")
+
+    def test_returns_empty_for_short_series(self):
+        df = pd.DataFrame({"High": [100.0, 101.0], "Low": [99.0, 100.0]})
+        self.assertEqual([], detect_support_resistance(df))
 
 
 if __name__ == "__main__":

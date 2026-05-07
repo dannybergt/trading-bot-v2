@@ -6,6 +6,7 @@ import { ApiError, apiFetch } from "../api/client";
 import {
   StockChart,
   type ChartCandle,
+  type ChartLevel,
   type ChartPattern,
   type ChartZones,
 } from "../components/StockChart";
@@ -67,6 +68,7 @@ type StockResponse = {
   patterns: ChartPattern[];
   prediction: Prediction | null;
   volume_profile?: VolumeProfilePayload | null;
+  support_resistance?: ChartLevel[] | null;
 };
 
 type ResearchPayload = {
@@ -254,6 +256,7 @@ export function AnalysisPage() {
             candles={candles}
             patterns={patterns}
             zones={stock?.prediction?.zones ?? null}
+            levels={stock?.support_resistance ?? null}
           />
           <VolumeProfile profile={stock?.volume_profile ?? null} />
         </div>

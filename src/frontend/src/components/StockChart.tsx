@@ -66,6 +66,14 @@ export type ChartZones = {
   meetsMinimum?: boolean | null;
 };
 
+export type ChartLevel = {
+  price: number;
+  kind: "support" | "resistance";
+  strength: number;
+  lastTouch?: string;
+  isFlipZone?: boolean;
+};
+
 type OverlayKey =
   | "sma_20"
   | "sma_50"
@@ -153,10 +161,12 @@ export function StockChart({
   candles,
   patterns,
   zones,
+  levels,
 }: {
   candles: ChartCandle[];
   patterns: ChartPattern[];
   zones?: ChartZones | null;
+  levels?: ChartLevel[] | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -173,7 +183,9 @@ export function StockChart({
   }>({});
   const markerPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const zoneLinesRef = useRef<IPriceLine[]>([]);
+  const levelLinesRef = useRef<IPriceLine[]>([]);
   const [showZones, setShowZones] = useState(true);
+  const [showLevels, setShowLevels] = useState(true);
 
   const [enabledOverlays, setEnabledOverlays] = useState<Set<OverlayKey>>(() => {
     const s = new Set<OverlayKey>();
@@ -389,6 +401,38 @@ export function StockChart({
     );
   }, [zones, showZones, candles]);
 
+  // Manage support / resistance horizontal lines.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const line of levelLinesRef.current) {
+      series.removePriceLine(line);
+    }
+    levelLinesRef.current = [];
+
+    if (!showLevels || !levels || levels.length === 0) return;
+
+    for (const level of levels) {
+      const isResistance = level.kind === "resistance";
+      const baseColor = isResistance ? "#ef4444" : "#22c55e";
+      const opacity = Math.min(1, 0.35 + level.strength * 0.15);
+      // lightweight-charts wants hex, not rgba; encode opacity as alpha hex.
+      const alphaHex = Math.round(opacity * 255).toString(16).padStart(2, "0");
+      const color = `${baseColor}${alphaHex}`;
+      levelLinesRef.current.push(
+        series.createPriceLine({
+          price: level.price,
+          color,
+          lineWidth: 1,
+          lineStyle: 1,
+          axisLabelVisible: true,
+          title: `${isResistance ? "R" : "S"}${level.isFlipZone ? "*" : ""} x${level.strength}`,
+        }),
+      );
+    }
+  }, [levels, showLevels, candles]);
+
   // Manage sub-panes (RSI, MACD).
   useEffect(() => {
     const chart = chartRef.current;
@@ -507,6 +551,22 @@ export function StockChart({
               }`}
             >
               {showZones ? "Hide" : "Show"} entry/stop/target
+            </button>
+          </>
+        ) : null}
+        {levels && levels.length > 0 ? (
+          <>
+            <span className="ml-2 text-slate-400">Levels:</span>
+            <button
+              type="button"
+              onClick={() => setShowLevels((v) => !v)}
+              className={`rounded-full border px-2 py-0.5 transition ${
+                showLevels
+                  ? "border-bergt-green/50 bg-bergt-green/10 text-bergt-green"
+                  : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500"
+              }`}
+            >
+              {showLevels ? "Hide" : "Show"} S/R ({levels.length})
             </button>
           </>
         ) : null}

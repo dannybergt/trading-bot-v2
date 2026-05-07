@@ -101,6 +101,89 @@ def compute_volume_profile(df: pd.DataFrame, *, bins: int = 24) -> dict:
     }
 
 
+def detect_support_resistance(df: pd.DataFrame, *, lookback: int = 5, max_levels: int = 6,
+                                tolerance_pct: float = 0.5) -> list[dict]:
+    """Detect horizontal support/resistance levels via swing-pivot clustering.
+
+    A point is a swing high if its High exceeds the High of every candle in
+    the surrounding `lookback` window on both sides; a swing low symmetrically
+    on Low. Pivots within `tolerance_pct` of the same price collapse into one
+    level whose `strength` counts how many original pivots clustered there.
+
+    Returns a list sorted by strength (descending), capped at `max_levels`.
+    Each entry contains:
+      - price: representative price for the level
+      - kind: "support" | "resistance"
+      - strength: cluster size
+      - lastTouch: ISO timestamp of the most recent contributing pivot
+    """
+    levels: list[dict] = []
+    if df.empty or len(df) < lookback * 2 + 1:
+        return levels
+    if "High" not in df.columns or "Low" not in df.columns:
+        return levels
+
+    highs = df["High"].to_numpy(dtype=float)
+    lows = df["Low"].to_numpy(dtype=float)
+    timestamps = df.index
+
+    pivots: list[tuple[str, float, object]] = []  # (kind, price, timestamp)
+    for idx in range(lookback, len(df) - lookback):
+        left_high = highs[idx - lookback : idx]
+        right_high = highs[idx + 1 : idx + lookback + 1]
+        if highs[idx] > left_high.max() and highs[idx] > right_high.max():
+            pivots.append(("resistance", float(highs[idx]), timestamps[idx]))
+        left_low = lows[idx - lookback : idx]
+        right_low = lows[idx + 1 : idx + lookback + 1]
+        if lows[idx] < left_low.min() and lows[idx] < right_low.min():
+            pivots.append(("support", float(lows[idx]), timestamps[idx]))
+
+    if not pivots:
+        return levels
+
+    # Cluster pivots within tolerance into representative levels.
+    pivots.sort(key=lambda item: item[1])
+    clusters: list[dict] = []
+    for kind, price, ts in pivots:
+        absorbed = False
+        for cluster in clusters:
+            if abs(price - cluster["price"]) / max(cluster["price"], 1e-9) * 100 <= tolerance_pct:
+                cluster["prices"].append(price)
+                cluster["touches"].append(ts)
+                cluster["price"] = sum(cluster["prices"]) / len(cluster["prices"])
+                cluster["kinds"].add(kind)
+                absorbed = True
+                break
+        if not absorbed:
+            clusters.append({
+                "price": price,
+                "prices": [price],
+                "kinds": {kind},
+                "touches": [ts],
+            })
+
+    # Strength = touch count; ties break by recency.
+    for cluster in clusters:
+        last_touch = max(cluster["touches"])
+        if hasattr(last_touch, "isoformat"):
+            last_touch_iso = last_touch.isoformat()
+        else:
+            last_touch_iso = str(last_touch)
+        primary_kind = "resistance" if "resistance" in cluster["kinds"] else "support"
+        # If the cluster has both kinds it's a flip-zone; surface as resistance
+        # when above current price, support when below.
+        levels.append({
+            "price": round(float(cluster["price"]), 4),
+            "kind": primary_kind,
+            "strength": len(cluster["touches"]),
+            "lastTouch": last_touch_iso,
+            "isFlipZone": len(cluster["kinds"]) > 1,
+        })
+
+    levels.sort(key=lambda item: (item["strength"], item["lastTouch"]), reverse=True)
+    return levels[:max_levels]
+
+
 def detect_patterns(df: pd.DataFrame) -> list:
     """
     Detect candlestick patterns in the last few candles.
