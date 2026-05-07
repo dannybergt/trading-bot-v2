@@ -109,6 +109,10 @@ export function LoginPage() {
           No account?{" "}
           <Link to="/register" className="text-bergt-green hover:underline">
             Register
+          </Link>{" "}
+          ·{" "}
+          <Link to="/forgot-password" className="text-bergt-green hover:underline">
+            Forgot password?
           </Link>
         </p>
       </form>
