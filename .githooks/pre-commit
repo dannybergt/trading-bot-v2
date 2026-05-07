@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block accidental commits of secrets and local override files.
+# Activate via: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+staged_files=()
+while IFS= read -r line; do
+  staged_files+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ ${#staged_files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+errors=0
+
+# 1. Block staging of files that should never be committed.
+for path in "${staged_files[@]}"; do
+  case "$path" in
+    .env.local|.env.local.*|.env|.env.*.local|*.pem|*.key|*.pfx|*/credentials.json|*/secrets.json)
+      echo "pre-commit: refusing to commit secret-bearing path: $path" >&2
+      errors=1
+      ;;
+  esac
+done
+
+# 2. Scan staged content for secret-shaped patterns. Skip large/binary files
+# and the .githooks/ directory itself (contains the pattern strings).
+for path in "${staged_files[@]}"; do
+  if [[ "$path" == .githooks/* ]]; then
+    continue
+  fi
+  # Only scan tracked-as-text content; let git decide.
+  diff_content=$(git diff --cached --no-color -- "$path" 2>/dev/null || true)
+  [[ -z "$diff_content" ]] && continue
+
+  # Common secret patterns. Each pattern is intentionally narrow.
+  while IFS= read -r pattern_label; do
+    label=${pattern_label%%::*}
+    pattern=${pattern_label#*::}
+    if printf '%s' "$diff_content" | grep -E -q -- "$pattern"; then
+      echo "pre-commit: $path matches secret pattern [$label]" >&2
+      errors=1
+    fi
+  done <<'PATTERNS'
+aws_access_key::AKIA[0-9A-Z]{16}
+github_pat::gh[pousr]_[A-Za-z0-9_]{20,}
+slack_token::xox[baprs]-[A-Za-z0-9-]{10,}
+private_key_block::-----BEGIN [A-Z ]*PRIVATE KEY-----
+generic_high_entropy::(SECRET|TOKEN|API_KEY|PRIVATE_KEY|VAPID_PRIVATE_KEY|JWT_SECRET|APP_ENCRYPTION_KEY)\s*=\s*[\"\']?[A-Za-z0-9_/+=-]{32,}
+PATTERNS
+done
+
+if [[ $errors -ne 0 ]]; then
+  echo "pre-commit: blocking commit. Override only if you are certain (use --no-verify with caution)." >&2
+  exit 1
+fi
+
+exit 0
