@@ -1,6 +1,11 @@
 # Entscheidungen
 
 - Datum: 2026-05-07
+  Entscheidung: UX-Direktive ist verbindlich: Bedienung uebersichtlich + einfach mit Menues/Dropdowns; DE und EN parallel mit Toggle auf Login + im Layout; Empfehlungen muessen ihre Quellen zeigen; Werte mit Einheit + Vorzeichen + Vergleichswert; Onboarding-Restschritte sind im Dashboard immer sichtbar; ausgeloeste Trades werden lueckenlos chronologisch erfasst (Phase 3) mit Position-PnL und summierten Gebuehren + Steuerlast.
+  Begruendung: Drei Nutzer-Direktiven am 2026-05-07: "alles uebersichtlich und einfach zu bedienen ... mit Menues, Dropdowns oder oder oder", "der user soll beim login oder interactive die sprache aendern koennen, deutsch und englisch", "wenn eine order ausgeloest wurde, diese und letztlich alle chronologisch erfasst sind, nichts darf verloren gehen". Sie definieren UX-Standards plus die Persistenzanforderungen fuer das Trade-Journal.
+  Konsequenzen: `docs/admin/project-plan.md` enthaelt jetzt eine Sektion "UX-Direktive"; `docs/admin/product-roadmap.md` Phase 3 fordert das chronologische Trade-Journal mit Backup/Export/Import-Anbindung; `CLAUDE.md` zitiert die Regeln; i18n DE/EN ist als eigenstaendige Welle vor Phase-2-Tiefe geplant.
+
+- Datum: 2026-05-07
   Entscheidung: Produktvision wird verbindlich auf "kombinierte Signal-Quellen + Net-Yield-Gate + First-Login-Wizard + Dashboard-Onboarding-Fortschritt" festgezurrt und in `docs/admin/project-plan.md` Sektion "Produktvision" verankert.
   Begruendung: Der Nutzer hat heute mehrere Direktiven gegeben, die zusammen die Tragweite des Produkts definieren:
     1. Buy/Sell-Empfehlungen muessen aus dem Zusammenspiel von Fundamentaldaten, News, Markttrends, Technischer Chartanalyse und KI entstehen.
