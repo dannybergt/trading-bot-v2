@@ -54,6 +54,5 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 
 ## Bekannte strategische Engpaesse
 
-- Frontend-Quellstand fehlt; Patches liegen aktuell in `src/frontend-dist/ui-patches.js`. Strategieentscheidung des Nutzers: echten Vite/React-Quellstand neu aufbauen.
-- DB-Migrationen sind weiter `Base.metadata.create_all`. Phase-3-Vorbedingung ist Alembic-Einfuehrung.
-- `/root/trading-bot-v2-work` war eine ehemalige Sandbox mit divergenten WIP-Aenderungen. Nach der Migration wurde sie gelöscht.
+- Frontend-Quellstand-Wiederaufbau ist gestartet: `src/frontend/` enthaelt Vite/React/TS/Tailwind-Scaffold mit Auth (Login/Register), Layout, Dashboard, Watchlists und Alert-Rule-UI. Produktion laeuft weiter ueber das Bundle in `src/frontend-dist/` mit `ui-patches.js`. Swap erst nach Feature-Paritaet (Scanner, Analyse, Alpaca, Settings, Admin, News-Ticker, Provider-Research-Panel). CI-Stufe `Build frontend source` haelt das Scaffold per `npm ci && npm run build` lauffaehig.
+- Alembic-Migrationen sind eingefuehrt; initiale Revision `16389c42c243`; `init_db` stempelt Pre-Alembic-Deployments automatisch auf head.

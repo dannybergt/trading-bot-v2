@@ -82,6 +82,14 @@ jobs:
           UI_ARTIFACT_DIR: artifacts/ui-regression
         run: SKIP_BUILD=1 bash tests/run-ui-regression.sh
 
+      - name: Install frontend source dependencies
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Build frontend source
+        working-directory: src/frontend
+        run: npm run build
+
       - name: Upload UI regression artifacts
         if: always()
         uses: actions/upload-artifact@v4
