@@ -737,6 +737,14 @@ async def watchlist_alert_dispatch_task():
 @app.on_event("startup")
 async def on_startup():
     init_db()
+    push_config = PushService.validate_configuration()
+    logger.info(
+        "push_configuration_validated",
+        extra={
+            "configured": push_config["configured"],
+            "required": push_config["required"],
+        },
+    )
     bootstrap_db = SessionLocal()
     try:
         ensure_initial_admin(bootstrap_db)

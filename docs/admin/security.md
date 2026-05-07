@@ -26,7 +26,7 @@
 ## Kritische Risiken
 
 - Frontend-Quellcode fehlt weiterhin; dadurch bleiben Security-Review, Supply-Chain-Pruefung und gezielte Haertung eingeschraenkt
-- Push-VAPID-Defaults liegen noch im Code, waehrend der serverseitige Watchlist-Push-Dispatcher seit `2026.05.05-1` echte Web-Push-Zustellungen ausloesen kann; produktive Deployments muessen echte Secrets erzwingen
+- Produktive Push-Zustellung haengt jetzt explizit an gesetzten VAPID-Werten; fuer produktive Deployments muss `REQUIRE_VAPID_SECRETS=true` gesetzt und `tests/run-push-config-smoke.sh` gegen die Zielkonfiguration ausgefuehrt werden
 
 ## Mittlere Risiken
 
@@ -39,7 +39,6 @@
 
 ## Hardening-Ziele
 
-- Push-Defaults durch echte produktive Secrets ersetzen
 - Frontend-Quellstand beschaffen oder kontrolliert rekonstruieren
 - Watchlists, Nutzereinstellungen und Transaktionen voll migrationsfaehig weiterentwickeln
 - Background-Jobs und WebSockets auf dieselbe Telemetrie-/Audit-Qualitaet wie HTTP heben
@@ -47,8 +46,8 @@
 
 ## Sofortmassnahmen
 
-- produktive `VAPID_*`-Werte verpflichtend setzen und Default-Werte entfernen
-- Push-Konfigurations-Smoke-Test bauen, der keine echten Nutzergeraete benachrichtigt
+- produktive `VAPID_*`-Werte pro Zielumgebung setzen und mit `REQUIRE_VAPID_SECRETS=true` erzwingen
+- Push-Konfigurations-Smoke-Test vor produktiven Rollouts laufen lassen; fuer Parser-only-Proben `GENERATE_TEST_VAPID=1 bash tests/run-push-config-smoke.sh` verwenden
 - Frontend-Headerhaertung inkl. CSP und sichere Origin-Trennung definieren
 - Secrets aus Exceptions und Betriebslogs weiter strikt fernhalten
 - DB-Migrationspfad fuer PostgreSQL-first sauber nachziehen

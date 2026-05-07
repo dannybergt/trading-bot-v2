@@ -1,5 +1,11 @@
 # Sitzungslog
 
+- Datum: 2026-05-07
+  Kontext: Resume `trading-bot-v2`; nach Release `2026.05.05-1` sollte die produktive Push-/VAPID-Konfiguration ohne Code-Defaults gehaertet und ein Smoke-Test ohne echte Nutzergeraete gebaut werden.
+  Erledigt: Backend-Defaults fuer VAPID Public/Private Key entfernt; `PushService.validate_configuration()` prueft vollstaendige Keypaare, Claims-Subjekt, Public/Private-Match und erzwingt VAPID bei `APP_ENV=production` oder `REQUIRE_VAPID_SECRETS=true`. Web-Push-Versand wird ohne lokale VAPID-Konfiguration uebersprungen statt mit geteilten Defaults zu senden. Neuer oeffentlicher Endpoint `/api/auth/push/config` liefert Browsern nur `configured` und `publicKey`; das rekonstruierte Frontend-Bundle holt den Public Key dort ab und enthaelt den alten eingebetteten Key nicht mehr. `.env.example`, `.env.local.example`, Compose und Doku beschreiben `APP_ENV`, `REQUIRE_VAPID_SECRETS` und die VAPID-Zielkonfiguration. Neuer Smoke `tests/run-push-config-smoke.sh` validiert echte Zielkonfiguration oder mit `GENERATE_TEST_VAPID=1` ein disposable Keypair, ohne Push-Subscriptions oder externe Push-Endpunkte zu kontaktieren.
+  Verifikation: `bash ops/automation/build.sh`, `bash ops/automation/test.sh` (29 Tests OK), `GENERATE_TEST_VAPID=1 bash tests/run-push-config-smoke.sh`, `SKIP_BUILD=1 bash tests/run-api-regression.sh` und `SKIP_BUILD=1 bash tests/run-ui-regression.sh` erfolgreich. Ein UI-Zwischenlauf scheiterte transient erst am bestehenden `symbol research panel`-Wait mit Yahoo-429s im Backendlog, ein weiterer Startversuch an einem Docker-Compose-Startfehler; der direkte Wiederholungslauf war vollstaendig gruen.
+  Offen: Committen, nach `main` pushen und GitHub Actions beobachten.
+
 - Datum: 2026-05-05
   Kontext: Der Gesamtstand, der Phasenplan und die Sicherheits-/Betriebsleitplanken sollen dauerhaft im Projekt verankert werden.
   Erledigt: Neue kanonische Plan-Datei `docs/admin/project-plan.md` angelegt. Sie dokumentiert Release `v2026.05.05-1`, Phasenposition, Sicherheitsachsen, Architekturachsen, naechste Prioritaeten und Fertigstellungsregeln. README, Roadmap, Release-Doku, Runbook und Security-Doku wurden auf den aktuellen validierten Stand und den naechsten Fokus Push-/VAPID-Haertung aktualisiert; `state/decisions.md` haelt die neue Plan-Verankerung als Entscheidung fest.

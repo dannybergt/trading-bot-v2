@@ -23,6 +23,7 @@ services:
         condition: service_healthy
     environment:
       DATA_DIR: ${DATA_DIR:-/app/data}
+      APP_ENV: ${APP_ENV:-local}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://trading:trading-change-me@postgres:5432/trading_bot_v2}
       JWT_SECRET: ${JWT_SECRET}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
@@ -33,6 +34,7 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_CLAIMS_SUB: ${VAPID_CLAIMS_SUB:-mailto:admin@example.com}
+      REQUIRE_VAPID_SECRETS: ${REQUIRE_VAPID_SECRETS:-false}
       BACKUP_DIR: ${BACKUP_DIR:-/app/backups}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-3600}
       PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL:-http://127.0.0.1:18094/reset-password}

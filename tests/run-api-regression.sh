@@ -172,6 +172,13 @@ assert me_payload["is_admin"] is True
 assert me_payload["mfa_enabled"] is False
 print("bootstrap admin profile ok")
 
+push_config = requests.get(f"{base}/api/auth/push/config", timeout=30)
+push_config.raise_for_status()
+push_config_payload = push_config.json()
+assert push_config_payload["configured"] is False
+assert push_config_payload["publicKey"] is None
+print("push config unavailable ok")
+
 password_reset_request = requests.post(
     f"{base}/api/auth/password-reset/request",
     json={"email": email},

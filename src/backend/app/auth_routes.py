@@ -16,6 +16,7 @@ from app.database import get_db
 from app.logging_config import fingerprint_value
 from app.models import User, PasswordResetToken
 from app.email_service import PasswordResetDeliveryError, send_password_reset_email
+from app.push_service import PushConfigurationError, PushService
 from app.auth import (
     hash_password,
     verify_password,
@@ -466,6 +467,24 @@ def mfa_disable(req: MFACodeRequest, current_user: User = Depends(get_current_us
 
 
 # --- PUSH NOTIFICATIONS ---
+
+@router.get("/push/config")
+def get_push_config():
+    """Return public Web Push configuration for browser subscription."""
+    try:
+        config = PushService.validate_configuration(require_config=False)
+    except PushConfigurationError as exc:
+        logger.error("push_config_invalid error=%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Push notifications are not configured correctly",
+        ) from exc
+
+    return {
+        "configured": config["configured"],
+        "publicKey": config.get("public_key"),
+    }
+
 
 @router.post("/push/subscribe")
 def subscribe_push(req: PushSubscriptionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

@@ -109,9 +109,9 @@ Immer mitzudenken:
 
 Aktuell wichtigster Security-Block:
 
-- Push-/VAPID-Defaults aus dem produktiven Pfad entfernen
-- Start-/Config-Pruefung fuer fehlende VAPID-Secrets einfuehren
-- Smoke-Test bauen, der Push-Konfiguration prueft, ohne echte Nutzergeraete zu benachrichtigen
+- produktive VAPID-Werte in `.env.local` oder der Zielumgebung setzen
+- `REQUIRE_VAPID_SECRETS=true` fuer produktive Deployments aktivieren
+- `bash tests/run-push-config-smoke.sh` vor produktiven Push-Rollouts ausfuehren; der Smoke validiert nur die Konfiguration und benachrichtigt keine Nutzergeraete
 
 ## Architekturachsen
 

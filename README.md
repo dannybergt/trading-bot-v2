@@ -115,7 +115,7 @@ Die Distribution erfolgt ausschliesslich ueber Docker Hub:
 
 ## Prioritaeten
 
-- produktive Push-/VAPID-Secrets ohne Code-Defaults erzwingen
+- produktive Push-/VAPID-Konfiguration je Zielumgebung mit `REQUIRE_VAPID_SECRETS=true` erzwingen und per `tests/run-push-config-smoke.sh` validieren
 - DB-Migrationspfad fuer PostgreSQL-first professionalisieren
 - Provider- und Live-Datenabdeckung weiter ausbauen
 - Frontend-Quellstand statt nur Build-Artefakt beschaffen oder rekonstruieren

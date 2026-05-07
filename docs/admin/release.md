@@ -30,6 +30,7 @@ Lokaler Build, versionierter Docker-Hub-Publish und Docker-Hub-Deploy/Upgrade si
   - `bash tests/run-api-regression.sh`
   - `bash tests/run-password-reset-email-smoke.sh`
   - `bash tests/run-ui-regression.sh`
+  - fuer produktive Push-Konfiguration: `bash tests/run-push-config-smoke.sh`
   - `IMAGE_TAG=2026.05.05-1 bash tests/run-upgrade-rehearsal.sh`
   - optional mit echtem Provider-Key:
     `ALPHA_VANTAGE_API_KEY=... IMAGE_TAG=2026.05.05-1 bash tests/run-alpha-vantage-live-smoke.sh`
