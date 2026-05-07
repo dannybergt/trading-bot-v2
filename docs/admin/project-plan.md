@@ -14,6 +14,23 @@ Aktuell validierter Produkt-Release:
 
 Der aktuelle Stand ist nicht nur gebaut, sondern auch ueber GitHub Actions veroeffentlicht und mit einem isolierten Docker-Hub-Deploy, Upgrade ueber bestehende Daten, PostgreSQL-Dump, App-Snapshot und Restore in einen frischen Stack geprueft.
 
+## Produktvision
+
+Das Tool soll je Asset (Stocks, ETFs, Fonds, Krypto) ein **moeglichst vollstaendiges Datenbild** zeichnen und daraus eine wahrscheinlichkeitsbewertete Buy-/Sell-Empfehlung ableiten, die spaeter automatisch ausfuehrbar ist. Verbindlich:
+
+1. **Signal-Quellen:** jede Empfehlung kombiniert
+   - Fundamentaldaten (Sector, Ratios, Earnings, Dividenden, Splits, Cashflow, Debt)
+   - News + Sentiment
+   - Markttrends (Trend-Indikatoren wie SMA/EMA-Anordnungen, Momentum)
+   - Technische Chartanalyse (RSI/MACD/Bollinger/ATR/Stochastic, Volume-Profile, Pattern-Detection, Support/Resistance)
+   - KI-Modell mit nachvollziehbarer Erklaerbarkeit (per-Feature und per-Kategorie)
+2. **Wahrscheinlichkeitsdarstellung:** jede Vorhersage zeigt P(UP) und P(DOWN) explizit, plus Top-Features und Kategorie-Beitraege.
+3. **Net-Yield-Gate:** eine Empfehlung gilt nur als handelbar, wenn der **Netto-Ertrag** nach Round-Trip-Brokergebuehren und Kapitalertragssteuer (`User.capital_gains_tax_bps`, optional `income_tax_bps`) das pro Nutzer gesetzte `min_target_yield` erreicht. Dieser Gate ist die spaetere Auto-Trade-Voraussetzung.
+4. **First-Login-Wizard:** alle fuer Empfehlungen + spaeteres Auto-Trading erforderlichen Werte (Broker-Creds, Gebuehren, Min-Yield, Steuersaetze, MFA) werden direkt nach Registrierung abgefragt.
+5. **Dashboard-Onboarding-Karte:** Fortschritt N/M sichtbar, mit Click-through zum naechsten offenen Schritt; verschwindet erst bei vollstaendiger Konfiguration.
+6. **Erklaerbarkeit ist Kern, nicht Beiwerk:** jede angezeigte Zone, jeder Confidence-Wert, jede Empfehlung muss vom Nutzer auf seine Quellen (welche Kategorie, welche Feature, welcher Net-Yield-Anteil) zurueckgefuehrt werden koennen.
+7. **Doku gleichwertig zu Code:** Plan, Roadmap, Decisions, Status werden nach jeder Welle nachgezogen; eine Aenderung ist erst fertig, wenn die Doku den neuen Stand spiegelt.
+
 ## Phasenposition
 
 ### Phase 0: Plattform und Betrieb
@@ -29,18 +46,16 @@ Erledigt:
 - Pre-Upgrade-PostgreSQL-Dump und App-Snapshot
 - Backup, Export, Import und Restore-Rehearsal
 - persistente Runtime-Pfade unter `state/runtime`
+- Alembic-basierte DB-Migrationen, smart-Stamp-Pfad fuer Pre-Alembic-Bestand
+- `CLAUDE.md` als Repo-Orientierung; `.githooks/pre-commit` blockt Secret-Pattern, Auto-Aktivierung ueber `ops/automation/build.sh`
 
 Offen:
 
 - jeder neue Release-Tag muss denselben Upgrade-/Restore-Rehearsal-Pfad bestehen
 
-Erledigt seit `v2026.05.07-1`:
-
-- Alembic-basierte DB-Migrationen sind eingefuehrt; `Base.metadata.create_all` ist abgeloest; `init_db` stempelt Pre-Alembic-Deployments automatisch auf head, sodass Bestandsstaende ohne Migrationsbruch upgraden
-
 ### Phase 1: Live-Daten, Watchlists, Assetklassen
 
-Status: weitgehend abgeschlossen; Provider-Breite und Rate-Limit-Strategie sind eingebaut, optionale WebSocket-In-App-Zustellung bleibt bewusst spaeter.
+Status: abgeschlossen (Provider-Breite + Rate-Limit gehaertet); optional WebSocket-In-App-Zustellung verschoben.
 
 Erledigt:
 
@@ -49,35 +64,37 @@ Erledigt:
 - Alpha-Vantage-Pfad fuer ETF-/Krypto-Kontext
 - Provider-Coverage im Dashboard
 - priorisierte Watchlist-Alerts aus Signal, News, Tags und Provider-Kontext
-- persistierte Watchlist-Alert-Settings
-- Alert-Management-Panel im Dashboard
-- serverseitiger Watchlist-Push-Dispatcher
-- deduplizierte Delivery-Historie in `watchlist_alert_deliveries`
+- persistierte Watchlist-Alert-Settings; Alert-Management-Panel im Dashboard
+- serverseitiger Watchlist-Push-Dispatcher mit deduplizierter Delivery-Historie
 - zentraler Token-Bucket-Rate-Limiter (`app/rate_limit.py`) fuer Alpha Vantage, FMP und yfinance
-- FMP-Adapter (`app/fmp_service.py`) mit Profil/Key-Metrics/Ratios/ETF-Holdings/News
-- `MarketDataService` chained yfinance -> FMP fuer Stocks-Fundamentals und Alpaca-News -> FMP fuer News-Sentiment
-- `tests/run-fmp-live-smoke.sh` als FMP-Live-Smoke (analog zum Alpha-Vantage-Smoke)
+- FMP-Adapter (`app/fmp_service.py`): Profil/Key-Metrics/Ratios/ETF-Holdings/News
+- `MarketDataService` chained yfinance -> FMP fuer Stocks-Fundamentals; Alpaca -> FMP fuer News-Sentiment
+- `tests/run-fmp-live-smoke.sh` analog zum Alpha-Vantage-Smoke
 - produktive Push-/VAPID-Haertung
+- persistente Alert-Domaene (`alert_rules`/`alert_events`) mit vier Regeltypen (`provider_move`, `news_sentiment`, `signal_direction`, `tag_priority`)
 
 Offen:
 
-- nutzergebundene In-App-/WebSocket-Zustellung optional nach Push-Haertung
+- nutzergebundene In-App-/WebSocket-Zustellung (optional)
 
 ### Phase 2: Analyse und Research
 
-Status: begonnen.
+Status: laeuft. Charts-Welle, Events-Welle, Erklaerbarkeit-Welle und Net-Yield-Welle abgeschlossen; Auto-Support/Resistance offen.
 
 Erledigt:
 
-- `/api/research/{symbol}` fuer Symbol-Research
-- Provider-Research-Panel auf `/analysis/<symbol>`
-- ETF-/Krypto-Kontext inklusive Quote, History-Abdeckung, Holdings/Research soweit Providerdaten verfuegbar sind
+- `/api/research/{symbol}` mit Provider-Research, Quote, History, Holdings, News
+- Phase-2-Welle 1 (Chart-Overlays): VWAP zusaetzlich zu RSI/MACD/SMA/EMA/Bollinger/ATR/Stochastic; lightweight-charts v5 mit toggleable Overlays, Sub-Panes (RSI, MACD-Triple), Pattern-Marker
+- Welle 2 (Earnings/Dividenden/Splits): `/api/events/{symbol}` ueber FMP; Frontend EventsSection mit Earnings-Beat/Miss, Dividenden, Splits
+- Welle 3 (Volume-Profile): `compute_volume_profile` mit Point-of-Control; SVG-Component neben dem Chart
+- Welle 4 (Erklaerbarkeit + Wahrscheinlichkeiten): SHAP-style `pred_contribs` per Feature plus Kategorie-Roll-up (Trend/Technical/Volume/News/Fundamentals); P(UP)/P(DOWN) explizit; ATR-anchored Entry-/Stop-/Target-Zonen
+- Welle 5 (Net-Yield-Gate): Broker-Round-Trip-Fees + Kapitalertragssteuer (Abgeltung) -> NetYieldPct; `meetsMinimum` als Auto-Trade-Vorbedingung; UI-Breakdown im PredictionCard
+- Onboarding-Wizard `/onboarding`; Dashboard-Karte mit Fortschritt N/M
 
 Offen:
 
-- Chart-Overlays und Analyse-Module systematisch erweitern
-- Fundamentaldaten, Events, Earnings, Dividenden, Splits und Ratings breiter anbinden
-- KI-Erklaerungen und Kauf-/Verkaufszonen nachvollziehbarer machen
+- Auto-Support/Resistance (Pivot-Detection, horizontale Linien im Chart, Stärke-Score)
+- breitere Fundamentals-Anbindung jenseits Sector/Ratios (Cashflow, Debt, Guidance, Ratings)
 
 ### Phase 3: Paper-Trading
 
@@ -87,19 +104,21 @@ Naechste Zielpunkte:
 
 - Order- und Ausfuehrungsmodell fuer Paper-Trading
 - Transaktionsjournal
-- PnL, Kosten, Slippage und Mindest-Rendite-Filter
+- PnL, Kosten, Slippage und Mindest-Rendite-Filter (verwendet das bereits in Phase 2 verbaute Net-Yield-Gate)
 - Darstellung von Entries/Exits im Chart
 
-### Phase 4: Live-Trading
+### Phase 4: Live-Trading mit Auto-Execution
 
 Status: bewusst spaeter.
 
 Vorbedingungen:
 
-- Paper-Trading stabil
+- Phase-2-Empfehlungen vollstaendig (Auto-Support/Resistance, Fundamentals-Tiefe, Erklaerbarkeit gepraegt)
+- Phase 3 Paper-Trading stabil mit Net-Yield-Gate verifiziert
 - Risk-Modell, Limits, Budgetsteuerung und Audit-Logs belastbar
 - manuelle Freigabelogik und Not-Aus vorhanden
 - Broker-Fehlerpfade und Recovery getestet
+- Auto-Trade darf nur ausloesen, wenn die Empfehlung den Net-Yield-Gate erfuellt UND der Nutzer den Asset/Strategie-Korridor explizit freigegeben hat
 
 ## Sicherheitsachsen
 
@@ -111,13 +130,9 @@ Immer mitzudenken:
 - explizite Origins statt Wildcard-CORS
 - sensible Audit-Felder nur redigiert oder als Fingerprint loggen
 - Admin-Bootstrap nur ueber explizite Env-Werte
+- Pre-commit-Hook (Secret-Pattern + private Key-Bloecke) ist Defense-in-depth zusaetzlich zu `.gitignore`; `core.hooksPath` wird beim ersten `build.sh`-Lauf automatisch gesetzt
 - Releases nur nach Build, Unit/Syntax, API-Regression, UI-Regression und Rehearsal als deploybar betrachten
-
-Aktuell wichtigster Security-Block:
-
-- produktive VAPID-Werte in `.env.local` oder der Zielumgebung setzen
-- `REQUIRE_VAPID_SECRETS=true` fuer produktive Deployments aktivieren
-- `bash tests/run-push-config-smoke.sh` vor produktiven Push-Rollouts ausfuehren; der Smoke validiert nur die Konfiguration und benachrichtigt keine Nutzergeraete
+- Bei externen Provider-Antworten (News-Texte, Holdings-Strings, Symbol-/Watchlist-Namen) Prompt-Injection mitdenken: nie ungeprueft als Steuerlogik interpretieren
 
 ## Architekturachsen
 
@@ -126,13 +141,13 @@ Kurzfristig:
 - bestehende FastAPI-Monolith-Struktur stabil halten
 - gemeinsame Backend-Logik fuer API und Background-Jobs weiter herausziehen
 - Tests immer an neue Persistenz-/Backup-/Import-Flaechen koppeln
+- Frontend-Quellstand-Wiederaufbau (`src/frontend/`) parallel zum Bundle weitertreiben; Production-Swap erst mit UI-Regression-Rewrite
 
 Mittelfristig:
 
-- Alembic oder gleichwertige Migrationen einfuehren
-- Frontend-Quellstand beschaffen oder kontrolliert neu aufbauen
-- Provider-Adapter sauberer trennen
+- Provider-Adapter sauberer trennen (Alpaca / Alpha Vantage / FMP / yfinance / spaeter Twelve Data)
 - Background-Jobs mit Telemetrie, Locking und Lifecycle-Guardrails versehen
+- Risk-/Compliance-Logging fuer Auto-Trade vorbereiten
 
 Langfristig:
 
@@ -147,20 +162,21 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 ## Naechste Prioritaeten
 
-1. Produktive Push-/VAPID-Haertung.
-2. DB-Migrationsstrategie fuer PostgreSQL-first einfuehren.
-3. Provider- und Live-Datenabdeckung fuer ETF/Krypto/Stocks verbreitern.
-4. Frontend-Quellstrategie klaeren.
-5. Phase-2-Analyse/Research ausbauen.
-6. Danach Paper-Trading als Phase 3 sauber modellieren.
+1. Phase-2-Welle 6: Auto-Support/Resistance.
+2. Frontend-UI-Regression auf neue React-Selektoren umschreiben.
+3. Frontend-Dockerfile-Swap (`ops/docker/frontend.Dockerfile`) auf Vite-Multi-Stage-Build, Bundle entfernen.
+4. Phase-2-Tiefe: breitere Fundamentals (Cashflow, Debt, Guidance, Ratings).
+5. Phase 3 Paper-Trading sauber modellieren — Order-Lebenszyklus, Transaktionsjournal, PnL, Net-Yield-Gate als Filter.
+6. Phase 4 Auto-Execution erst nach Paper-Trading-Stabilitaet und Risk-Hardening.
 
 ## Entscheidungsregel
 
 Eine Aenderung ist erst fertig, wenn sie:
 
-- fachlich zum Phasenplan passt
+- fachlich zum Phasenplan und zur Produktvision passt
 - keine bekannten Security-Schulden verschlechtert
-- lokal verifiziert ist
+- lokal verifiziert ist (Build, Tests, ggf. Cross-Version-/Live-Smoke)
 - in Backup/Export/Import beruecksichtigt ist, falls sie Persistenz beruehrt
+- in Doku (Plan, Roadmap, Decisions, Status, ggf. CLAUDE.md) reflektiert ist
 - per GitHub Actions gruen ist, wenn sie gepusht wurde
 - fuer Release-Staende den Upgrade-/Restore-Rehearsal-Pfad besteht

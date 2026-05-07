@@ -12,7 +12,7 @@ Sagt der Nutzer nur `resume trading-bot-v2`, dann zuerst in dieser Reihenfolge l
 
 Danach an der dort beschriebenen Stelle ohne Rueckfragen fortsetzen.
 
-Kanonischer Gesamtplan: `docs/admin/project-plan.md`. Phasenposition, Sicherheitsachsen, Architekturachsen, naechste Prioritaeten und die Fertigstellungsregel stehen dort.
+Kanonischer Gesamtplan: `docs/admin/project-plan.md`. Phasenposition, Sicherheitsachsen, Architekturachsen, naechste Prioritaeten und die Fertigstellungsregel stehen dort. Die Sektion "Produktvision" oben im Plan ist verbindlich — jede Empfehlung kombiniert Fundamentals + News + Trend + Technical + AI mit expliziten Wahrscheinlichkeiten, das Net-Yield-Gate (Brokergebuehren + Kapitalertragssteuer netto) entscheidet ueber "actionable", und ein First-Login-Wizard plus Dashboard-Fortschrittskarte fuehren neue Nutzer durch alle Pflichtwerte.
 
 ## Was das Projekt ist
 

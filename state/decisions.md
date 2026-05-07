@@ -1,6 +1,22 @@
 # Entscheidungen
 
 - Datum: 2026-05-07
+  Entscheidung: Produktvision wird verbindlich auf "kombinierte Signal-Quellen + Net-Yield-Gate + First-Login-Wizard + Dashboard-Onboarding-Fortschritt" festgezurrt und in `docs/admin/project-plan.md` Sektion "Produktvision" verankert.
+  Begruendung: Der Nutzer hat heute mehrere Direktiven gegeben, die zusammen die Tragweite des Produkts definieren:
+    1. Buy/Sell-Empfehlungen muessen aus dem Zusammenspiel von Fundamentaldaten, News, Markttrends, Technischer Chartanalyse und KI entstehen.
+    2. Wahrscheinlichkeiten muessen explizit dargestellt werden (P(UP)/P(DOWN)), nicht versteckt hinter einem einzelnen Confidence-Wert.
+    3. Das Datenbild je Asset soll moeglichst vollstaendig sein, weil das End-Ziel automatisches Trading ist.
+    4. Brokergebuehren und Steuern (Kapitalertragssteuer / Abgeltungssteuer / Einkommenssteuer-Fallback) muessen in die Empfehlung einfliessen — actionable nur, wenn nutzerdefinierter Mindest-Yield NETTO erreicht wird.
+    5. Pflicht-Konfiguration wird beim ersten Login per Wizard abgefragt und im Dashboard als Fortschritt visualisiert.
+    6. Plan/Doku muss alle Direktiven inhaltlich gepruegt und optimiert spiegeln.
+  Konsequenzen: `docs/admin/project-plan.md` enthaelt jetzt eine eigene Sektion "Produktvision" mit den 7 verbindlichen Punkten; `docs/admin/product-roadmap.md` reflektiert dieselbe Vision in Phase 2/3/4; `CLAUDE.md` zitiert die Vision; jede neue Welle muss den Vision-Check passieren bevor sie als "fertig" gilt. Backend liefert Net-Yield mit `meetsMinimum`-Flag; Frontend zeigt Net-Yield-Breakdown plus Probability-Bars und Kategorie-Erklaerbarkeit. `/onboarding`-Wizard und Dashboard-Onboarding-Karte sind eingebaut.
+
+- Datum: 2026-05-07
+  Entscheidung: User-Schema wird um `capital_gains_tax_bps` und `income_tax_bps` (Integer-Basispunkte) erweitert; `min_target_yield` wird ab jetzt als NETTO-Minimum interpretiert.
+  Begruendung: Ohne Steuermodell gilt eine Empfehlung als "10% Gewinn" auch dann, wenn 26.375% Abgeltungssteuer plus Brokergebuehren den Netto-Ertrag unter das Nutzer-Minimum drueckt. Auto-Trade-Freigabe braucht eine harte Netto-Ertrags-Vorbedingung. Basispunkte vermeiden Floating-Point-Drift und halten SQLite + PostgreSQL ohne Numeric-Spalte konsistent.
+  Konsequenzen: Alembic-Migration `0003_add_user_tax_rates` (revision `a3c1d4f5e6b7`); `PortfolioSettingsRequest`/`Response` reichen die Felder durch; `_enrich_with_yield_model` berechnet Gross -> Fees -> Tax -> Net und liefert `meetsMinimum`; UI im PredictionCard zeigt Breakdown plus Schwellen-Badge; Backup/Export/Import deckt die neuen Felder mit ab.
+
+- Datum: 2026-05-07
   Entscheidung: Phase-2-Charts werden mit TradingView-`lightweight-charts` v5 gebaut, nicht mit `recharts`/`chart.js`/`apexcharts`; AnalysisPage lazy-loaded per `React.lazy` damit der Initial-Load-Bundle nicht durch die Chart-Library aufgeblaeht wird.
   Begruendung: `lightweight-charts` ist purpose-built fuer Finanz-Charts (Candlesticks, Volumen, Sub-Panes, Marker) und liefert das deutlich beste Verhaeltnis aus Bundle-Groesse zu Funktionsumfang (~60 KB gzipped fuer den vollen Featuresatz). `chart.js`/`recharts` haetten Candlesticks und Sub-Panes nur ueber Plugins/eigene Komponenten geliefert; `apexcharts` ist groesser. Lazy-Loading der `AnalysisPage` (inkl. Chart-Code) hebt das Initial-JS zurueck auf 96 KB gzipped, der Chart-Chunk laedt erst beim Drilldown.
   Konsequenzen: `app/analysis.py` ergaenzt um `VWAP` (cumulative typical-price * volume); `/api/stock/{symbol}` reicht jetzt zusaetzlich `ema_12`, `ema_26`, `atr`, `vwap`, `stoch_k`, `stoch_d` durch. `src/frontend/src/components/StockChart.tsx` haelt Candle + Volume + Toggleable Overlays (SMA 20/50/200, EMA 12/26, VWAP, Bollinger) + Sub-Panes (RSI, MACD-Triple) + Pattern-Marker. AnalysisPage lazy-loaded ueber `React.lazy` mit Suspense-Fallback. Volume Profile (Phase-2-Punkt) ist absichtlich nicht in dieser Welle, weil `lightweight-charts` das nicht out-of-the-box liefert; kommt als eigene Welle, wenn priorisiert.

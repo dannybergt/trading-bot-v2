@@ -2,16 +2,19 @@
 
 ## Zielbild
 
-Das Produkt soll sich von einem rekonstruierten MVP zu einer vollwertigen Trading-Workstation entwickeln:
+Vollwertige Trading-Workstation mit moeglichst vollstaendigem Datenbild je Asset (Aktien, ETFs, Fonds, Krypto) und automatisch ausfuehrbarer, wahrscheinlichkeitsbewerteter Buy-/Sell-Empfehlung. Konkrete Eckpunkte:
 
 - Live-Marktdaten fuer Aktien, ETFs, Fonds, Krypto und spaeter Optionen
 - klare Trennung und Visualisierung nach Assetklassen
 - Watchlists, Scanner, News-Ticker, Popups und Alerts
 - technische Analyse mit frei zuschaltbaren Overlays und Indikatoren
 - Fundamentaldaten, Bewertungskennzahlen, Holdings und Unternehmensereignisse
-- KI-gestuetzte Kauf-/Verkaufszonen mit nachvollziehbarer Begruendung
-- Paper-Trading mit lueckenloser Transaktionshistorie
-- spaeter Live-Trading mit Budget- und Risikomanagement
+- News + Sentiment als gleichberechtigte Signal-Quelle
+- KI-gestuetzte Kauf-/Verkaufszonen mit nachvollziehbarer Begruendung (Kategorie- und Feature-Erklaerbarkeit) und expliziten P(UP)/P(DOWN)
+- Net-Yield-Gate: Empfehlungen werden nur ausgesprochen, wenn nach Brokergebuehren und Kapitalertragssteuer (`min_target_yield` netto) das nutzergesetzte Minimum erreicht wird; spaeter wird genau dieser Gate die Auto-Execution freischalten
+- First-Login-Wizard fuer Pflichtwerte (Broker, Fees, Min-Yield, Steuern, MFA) und Dashboard-Karte mit Konfigurationsfortschritt
+- Paper-Trading mit lueckenloser Transaktionshistorie als Vorstufe zum Live-Trading
+- Live-Trading mit Budget- und Risikomanagement, Audit-Logs, Not-Aus
 - Export, Import, manuelle und geplante Backups
 - permanenter Build-/Sync-Pfad Richtung Docker Hub
 
@@ -50,20 +53,24 @@ Der operative Gesamtplan und der aktuelle Release-Stand sind in `docs/admin/proj
 - automatische Chartanalyse mit Trend, Support/Resistance, Volatilitaet und Mustern
 - Fundamentaldaten als aufklappbare Module im UI
 - Earnings, Dividenden, Splits, Guidance, Holdings, Ratios, Cashflow, Debt
-- KI-Modul fuer Kauf-/Verkaufszonen inklusive Erklaerung der Entscheidungsbasis
+- News + Sentiment-Aggregat als sichtbare Signal-Quelle in der Analyse
+- KI-Modul fuer Kauf-/Verkaufszonen inklusive Kategorie-Erklaerbarkeit (Trend, Technical, Volume, News, Fundamentals) und Top-Feature-Beitraegen
+- explizite Wahrscheinlichkeiten P(UP) / P(DOWN) plus Risk/Reward
+- Net-Yield-Projektion (Gross -> Fees -> Tax -> Net) als Vorstufe der Auto-Trade-Freigabe
 
 ### Phase 3: Paper-Trading
 
 - Orders und simulierte Ausfuehrung mit Paper-Geld
 - Transaktionsjournal mit absolutem und prozentualem PnL
 - Visualisierung von Orders und Exits direkt im Chart
-- Nutzerdefinierte Mindest-Rendite und Kostenfilter
-- Plausibilitaetsansicht fuer jede KI-Entscheidung
+- Net-Yield-Gate aus Phase 2 als Filter: Empfehlung wird nur als Order vorgeschlagen, wenn Netto-Ertrag >= `min_target_yield`
+- Plausibilitaetsansicht fuer jede KI-Entscheidung mit Kategorie- und Feature-Erklaerbarkeit
 
-### Phase 4: Live-Trading
+### Phase 4: Live-Trading mit Auto-Execution
 
 - Budgetverwaltung, Positionsgroessenregeln, Exposition und Limits
-- Freigabelogik fuer automatisierte Orders
+- Freigabelogik fuer automatisierte Orders mit per-User-Korridor (Asset-Klassen, max. Positionsgroesse, max. Tagesvolumen)
+- Auto-Trade-Vorbedingung: Empfehlung MUSS den Phase-2-Net-Yield-Gate bestanden haben UND der Nutzer hat Asset/Strategie freigegeben
 - Broker- und Order-Failover
 - Audit-Logs, Risiko-Dashboard und Not-Aus
 
