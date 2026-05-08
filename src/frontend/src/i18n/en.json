@@ -245,6 +245,35 @@
       "skewBullish": "Bullish skew",
       "skewBearish": "Bearish skew",
       "skewNeutral": "Neutral"
+    },
+    "sectorStrength": {
+      "title": "Sector relative strength",
+      "subtitle": "Trailing return spread vs SPY/QQQ/IWM and the matching sector ETF; correlation and beta against SPY for the last 90 trading days.",
+      "matchedSectorEtf": "Sector match: {{sector}} → {{etf}}",
+      "correlationLabel": "Correlation",
+      "correlationHelp": "Daily-return Pearson vs {{benchmark}}, {{days}} day window",
+      "betaLabel": "Beta",
+      "betaHelp": "Slope of daily returns vs {{benchmark}}",
+      "peerCountLabel": "Peers tracked",
+      "peerCountHelp": "Benchmarks + sector ETF compared against this symbol"
+    },
+    "secFilings": {
+      "title": "SEC filings",
+      "subtitle": "EDGAR filings index from FMP — annual (10-K), quarterly (10-Q), material events (8-K), proxy statements (DEF 14A) and offerings.",
+      "lastAnnualLabel": "Last 10-K",
+      "lastQuarterlyLabel": "Last 10-Q",
+      "lastMaterialLabel": "Last 8-K",
+      "daysAgo": "{{days}}d ago",
+      "openFiling": "Open",
+      "category": {
+        "annual": "Annual",
+        "quarterly": "Quarterly",
+        "material": "Material event",
+        "proxy": "Proxy",
+        "offering": "Offering",
+        "insider": "Insider form",
+        "other": "Other"
+      }
     }
   },
   "news": {
@@ -314,5 +343,14 @@
     "later": "Later",
     "offlineReady": "App ready to work offline.",
     "ok": "OK"
+  },
+  "macroCalendar": {
+    "title": "Macro calendar",
+    "unconfigured": "FRED_API_KEY not configured — set one in .env.local to surface treasury yields, commodities, and upcoming CPI/NFP/FOMC release dates.",
+    "tenYear": "10Y yield",
+    "twoYear": "2Y yield",
+    "spread": "10Y-2Y spread",
+    "inverted": "Inverted",
+    "daysUntil": "in {{days}}d"
   }
 }

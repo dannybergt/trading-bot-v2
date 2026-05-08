@@ -37,9 +37,11 @@ from app.discovery_service import get_discovery_service
 from app.news_hub_service import get_news_hub_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
+from app.fred_service import get_fred_service
 from app.macro_service import get_macro_service
 from app.migrate_watchlists import migrate as migrate_watchlists
 from app.options_flow_service import get_options_flow_service
+from app.sector_service import get_sector_service
 from app.social_sentiment_service import get_social_sentiment_service
 from app.models import (
     AlertEvent as AlertEventRecord,
@@ -1839,6 +1841,19 @@ def get_symbol_research(
         else []
     )
 
+    sec_filings = (
+        service.fmp.normalized_sec_filings(asset_profile["symbol"])
+        if service.fmp.configured and not asset_profile.get("isCrypto")
+        else {
+            "filings": [],
+            "recentMaterial": [],
+            "lastAnnual": None,
+            "lastQuarterly": None,
+            "lastMaterial": None,
+            "countsByCategory": {},
+        }
+    )
+
     macro_context = get_macro_service().get_context()
 
     crypto_metrics = None
@@ -1854,6 +1869,15 @@ def get_symbol_research(
         asset_profile["symbol"], asset_class=asset_profile.get("assetClass")
     )
 
+    sector_context = (
+        get_sector_service().get_sector_context(
+            asset_profile["symbol"],
+            sector=ticker_info.get("sector") or fundamentals.get("sector"),
+        )
+        if not asset_profile.get("isCrypto")
+        else None
+    )
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1866,11 +1890,13 @@ def get_symbol_research(
         "researchDepth": research_depth,
         "researchSignals": research_signals,
         "earningsCalls": earnings_calls,
+        "secFilings": sec_filings,
         "macroContext": macro_context,
         "cryptoMetrics": crypto_metrics,
         "fearGreedIndex": fear_greed,
         "socialSentiment": social_sentiment,
         "optionsFlow": options_flow,
+        "sectorContext": sector_context,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),
@@ -2076,6 +2102,17 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
     except Exception:
         logger.exception("symbol_search_failed query=%s", query)
         return []
+
+@app.get("/api/macro/calendar")
+def get_macro_calendar(current_user: User = Depends(get_current_user)):
+    """Macro calendar: treasury yields, commodities, and upcoming FRED releases.
+
+    Global payload (no per-symbol filter). Auto-Execution will eventually
+    use `upcomingReleases` to halt automation in the 24h before CPI/NFP/FOMC
+    prints; for now the dashboard surfaces it so users can self-throttle.
+    """
+    return get_fred_service().normalized_macro_calendar()
+
 
 @app.get("/api/discover")
 def get_discovery_dashboard(current_user: User = Depends(get_current_user)):

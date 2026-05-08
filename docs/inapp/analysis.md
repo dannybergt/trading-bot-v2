@@ -17,6 +17,8 @@ The deepest single-symbol surface. Pulls every signal we have for the symbol and
 - **Retail sentiment** — combined StockTwits and Reddit chatter from the last 24 hours, with a sentiment score weighted by message volume.
 - **Options flow** (US-listed equities) — put/call ratios for volume and open interest, ATM implied volatility, top three strikes per side. A skew label classifies the chain bullish / bearish / neutral.
 - **Macro context** — VIX, 10-year Treasury yield, U.S. Dollar Index, and the Crypto Fear-and-Greed Index. The "weather report" you should read every per-symbol signal in.
+- **Sector relative strength** — trailing return spread vs SPY, QQQ, IWM, and the matching sector ETF (XLK, XLF, XLE, XLV, XLY, XLP, XLI, XLB, XLU, XLRE, XLC). Plus 90-day correlation and beta to SPY. Positive alpha means the symbol is leading its peers; high beta means it amplifies SPY moves.
+- **SEC filings** — EDGAR filings index via FMP, classified into annual (10-K), quarterly (10-Q), material events (8-K), proxy statements (DEF 14A), offerings, and insider forms. Each entry links straight to the SEC document. The "last 8-K" timestamp is a rough freshness gauge for material news that hasn't necessarily reached the news feed yet.
 - **Events** — earnings dates, dividends, splits.
 - **Holdings** — for ETFs, top holdings with weight.
 - **News** — aggregated news with VADER sentiment per item.

@@ -296,6 +296,56 @@ type OptionsFlow = {
   putCallSignal?: "bullish_skew" | "bearish_skew" | "neutral" | null;
 };
 
+type SecFilingEntry = {
+  date?: string;
+  type?: string;
+  category?: "annual" | "quarterly" | "material" | "proxy" | "offering" | "insider" | "other";
+  link?: string;
+  daysAgo?: number | null;
+};
+
+type SecFilingsPayload = {
+  filings?: SecFilingEntry[];
+  recentMaterial?: SecFilingEntry[];
+  lastAnnual?: SecFilingEntry | null;
+  lastQuarterly?: SecFilingEntry | null;
+  lastMaterial?: SecFilingEntry | null;
+  countsByCategory?: Record<string, number>;
+};
+
+type SectorRelativeWindow = {
+  symbolReturnPct: number | null;
+  peerReturnPct: number | null;
+  alphaPct: number | null;
+};
+
+type SectorRelativeBlock = {
+  peer: string;
+  windows: {
+    oneMonth: SectorRelativeWindow;
+    threeMonths: SectorRelativeWindow;
+    sixMonths: SectorRelativeWindow;
+  };
+};
+
+type SectorContextPayload = {
+  symbol: string;
+  sector?: string | null;
+  sectorEtf?: string | null;
+  relativeStrength: {
+    spy?: SectorRelativeBlock;
+    qqq?: SectorRelativeBlock;
+    iwm?: SectorRelativeBlock;
+    sector?: SectorRelativeBlock;
+  };
+  correlation: {
+    benchmark: string;
+    windowDays: number;
+    correlation: number | null;
+    beta: number | null;
+  };
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
@@ -341,6 +391,8 @@ type ResearchPayload = {
   fearGreedIndex?: FearGreedIndex | null;
   socialSentiment?: SocialSentiment | null;
   optionsFlow?: OptionsFlow | null;
+  sectorContext?: SectorContextPayload | null;
+  secFilings?: SecFilingsPayload | null;
   news?: {
     items?: Array<{
       title?: string;
@@ -579,6 +631,8 @@ export function AnalysisPage() {
       <CryptoMetricsSection metrics={research?.cryptoMetrics} />
       <SocialSentimentSection social={research?.socialSentiment} />
       <OptionsFlowSection flow={research?.optionsFlow} />
+      <SectorStrengthSection sector={research?.sectorContext} />
+      <SecFilingsSection filings={research?.secFilings} />
       <MacroContextSection
         macro={research?.macroContext}
         fearGreed={research?.fearGreedIndex}
@@ -2050,6 +2104,257 @@ function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) 
           {renderStrikes(flow.topPuts, "puts")}
         </div>
       </div>
+    </section>
+  );
+}
+
+function SectorStrengthSection({
+  sector,
+}: {
+  sector: SectorContextPayload | null | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!sector) return null;
+  const blocks = sector.relativeStrength ?? {};
+  const entries: Array<[string, SectorRelativeBlock | undefined]> = [
+    ["sector", blocks.sector],
+    ["spy", blocks.spy],
+    ["qqq", blocks.qqq],
+    ["iwm", blocks.iwm],
+  ];
+  const presentEntries = entries.filter(([, v]) => v) as Array<[string, SectorRelativeBlock]>;
+  if (presentEntries.length === 0 && sector.correlation.correlation == null) return null;
+
+  const fmtPct = (value: number | null | undefined) => {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}%`;
+  };
+  const alphaClass = (value: number | null | undefined) => {
+    if (value == null) return "text-slate-400";
+    if (value > 0.5) return "text-bergt-green";
+    if (value < -0.5) return "text-red-300";
+    return "text-slate-300";
+  };
+
+  return (
+    <section className="card space-y-3" data-testid="analysis-sector-strength">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          {t("analysis.sectorStrength.title")}
+        </h2>
+        <p className="text-xs text-slate-500">{t("analysis.sectorStrength.subtitle")}</p>
+        {sector.sectorEtf ? (
+          <p className="text-xs text-slate-500">
+            {t("analysis.sectorStrength.matchedSectorEtf", {
+              sector: sector.sector ?? "—",
+              etf: sector.sectorEtf,
+            })}
+          </p>
+        ) : null}
+      </header>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.sectorStrength.correlationLabel")}
+          </p>
+          <p className="text-lg font-medium">
+            {sector.correlation.correlation != null
+              ? sector.correlation.correlation.toFixed(2)
+              : "—"}
+          </p>
+          <p className="text-[10px] text-slate-500">
+            {t("analysis.sectorStrength.correlationHelp", {
+              benchmark: sector.correlation.benchmark,
+              days: sector.correlation.windowDays,
+            })}
+          </p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.sectorStrength.betaLabel")}
+          </p>
+          <p className="text-lg font-medium">
+            {sector.correlation.beta != null ? sector.correlation.beta.toFixed(2) : "—"}
+          </p>
+          <p className="text-[10px] text-slate-500">
+            {t("analysis.sectorStrength.betaHelp", { benchmark: sector.correlation.benchmark })}
+          </p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.sectorStrength.peerCountLabel")}
+          </p>
+          <p className="text-lg font-medium">{presentEntries.length}</p>
+          <p className="text-[10px] text-slate-500">
+            {t("analysis.sectorStrength.peerCountHelp")}
+          </p>
+        </div>
+      </div>
+
+      {presentEntries.length === 0 ? null : (
+        <table className="w-full text-left text-xs">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="py-1">Peer</th>
+              <th className="text-right">1M Δ</th>
+              <th className="text-right">3M Δ</th>
+              <th className="text-right">6M Δ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {presentEntries.map(([key, block]) => (
+              <tr key={key} className="border-t border-slate-800">
+                <td className="py-1 font-medium">{block.peer}</td>
+                <td className={`text-right ${alphaClass(block.windows.oneMonth.alphaPct)}`}>
+                  {fmtPct(block.windows.oneMonth.alphaPct)}
+                </td>
+                <td className={`text-right ${alphaClass(block.windows.threeMonths.alphaPct)}`}>
+                  {fmtPct(block.windows.threeMonths.alphaPct)}
+                </td>
+                <td className={`text-right ${alphaClass(block.windows.sixMonths.alphaPct)}`}>
+                  {fmtPct(block.windows.sixMonths.alphaPct)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function SecFilingsSection({
+  filings,
+}: {
+  filings: SecFilingsPayload | null | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!filings || (filings.filings ?? []).length === 0) return null;
+
+  const categoryClass: Record<string, string> = {
+    annual: "border-bergt-green/40 bg-bergt-green/10 text-bergt-green",
+    quarterly: "border-blue-700/40 bg-blue-900/30 text-blue-200",
+    material: "border-amber-500/40 bg-amber-900/30 text-amber-200",
+    proxy: "border-purple-700/40 bg-purple-900/30 text-purple-200",
+    offering: "border-slate-700 bg-slate-900 text-slate-300",
+    insider: "border-slate-700 bg-slate-900 text-slate-300",
+    other: "border-slate-700 bg-slate-900 text-slate-400",
+  };
+
+  const counts = filings.countsByCategory ?? {};
+
+  return (
+    <section className="card space-y-3" data-testid="analysis-sec-filings">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          {t("analysis.secFilings.title")}
+        </h2>
+        <p className="text-xs text-slate-500">{t("analysis.secFilings.subtitle")}</p>
+      </header>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.secFilings.lastAnnualLabel")}
+          </p>
+          <p className="text-sm font-medium">
+            {filings.lastAnnual?.date ?? "—"}
+            {filings.lastAnnual?.daysAgo != null ? (
+              <span className="ml-1 text-[10px] text-slate-500">
+                ({t("analysis.secFilings.daysAgo", { days: filings.lastAnnual.daysAgo })})
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[10px] text-slate-500">{filings.lastAnnual?.type ?? "—"}</p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.secFilings.lastQuarterlyLabel")}
+          </p>
+          <p className="text-sm font-medium">
+            {filings.lastQuarterly?.date ?? "—"}
+            {filings.lastQuarterly?.daysAgo != null ? (
+              <span className="ml-1 text-[10px] text-slate-500">
+                ({t("analysis.secFilings.daysAgo", { days: filings.lastQuarterly.daysAgo })})
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[10px] text-slate-500">{filings.lastQuarterly?.type ?? "—"}</p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.secFilings.lastMaterialLabel")}
+          </p>
+          <p className="text-sm font-medium">
+            {filings.lastMaterial?.date ?? "—"}
+            {filings.lastMaterial?.daysAgo != null ? (
+              <span className="ml-1 text-[10px] text-slate-500">
+                ({t("analysis.secFilings.daysAgo", { days: filings.lastMaterial.daysAgo })})
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[10px] text-slate-500">{filings.lastMaterial?.type ?? "—"}</p>
+        </div>
+      </div>
+
+      {Object.keys(counts).length > 0 ? (
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          {Object.entries(counts).map(([cat, count]) => (
+            <span
+              key={cat}
+              className={`rounded-full border px-2 py-0.5 uppercase tracking-wide ${categoryClass[cat] ?? categoryClass.other}`}
+            >
+              {t(`analysis.secFilings.category.${cat}`, { defaultValue: cat })} · {count}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <table className="w-full text-left text-xs">
+        <thead className="text-slate-500">
+          <tr>
+            <th className="py-1">Date</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Filing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(filings.filings ?? []).slice(0, 12).map((entry, idx) => (
+            <tr key={`${entry.link ?? idx}-${idx}`} className="border-t border-slate-800">
+              <td className="py-1 text-slate-300">{entry.date ?? "—"}</td>
+              <td className="font-medium">{entry.type ?? "—"}</td>
+              <td>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                    categoryClass[entry.category ?? "other"] ?? categoryClass.other
+                  }`}
+                >
+                  {t(`analysis.secFilings.category.${entry.category ?? "other"}`, {
+                    defaultValue: entry.category ?? "other",
+                  })}
+                </span>
+              </td>
+              <td>
+                {entry.link ? (
+                  <a
+                    href={entry.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-bergt-green hover:underline"
+                  >
+                    {t("analysis.secFilings.openFiling")}
+                  </a>
+                ) : (
+                  <span className="text-slate-500">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }

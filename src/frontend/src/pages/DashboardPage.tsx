@@ -183,6 +183,7 @@ export function DashboardPage() {
 
       <TrackedAssets data={watchlistAlertsQuery.data} />
       <ProviderCoverage data={watchlistAlertsQuery.data} />
+      <MacroCalendarCard />
       <NewsTicker data={watchlistNewsQuery.data} />
 
       {watchlistAlertsQuery.error ? (
@@ -386,6 +387,86 @@ function Mini({
         {value}
       </p>
     </div>
+  );
+}
+
+type MacroCalendarPayload = {
+  configured: boolean;
+  treasury: {
+    two?: { value: number | null; changePct: number | null; asOf?: string | null };
+    ten?: { value: number | null; changePct: number | null; asOf?: string | null };
+    spread?: { value: number | null; changePct: number | null; asOf?: string | null };
+    spreadInverted?: boolean;
+  };
+  upcomingReleases: Array<{
+    releaseId: number;
+    name: string;
+    category: string;
+    date: string;
+    daysUntil: number;
+  }>;
+};
+
+function MacroCalendarCard() {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["macro-calendar"],
+    queryFn: () => apiFetch<MacroCalendarPayload>("/api/macro/calendar"),
+    refetchInterval: 30 * 60_000,
+  });
+  const data = query.data;
+  if (!data) return null;
+  if (!data.configured) {
+    return (
+      <section className="card" data-testid="dashboard-macro-calendar">
+        <h2 className="text-lg font-semibold">{t("macroCalendar.title")}</h2>
+        <p className="mt-1 text-xs text-slate-500">{t("macroCalendar.unconfigured")}</p>
+      </section>
+    );
+  }
+  const ten = data.treasury?.ten;
+  const two = data.treasury?.two;
+  const spread = data.treasury?.spread;
+  const fmtPct = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(2)}%`);
+  return (
+    <section className="card" data-testid="dashboard-macro-calendar">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold">{t("macroCalendar.title")}</h2>
+        {data.treasury?.spreadInverted ? (
+          <span className="rounded-full border border-amber-500/40 bg-amber-900/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+            {t("macroCalendar.inverted")}
+          </span>
+        ) : null}
+      </header>
+      <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-2">
+          <p className="text-slate-500">{t("macroCalendar.tenYear")}</p>
+          <p className="text-sm font-medium">{fmtPct(ten?.value)}</p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-2">
+          <p className="text-slate-500">{t("macroCalendar.twoYear")}</p>
+          <p className="text-sm font-medium">{fmtPct(two?.value)}</p>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-2">
+          <p className="text-slate-500">{t("macroCalendar.spread")}</p>
+          <p className={`text-sm font-medium ${data.treasury?.spreadInverted ? "text-amber-300" : ""}`}>
+            {fmtPct(spread?.value)}
+          </p>
+        </div>
+      </div>
+      {data.upcomingReleases.length === 0 ? null : (
+        <ul className="mt-3 space-y-1 text-xs">
+          {data.upcomingReleases.slice(0, 5).map((r) => (
+            <li key={`${r.releaseId}-${r.date}`} className="flex justify-between gap-2">
+              <span className="font-medium">{r.name}</span>
+              <span className="text-slate-400">
+                {r.date} · {t("macroCalendar.daysUntil", { days: r.daysUntil })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

@@ -245,6 +245,35 @@
       "skewBullish": "Bullish-Skew",
       "skewBearish": "Bearish-Skew",
       "skewNeutral": "Neutral"
+    },
+    "sectorStrength": {
+      "title": "Sektor-Relativstärke",
+      "subtitle": "Trailing-Return-Spread gegen SPY/QQQ/IWM und das passende Sektor-ETF; Korrelation und Beta zum SPY über die letzten 90 Handelstage.",
+      "matchedSectorEtf": "Sektor-Mapping: {{sector}} → {{etf}}",
+      "correlationLabel": "Korrelation",
+      "correlationHelp": "Pearson-Korrelation der Tages-Returns vs {{benchmark}}, {{days}}-Tage-Fenster",
+      "betaLabel": "Beta",
+      "betaHelp": "Steigung der Tages-Returns gegen {{benchmark}}",
+      "peerCountLabel": "Peers verglichen",
+      "peerCountHelp": "Benchmarks + Sektor-ETF gegen dieses Symbol"
+    },
+    "secFilings": {
+      "title": "SEC-Filings",
+      "subtitle": "EDGAR-Filings-Index über FMP — Jahresberichte (10-K), Quartalsberichte (10-Q), wesentliche Ereignisse (8-K), Proxy-Statements (DEF 14A) und Emissionen.",
+      "lastAnnualLabel": "Letzter 10-K",
+      "lastQuarterlyLabel": "Letzter 10-Q",
+      "lastMaterialLabel": "Letzter 8-K",
+      "daysAgo": "vor {{days}}T",
+      "openFiling": "Öffnen",
+      "category": {
+        "annual": "Jahres",
+        "quarterly": "Quartal",
+        "material": "Wes. Ereignis",
+        "proxy": "Proxy",
+        "offering": "Emission",
+        "insider": "Insider-Form",
+        "other": "Sonstige"
+      }
     }
   },
   "news": {
@@ -314,5 +343,14 @@
     "later": "Später",
     "offlineReady": "App ist offline einsatzbereit.",
     "ok": "OK"
+  },
+  "macroCalendar": {
+    "title": "Makro-Kalender",
+    "unconfigured": "FRED_API_KEY ist nicht gesetzt — in .env.local konfigurieren, um Treasury-Renditen, Rohstoffe und CPI-/NFP-/FOMC-Veroeffentlichungstermine anzuzeigen.",
+    "tenYear": "10J-Rendite",
+    "twoYear": "2J-Rendite",
+    "spread": "10J-2J-Spread",
+    "inverted": "Invertiert",
+    "daysUntil": "in {{days}}T"
   }
 }

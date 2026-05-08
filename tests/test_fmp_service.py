@@ -395,6 +395,82 @@ class FmpServiceTests(unittest.TestCase):
         self.assertIsNone(signals["upcomingEarnings"])
         self.assertIsNone(signals["daysUntilEarnings"])
 
+    def test_normalized_sec_filings_classifies_and_groups(self):
+        service = FmpService(api_key="k")
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        payload = [
+            {"type": "10-K", "fillingDate": "2025-11-01", "finalLink": "https://sec.gov/10k"},
+            {"type": "10-Q", "fillingDate": "2026-02-01", "link": "https://sec.gov/10q"},
+            {"type": "8-K", "fillingDate": today_iso, "link": "https://sec.gov/8k"},
+            {"type": "DEF 14A", "fillingDate": "2025-10-15", "link": "https://sec.gov/proxy"},
+            {"type": "4", "fillingDate": "2026-04-01", "link": "https://sec.gov/form4"},
+            {"type": "FOO", "fillingDate": "2025-09-01", "link": "https://sec.gov/foo"},
+        ]
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), \
+             patch("app.fmp_service.requests.get", return_value=_response(payload)):
+            result = service.normalized_sec_filings("AAPL", limit=10)
+
+        types = [f["type"] for f in result["filings"]]
+        # Sort is newest-first
+        self.assertEqual(types[0], "8-K")
+        # finalLink wins over link when both exist
+        annual = next(f for f in result["filings"] if f["type"] == "10-K")
+        self.assertEqual(annual["link"], "https://sec.gov/10k")
+        # Categories
+        self.assertEqual(annual["category"], "annual")
+        self.assertEqual(
+            next(f["category"] for f in result["filings"] if f["type"] == "10-Q"),
+            "quarterly",
+        )
+        self.assertEqual(
+            next(f["category"] for f in result["filings"] if f["type"] == "8-K"),
+            "material",
+        )
+        self.assertEqual(
+            next(f["category"] for f in result["filings"] if f["type"] == "DEF 14A"),
+            "proxy",
+        )
+        self.assertEqual(
+            next(f["category"] for f in result["filings"] if f["type"] == "4"),
+            "insider",
+        )
+        self.assertEqual(
+            next(f["category"] for f in result["filings"] if f["type"] == "FOO"),
+            "other",
+        )
+        # 8-K is today, daysAgo == 0
+        eightk = next(f for f in result["filings"] if f["type"] == "8-K")
+        self.assertEqual(eightk["daysAgo"], 0)
+        # recentMaterial drops insider + other categories
+        material_types = [f["type"] for f in result["recentMaterial"]]
+        self.assertNotIn("4", material_types)
+        self.assertNotIn("FOO", material_types)
+        self.assertIn("8-K", material_types)
+        # Aggregate counts cover every input row
+        self.assertEqual(sum(result["countsByCategory"].values()), len(payload))
+        # Last per category snapshots
+        self.assertEqual(result["lastAnnual"]["type"], "10-K")
+        self.assertEqual(result["lastQuarterly"]["type"], "10-Q")
+        self.assertEqual(result["lastMaterial"]["type"], "8-K")
+
+    def test_get_sec_filings_unconfigured_returns_empty(self):
+        service = FmpService(api_key="")
+        with patch("app.fmp_service.requests.get") as get_mock:
+            self.assertEqual([], service.get_sec_filings("AAPL"))
+        get_mock.assert_not_called()
+
+    def test_get_sec_filings_passes_filing_type_filter(self):
+        service = FmpService(api_key="k")
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), \
+             patch(
+                 "app.fmp_service.requests.get",
+                 return_value=_response([]),
+             ) as get_mock:
+            service.get_sec_filings("AAPL", filing_type="10-K", limit=5)
+        kwargs = get_mock.call_args.kwargs
+        self.assertEqual(kwargs["params"]["type"], "10-K")
+        self.assertEqual(kwargs["params"]["limit"], 5)
+
     def test_http_error_returns_empty_without_raising(self):
         service = FmpService(api_key="k")
         bad_response = MagicMock()

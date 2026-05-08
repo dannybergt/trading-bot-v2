@@ -10,6 +10,7 @@ The dashboard is the single landing surface for everything you watch and everyth
 - **Tracked assets** — every symbol from the active watchlist with its asset class (Stock / ETF / Crypto), tags, and a link straight into the analysis page.
 - **Provider coverage** — small KPI cards counting how many of your tracked symbols have live provider data, partial coverage, or no data at all. Useful when something looks "empty": it tells you whether the provider is silent or you simply don't track anything in that asset class.
 - **Watchlist alerts** — priority-ranked list of trade-relevant items pulled from your alert configuration.
+- **Macro calendar** — current 10Y / 2Y Treasury yields and the 10Y-2Y spread (with an "Inverted" badge when the curve is inverted), plus the next five scheduled FRED release dates (CPI, NFP/Employment Situation, FOMC, GDP, PCE). Requires `FRED_API_KEY` in `.env.local`. Phase 4 Auto-Execution will use these dates as halt-triggers.
 - **News ticker** — rolling headlines for the active watchlist; each item links to the source.
 
 ## How it updates

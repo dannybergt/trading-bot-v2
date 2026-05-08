@@ -590,6 +590,78 @@ class FmpService:
                 break
         return out[:limit]
 
+    def get_sec_filings(
+        self, symbol: str, *, filing_type: str | None = None, limit: int = 30
+    ) -> list[dict[str, Any]]:
+        """Recent SEC filings for the symbol.
+
+        FMP's `/sec_filings/{symbol}` returns the EDGAR filings index for the
+        company sorted newest-first. Free-tier coverage is solid for US
+        listings; non-US tickers and crypto return empty. The optional
+        `filing_type` filter passes through to the FMP query (e.g. `10-K`,
+        `8-K`).
+        """
+        if not symbol:
+            return []
+        params: dict[str, Any] = {"limit": max(1, min(limit, 100))}
+        if filing_type:
+            params["type"] = filing_type
+        payload = self._request(f"/sec_filings/{symbol.upper()}", params=params)
+        return payload if isinstance(payload, list) else []
+
+    def normalized_sec_filings(
+        self, symbol: str, *, limit: int = 15
+    ) -> dict[str, Any]:
+        """Bundle the recent SEC filings into a UI-friendly shape.
+
+        Returns:
+        - filings: latest `limit` filings with date/type/category/link/daysAgo
+        - recentMaterial: last 5 filings classified as annual/quarterly/material/proxy
+        - lastAnnual / lastQuarterly / lastMaterial: nearest filing per category
+        - countsByCategory: aggregate counter per category for quick UI reads
+        """
+        raw = self.get_sec_filings(symbol, limit=60)
+        today = datetime.now(timezone.utc).date()
+        normalized: list[dict[str, Any]] = []
+        counts: dict[str, int] = {}
+        last_per_category: dict[str, dict[str, Any]] = {}
+
+        for row in raw:
+            if not isinstance(row, dict):
+                continue
+            filing_type = str(row.get("type") or "").strip().upper()
+            category = _classify_sec_filing(filing_type)
+            date_raw = row.get("fillingDate") or row.get("filingDate") or row.get("acceptedDate")
+            filed = _parse_date(date_raw)
+            days_ago = (today - filed).days if filed else None
+            entry = {
+                "date": str(date_raw)[:10] if date_raw else None,
+                "type": filing_type or None,
+                "category": category,
+                "link": row.get("finalLink") or row.get("link"),
+                "daysAgo": days_ago,
+            }
+            normalized.append(entry)
+            counts[category] = counts.get(category, 0) + 1
+            if category not in last_per_category and entry["date"]:
+                last_per_category[category] = entry
+
+        normalized.sort(
+            key=lambda e: (e["date"] or "0000-00-00"),
+            reverse=True,
+        )
+        material_categories = {"annual", "quarterly", "material", "proxy"}
+        recent_material = [e for e in normalized if e["category"] in material_categories][:5]
+
+        return {
+            "filings": normalized[:limit],
+            "recentMaterial": recent_material,
+            "lastAnnual": last_per_category.get("annual"),
+            "lastQuarterly": last_per_category.get("quarterly"),
+            "lastMaterial": last_per_category.get("material"),
+            "countsByCategory": counts,
+        }
+
     def get_news(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         if not symbol:
             return []
@@ -709,6 +781,49 @@ class FmpService:
 
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
+
+_SEC_FILING_CATEGORY_MAP: dict[str, str] = {
+    "10-K": "annual",
+    "10-K/A": "annual",
+    "20-F": "annual",
+    "40-F": "annual",
+    "10-Q": "quarterly",
+    "10-Q/A": "quarterly",
+    "8-K": "material",
+    "8-K/A": "material",
+    "6-K": "material",
+    "DEF 14A": "proxy",
+    "PRE 14A": "proxy",
+    "DEFA14A": "proxy",
+    "S-1": "offering",
+    "S-3": "offering",
+    "S-4": "offering",
+    "424B1": "offering",
+    "424B2": "offering",
+    "424B3": "offering",
+    "424B4": "offering",
+    "424B5": "offering",
+    "F-1": "offering",
+    "4": "insider",
+    "4/A": "insider",
+    "3": "insider",
+    "5": "insider",
+    "SC 13G": "insider",
+    "SC 13G/A": "insider",
+    "SC 13D": "insider",
+    "SC 13D/A": "insider",
+}
+
+
+def _classify_sec_filing(filing_type: str) -> str:
+    """Map an EDGAR form type to a UI category.
+
+    Unknown forms fall through to "other" so the UI can hide them by
+    default but the count still surfaces in `countsByCategory`.
+    """
+    if not filing_type:
+        return "other"
+    return _SEC_FILING_CATEGORY_MAP.get(filing_type, "other")
 
 
 def _safe_float(value: Any) -> float | None:

@@ -30,16 +30,18 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution oder Welle 14
+## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution
 
-Welle 12 (DE-Uebersetzungen) ist abgeschlossen und in `main` (Frontend-Bundle 132 KB gz). Damit sind alle 12 vorab gezogenen Wellen ausgeliefert. Wahl-Frage an den User beim naechsten Resume:
+Welle 14 (Datenbasis-Tiefe) ist abgeschlossen und in `main`. Wellen 1-12 + 14 sind damit ausgeliefert; alle Phase-4-Vorbedingungen sind erfuellt. Naechster grosser Block ist **Phase 4 Auto-Execution** in vier Schnitten:
 
-- **A) Phase 4 Auto-Execution** — Risk-Modell (`auto_execution_limits` + `auto_execution_events`), manuelle Freigabe-Logik (Default off, Bestaetigungs-Dialog, Net-Yield-Gate UND Risk-Modell), Not-Aus (`POST /api/auto-execution/halt`) und Order-Reconciliation gegen Alpaca.
-- **B) Welle 14 Datenbasis-Tiefe** — SEC-Filings (10-K/10-Q/8-K via FMP), Macro-Calendar via FRED (Fed Funds, CPI, NFP), Sektor-/Index-Relativstaerke (SPY/QQQ/XLK/XLF/XLE), Korrelations-/Beta-zu-Benchmark, Yield-Curve-Spread (2Y/10Y), Commodities (Oil/Gold).
-- **C) Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
-- **D) Welle 11 Phase B** — Capacitor + Biometric + App-Store (zurueckgestellt bis echter Native-App-Bedarf).
+1. **Risk-Modell + Limits**: neue Tabellen `auto_execution_limits` (pro User: max_position_size_usd, max_daily_loss_usd, max_open_positions, max_portfolio_beta, allowed_asset_classes, per_strategy_budget_pct) und `auto_execution_events` (audit aller Auto-Trade-Versuche mit accepted/rejected/executed/failed + Begruendung). Alembic-Migration `0006_add_auto_execution`. Backup/Export/Import-Coverage.
+2. **Manuelle Freigabe-Logik**: Setting `auto_execution_enabled` pro User + pro Asset-Klasse + pro Strategie. Default off. UI-Schalter mit Bestaetigungs-Dialog ("Ich verstehe dass dieser Schalter echte Trades ausloest"). Net-Yield-Gate UND Risk-Modell muessen UND-verknuepft pass-en. Halt-Trigger aus Welle 14 verdrahtet: FOMC<24h via `fred_service.upcomingReleases`, 8-K-Window via `fmp_service.lastMaterial.daysAgo<7`, Yield-Curve invertiert via `fred_service.spreadInverted=true`, Sektor-Beta>Limit via `sector_service.correlation.beta`.
+3. **Not-Aus**: Endpoint `POST /api/auto-execution/halt` deaktiviert alle Auto-Strategien sofort + cancelt offene Limit-Orders bei Alpaca. UI-Button "Stop all automation" prominent im Layout-Header.
+4. **Broker-Fehlerpfade**: Reconciliation-Task gleicht Alpaca-Order-Status periodisch gegen lokale DB; bei Discrepancy korrigieren. Recovery bei Connection-Errors mit exponentiellem Backoff.
 
-Empfehlung: **B vor A**. Phase 4 ist der gefaehrliche Block und profitiert von noch besserer Datenbasis. SEC-Filings + Macro-Calendar liefern dann auch konkrete Auto-Execution-Halt-Trigger ("Earnings naeher als 24h", "FOMC-Tag heute").
+Andere Optionen (nicht aktiv vorgeschlagen, nur bei expliziter User-Anforderung):
+- **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
+- **Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
