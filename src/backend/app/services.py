@@ -11,6 +11,7 @@ from app.fmp_service import FmpService
 from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_news
 from app.ml_models import PricePredictor
+from app.twelve_data_service import TwelveDataService
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,18 @@ TICKER_INFO_TTL_SECONDS = 5 * 60
 NEWS_CACHE_TTL_SECONDS = 60
 
 class MarketDataService:
-    def __init__(self, alpaca_service=None, alpha_vantage_service=None, fmp_service=None):
+    def __init__(
+        self,
+        alpaca_service=None,
+        alpha_vantage_service=None,
+        fmp_service=None,
+        twelve_data_service=None,
+    ):
         self.predictor = PricePredictor()
         self.alpaca = alpaca_service
         self.alpha_vantage = alpha_vantage_service or AlphaVantageService()
         self.fmp = fmp_service or FmpService()
+        self.twelve_data = twelve_data_service or TwelveDataService()
         self._ticker_info_cache: dict[str, dict] = {}
         self._news_cache: dict[str, dict] = {}
 
@@ -163,12 +171,24 @@ class MarketDataService:
         # quoteSummary, or symbol not covered). Only chain when the result is
         # genuinely empty so we don't waste FMP quota when yfinance is healthy.
         meaningful_keys = {"sector", "industry", "marketCap", "trailingPE"}
-        if not (ticker_info and any(ticker_info.get(k) for k in meaningful_keys)):
-            if self.fmp.configured:
-                fmp_info = self.fmp.normalized_ticker_info(symbol)
-                if fmp_info:
-                    logger.info("fundamentals_fmp_fallback symbol=%s", symbol)
-                    ticker_info = {**ticker_info, **fmp_info}
+
+        def _has_meaningful(info: dict) -> bool:
+            return bool(info) and any(info.get(k) for k in meaningful_keys)
+
+        if not _has_meaningful(ticker_info) and self.fmp.configured:
+            fmp_info = self.fmp.normalized_ticker_info(symbol)
+            if fmp_info:
+                logger.info("fundamentals_fmp_fallback symbol=%s", symbol)
+                ticker_info = {**ticker_info, **fmp_info}
+
+        # Twelve Data closes the non-US gap (`SAP.DE`, `LVMH.PA`, `7203.T`).
+        # Only chain when both yfinance and FMP came back empty so we don't
+        # burn the 8 req/min budget on tickers the earlier providers covered.
+        if not _has_meaningful(ticker_info) and self.twelve_data.configured:
+            twelve_info = self.twelve_data.normalized_ticker_info(symbol)
+            if twelve_info:
+                logger.info("fundamentals_twelve_data_fallback symbol=%s", symbol)
+                ticker_info = {**ticker_info, **twelve_info}
 
         return self._set_cached_payload(
             self._ticker_info_cache,

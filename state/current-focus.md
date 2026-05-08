@@ -14,44 +14,43 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Datenbasis-Welle 8 + Phase-3-Restverfeinerung
+## Naechster Einstieg 2026-05-09: Phase-3-Restverfeinerung + Welle 10
 
 Sitzung 2026-05-08 hat geliefert:
 
 - Phase 3 Paper-Trading komplett (bis auf Restverfeinerungen)
-- Datenbasis-Wellen 1-7 ausgeliefert: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, **FinBERT-Premium-Schalter** (opt-in via `requirements-finbert.txt` + `SENTIMENT_PROVIDER=finbert`, Default bleibt VADER)
+- Datenbasis-Wellen 1-8 ausgeliefert: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, **FinBERT-Premium-Schalter** (opt-in), **Twelve Data fuer Non-US-Maerkte** (yfinance → FMP → Twelve Data Chain)
 - Release-Tag `v2026.05.08-1` gesetzt + Upgrade-/Restore-Rehearsal bestanden
 
-Naechster sinnvoller Schnitt:
+Naechster sinnvoller Schnitt — der Datenbasis-Stack ist breit. Jetzt Phase-3-Restverfeinerung und gezielte Welle-10-Ergaenzungen:
 
-**Datenbasis Welle 8: Twelve Data**
+**Phase 3 Restverfeinerungen**
 
-1. Twelve Data API hat Free-Tier ~8 req/min, ueberragende Coverage fuer Non-US-Maerkte (Frankfurt XETR, Paris EPA, London LSE, Tokio TSE, Hong Kong HKG).
-2. Neuer Adapter `app/twelve_data_service.py` analog zu FMP-Service-Pattern. Endpunkte: `/quote`, `/time_series`, `/profile`, `/statistics`. Rate-Limiter-Provider `twelve_data` mit ~0.13 req/s Default.
-3. Bindet sich in `MarketDataService.get_ticker_info` als zweiter Fallback hinter yfinance fuer Symbols mit Exchange-Suffix (z.B. `SAP.DE`, `BMW.DE`, `LVMH.PA`). Optional `TWELVE_DATA_API_KEY`-Env-Var (kostenlos registrierbar).
-4. `/api/research/{symbol}` reicht den fallback-Pfad transparent durch — kein neues UI-Feld noetig, nur breitere Coverage in den existierenden Fundamentals-Cards.
+1. **Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen**. Heute ist die Slippage fix pro Asset-Klasse. Realer Markt zeigt: eine 1000-Aktien-Order in einem 100k-Volume-Stock hat deutlich hoehere Slippage als 100 Aktien. Pragmatik: `_try_fill` bekommt Zugriff auf Last-Day-Volume (via `MarketDataService.get_latest_close`-Pendant), und `_resolve_slippage_pct(asset_class, qty, last_volume)` skaliert linear mit `qty / avg_daily_volume`. Default-Cap 1% Slippage.
+2. **Asset-spezifische Fee-Multipliers**. Crypto-Brokers (Coinbase, Binance) nehmen 0.5-1% Fee, Stock-Brokers oft 0%. Heute uniform aus User-Portfolio-Settings. Map `FEE_MULTIPLIER_BY_ASSET_CLASS` (stock 1.0, etf 1.0, crypto 5.0) skaliert die User-Settings nach oben fuer Crypto-Trades.
 
-**Welle 9 (optional): FinBERT-Image-Variant**
+**Datenbasis Welle 9 (optional): FinBERT-Image-Variant**
 
-5. Zweite Build-Stage in `ops/docker/backend.Dockerfile` mit `RUN pip install -r requirements-finbert.txt` als final-image fuer ein separates Tag `dbergt/trading-bot-backend-finbert:<tag>`. GitHub-Actions-Publish baut beide Images parallel. Erst aufnehmen, wenn ein Nutzer FinBERT produktiv nutzen will.
+3. Zweite Build-Stage in `ops/docker/backend.Dockerfile` mit `RUN pip install -r requirements-finbert.txt` als final-image fuer ein separates Tag `dbergt/trading-bot-backend-finbert:<tag>`. GitHub-Actions-Publish baut beide Images parallel. Erst aufnehmen, wenn ein Nutzer FinBERT produktiv nutzen will.
 
-**Phase 3 Restverfeinerungen** (wann immer):
+**Datenbasis Welle 10 (offen)**
 
-6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
-7. Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers).
+4. **SEC-Filings** (10-K/10-Q/8-K Annual/Quarterly/Material-Event Reports) ueber FMP `/sec_filings/{symbol}`. Pro Filing: Datum, Typ, Link, ggf. Inhalt-Excerpt mit VADER-Score. Auf `/analysis/<symbol>` neue SecFilingsSection.
+5. **Macro-Calendar** ueber FRED API (Fed Funds Rate, CPI, Non-Farm-Payrolls, Unemployment). Naechste Termine als Macro-Card-Erweiterung neben VIX/10Y/DXY.
+6. **Insider-Cluster-Detection**: 90-Tage-Window, mindestens 3 unabhaengige Insider mit gleichgerichteten Transaktionen → "Cluster Buy/Sell"-Highlight in der existierenden ResearchSignalsSection.
 
 **Phase 4 Auto-Execution** beginnt erst NACH:
+- Phase-3-Restverfeinerungen (mindestens dynamische Slippage + Fee-Multipliers)
 - Risk-Modell (Limits, Position-Size-Caps, Budget pro Strategie, Audit-Log)
 - Manuelle Freigabelogik (Asset/Strategie-Korridor pro User explizit aktiviert)
 - Not-Aus + Broker-Fehlerpfade (Recovery, Reconcile)
-- Phase-3-Restverfeinerungen (mindestens dynamische Slippage)
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Stand 2026-05-08 + Sektion "Phase 3" + "Phase 4" + "Datenbasis-Erweiterung"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen sieben Datenbasis-Wellen
-- `src/backend/app/fmp_service.py` als Adapter-Pattern fuer Welle 8 (Provider-Subset-Mapping zu yfinance-kompatibler `normalized_ticker_info`)
-- `src/backend/app/services.py::MarketDataService.get_ticker_info` als Stelle fuer den dritten Provider-Fallback
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen acht Datenbasis-Wellen + Phase-3-Slippage
+- `src/backend/app/paper_trading.py::_try_fill` und `_resolve_slippage_pct` als Stellen fuer dynamische Slippage
+- `src/backend/app/services.py::MarketDataService.get_latest_close` als Pattern fuer Last-Day-Volume-Fetch
 
 ## Stand Beim Letzten Handover
 

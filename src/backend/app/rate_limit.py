@@ -100,6 +100,7 @@ class ProviderRateLimitRegistry:
         "fear_greed": (0.05, 1),  # alternative.me, daily-updated, called rarely
         "stocktwits": (1.0, 5),  # public stream API; conservative w/o auth
         "reddit": (0.5, 6),  # public search.json budget is ~60 req/10min
+        "twelve_data": (0.13, 5),  # ~8 req/min on the free tier
     }
 
     def __init__(self) -> None:

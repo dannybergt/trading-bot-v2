@@ -137,10 +137,14 @@ Bereits umgesetzt (Welle 7, 2026-05-08):
 
 - FinBERT (`ProsusAI/finbert`) als optionaler Premium-Sentiment-Provider ueber `SENTIMENT_PROVIDER=finbert`. Schwere Dependency-Schicht (transformers + torch) liegt in `requirements-finbert.txt`, Default-Container bleibt schmal. Lazy-Singleton-Pipeline, Mapping FinBERT-Label/Score auf [-1, 1]; transparenter Fallback auf VADER bei nicht-installiertem `transformers` oder Load-Fehler. Default-Verhalten ist unveraendert VADER
 
+Bereits umgesetzt (Welle 8, 2026-05-08):
+
+- Twelve Data als dritter Provider-Fallback hinter yfinance + FMP. Schliesst die Non-US-Coverage-Luecke (Frankfurt, Paris, London, Tokio, Hong Kong) — `MarketDataService.get_ticker_info` chained jetzt yfinance → FMP → Twelve Data. Optionaler `TWELVE_DATA_API_KEY`. Adapter analog zu FMP-Pattern, normalisiert auf yfinance-kompatible Felder, defensiv gegen Twelve-Data-typische `{"status":"error"}`-Responses
+
 Naechste Wellen (priorisiert):
 
-- Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren
 - Welle 9 (optional): FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage damit Premium-Nutzer ein vorgewaermtes Image ziehen koennen
+- Welle 10 (offen): SEC-Filings (10-K/10-Q/8-K) ueber FMP `/sec_filings`, Macro-Calendar (Fed-/CPI-/Jobs-Termine) ueber FRED, Insider-Cluster-Detection
 
 ### Phase 3: Paper-Trading
 

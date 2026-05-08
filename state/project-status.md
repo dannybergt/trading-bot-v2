@@ -8,6 +8,7 @@
 
 ## Gesichert verifiziert
 
+- Datenbasis-Welle 8 am 2026-05-08: Neuer Adapter `app/twelve_data_service.py` als dritter Provider-Fallback hinter yfinance + FMP, primaer fuer Non-US-Symbols (`SAP.DE`, `BMW.DE`, `LVMH.PA`, `BARC.LON`, `7203.T`). `normalized_ticker_info` mappt Twelve-Data-Profile/Statistics/Quote auf yfinance-kompatible Felder. Defensiv gegen Twelve-Data-typische `{"status":"error"}`-Responses. Optional `TWELVE_DATA_API_KEY`. `MarketDataService.get_ticker_info` chained yfinance → FMP → Twelve Data ueber `_has_meaningful`-Check; Twelve-Data-Call nur wenn beide Vorgaenger leer. `rate_limit.py` ergaenzt um Provider-Default `twelve_data` 0.13 req/s. 126 Unit-Tests OK (vorher 118 + 6 Twelve-Data + 2 Chain). API+UI-Regression weiter gruen.
 - Datenbasis-Welle 7 am 2026-05-08: FinBERT (`ProsusAI/finbert`) als optionaler Premium-Sentiment-Provider ueber `SENTIMENT_PROVIDER=finbert`. Schwere Dependency-Schicht (transformers + torch) liegt in neuem `src/backend/requirements-finbert.txt`, Default-Container bleibt schmal. `app/sentiment.py` mit Lazy-Singleton-Pipeline (lockguarded), Mapping FinBERT-Label/Score auf [-1, 1], transparenter Fallback auf VADER bei `ImportError` oder Pipeline-Load-Failure (Disabled-Flag verhindert Retry-Storm). 118 Unit-Tests OK (vorher 113 + 5 FinBERT). API+UI-Regression weiter gruen.
 - Docker-Hub-Release `2026.05.08-1` am 2026-05-08 erfolgreich gepusht und upgrade-/restore-rehearsal-validiert:
   - `dbergt/trading-bot-backend:2026.05.08-1` -> `sha256:bbbe4628833921abb880c4ad336ab892445a0254a27bdd066689cd16e4997d13`
@@ -165,8 +166,8 @@
 ## Naechste Schritte
 
 - Phase 3 Restverfeinerungen: dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen, asset-spezifische Fee-Multipliers. Phase 4 Auto-Execution erst nach Risk-Modell + Limits + Not-Aus.
-- Release-Tag `v2026.05.08-1` mit Upgrade-Rehearsal als naechster sinnvoller Schritt — Phase 3 + alle sechs Datenbasis-Wellen sind drin, Migration 0004 (paper_orders/paper_transactions) muss ueber den 2026.05.07-1-Bestand sauber upgraden.
-- Datenbasis-Welle 7+: FinBERT-Aktivierung als Premium-Schalter (transformers + ~900 MB Container), Twelve Data fuer internationale Maerkte. Phase 3 Restverfeinerungen (dynamische Slippage, Fee-Multipliers).
+- Phase 3 Restverfeinerungen: dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen (heute fix pro Asset-Klasse), asset-spezifische Fee-Multipliers (Crypto typischerweise 5x Stock). Phase 4 Auto-Execution erst nach Risk-Modell + Limits + Not-Aus.
+- Datenbasis-Welle 9 (optional): FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage. Welle 10 (offen): SEC-Filings via FMP, Macro-Calendar via FRED, Insider-Cluster-Detection.
 - denselben Rehearsal-Pfad fuer jeden neuen Release-Tag diszipliniert wiederholen
 - GitHub-Actions-`publish` bei kuenftigen `main`-Pushes weiter beobachten, aber nicht mehr als aktueller Blocker behandeln
 - `current.env` nur fuer echte Zielumgebungen und nicht fuer Smoke-Staende schreiben

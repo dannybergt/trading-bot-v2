@@ -273,6 +273,80 @@ class FmpFallbackTests(unittest.TestCase):
         self.assertEqual("Technology", payload["sector"])
         self.assertEqual([], called)
 
+    def test_get_ticker_info_falls_back_to_twelve_data_when_yfinance_and_fmp_empty(self):
+        service = MarketDataService()
+        service.fmp = type(
+            "FakeFmp",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(lambda symbol: {}),
+            },
+        )()
+        service.twelve_data = type(
+            "FakeTwelveData",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(
+                    lambda symbol: {
+                        "shortName": "SAP SE",
+                        "sector": "Technology",
+                        "marketCap": 175_000_000_000,
+                        "twelve_data_source": True,
+                    }
+                ),
+            },
+        )()
+
+        with patch("app.services.acquire_rate_limit", return_value=True), patch(
+            "app.services.yf.Ticker"
+        ) as ticker_ctor:
+            ticker_ctor.return_value.info = {}
+            payload = service.get_ticker_info("SAP.DE", asset_profile={"isCrypto": False})
+
+        self.assertEqual("SAP SE", payload["shortName"])
+        self.assertEqual("Technology", payload["sector"])
+        self.assertTrue(payload["twelve_data_source"])
+
+    def test_get_ticker_info_does_not_call_twelve_data_when_fmp_filled_in(self):
+        service = MarketDataService()
+        service.fmp = type(
+            "FakeFmp",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(
+                    lambda symbol: {
+                        "shortName": "Apple Inc.",
+                        "sector": "Technology",
+                        "marketCap": 3_000_000_000_000,
+                        "trailingPE": 28.5,
+                        "fmp_source": True,
+                    }
+                ),
+            },
+        )()
+        called = []
+        service.twelve_data = type(
+            "FakeTwelveData",
+            (),
+            {
+                "configured": True,
+                "normalized_ticker_info": staticmethod(
+                    lambda symbol: called.append(symbol) or {"shortName": "should not be used"}
+                ),
+            },
+        )()
+
+        with patch("app.services.acquire_rate_limit", return_value=True), patch(
+            "app.services.yf.Ticker"
+        ) as ticker_ctor:
+            ticker_ctor.return_value.info = {}
+            service.get_ticker_info("AAPL", asset_profile={"isCrypto": False})
+
+        self.assertEqual([], called)
+
     def test_get_market_news_falls_back_to_fmp_when_alpaca_empty(self):
         service = MarketDataService(alpaca_service=None)
         service.fmp = type(
