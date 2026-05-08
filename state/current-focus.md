@@ -14,7 +14,7 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Datenbasis Welle 6 + Phase-3-Restverfeinerung
+## Naechster Einstieg 2026-05-09: Release-Tag oder Welle 7
 
 Sitzung 2026-05-08 hat geliefert:
 
@@ -28,45 +28,47 @@ Sitzung 2026-05-08 hat geliefert:
 
 (E) **Datenbasis-Welle 4** — StockTwits + Reddit Retail-Sentiment.
 
-(F) **Datenbasis-Welle 5** — Earnings-Call-Transcripts ueber FMP v4-Batch mit VADER-Digest pro Quartal (Score + Top-Positive/Negative-Quote). EarningsCallsSection auf `/analysis/<symbol>`.
+(F) **Datenbasis-Welle 5** — Earnings-Call-Transcripts mit VADER-Digest.
 
-Naechster sinnvoller Schnitt:
+(G) **Datenbasis-Welle 6** — Options-Flow (P/C-Ratio, OI, ATM-IV, Top-Strikes) ueber yfinance.
 
-**Datenbasis Welle 6: Options-Flow**
+Naechster sinnvoller Schnitt — Wahl zwischen:
 
-1. Neuer `app/options_flow_service.py`. yfinance `Ticker(symbol).option_chain(expiry)` ist die offizielle yfinance-API; gibt `(calls, puts)`-DataFrames mit `strike`, `volume`, `openInterest`, `impliedVolatility` zurueck. Pro Symbol pro 60 Minuten gecacht.
-2. Aggregationen pro naechster Expiry (Default: nearest >= 7 Tage):
-   - `putCallVolumeRatio` aus Tagesvolumen
-   - `putCallOpenInterestRatio` aus aktuellen Open-Interest-Bestaenden
-   - Top-3-Strikes Calls + Puts nach Volumen
-   - Average-Implied-Volatility ATM (Strike ±5%)
-3. Defensiv: leeres Payload bei Crypto/ETF ohne Optionen, fail-soft bei yfinance-Errors.
-4. `/api/research/{symbol}` ergaenzt um `optionsFlow`. Frontend `OptionsFlowSection` mit P/C-Volume-Pille und P/C-OI-Pille (>1.2 bearish red, <0.7 bullish green, sonst neutral), Average-IV, Top-Strikes.
+**Option A: Release-Tag jetzt**
 
-**Datenbasis Welle 7: FinBERT-Aktivierung**
+1. `git tag -a v2026.05.08-1 -m "Datenbasis-Welle 1-6 + Phase 3 + Slippage"`, `git push --tags`
+2. `IMAGE_TAG=2026.05.08-1 bash tests/run-upgrade-rehearsal.sh` — pruefen, ob Alembic-Migration 0004 (paper_orders/paper_transactions) sauber ueber den 2026.05.07-1-Bestand upgraded und der Stack hinterher exportable + restorable bleibt
+3. Beim Erfolg ist der naechste Phase-4-Beginn ein klar deploybarer Punkt zum aufsetzen
 
-5. Optionaler `SENTIMENT_PROVIDER=finbert`-Schalter; Lazy-Initialisierung von `transformers` + `ProsusAI/finbert`. Trade-off Container-Size +900 MB. Sollte als separater optionaler `requirements-finbert.txt` getrennt werden, damit der Default-Container schmal bleibt.
+**Option B: Welle 7 FinBERT-Premium-Schalter**
 
-**Phase 3 Restverfeinerungen** (wann immer):
+1. `requirements-finbert.txt` mit `transformers`, `torch`, separate Optional-Dependency. Default-Container bleibt schmal.
+2. `app/sentiment.py` ergaenzt: bei `SENTIMENT_PROVIDER=finbert` Lazy-Loader fuer `ProsusAI/finbert`, Output-Mapping auf [-1, 1]. Bei nicht-installiertem `transformers` Warn-Log und Fallback auf VADER.
+3. Container-Trade-off: ~900 MB. Separates Image-Variant `dbergt/trading-bot-backend-finbert` denkbar.
 
-6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
-7. Asset-spezifische Fee-Multipliers.
+**Option C: Welle 8 Twelve Data**
 
-**Release-Tag** (nach Welle 6 + 7 oder fruehe Slippage-Verfeinerung):
+1. Twelve Data API hat ueberragende Coverage fuer EU-Maerkte (DE, FR, UK, JP). Free-Tier ~8 req/min.
+2. Adapter ergaenzt `MarketDataService` als zweiten Provider hinter yfinance fuer Stocks/ETFs ausserhalb US.
 
-- `v2026.05.08-1` setzen + Upgrade-Rehearsal (`tests/run-upgrade-rehearsal.sh`) bevor wir Phase 4 anfassen. Heutige Wellen sind alle pure-Read, kein Migrationsbedarf, sollte sauber durchlaufen.
+**Phase 3 Restverfeinerungen** (parallel/wann immer):
+
+- Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen
+- Asset-spezifische Fee-Multipliers
 
 **Phase 4 Auto-Execution** beginnt erst NACH:
-- Release-Tag mit Rehearsal
+- Release-Tag mit Rehearsal (Option A)
 - Risk-Modell (Limits/Budget/Audit-Logs)
 - Manuelle Freigabelogik + Not-Aus
+
+Empfehlung: **Option A jetzt** — wir haben sechs neue Datenbloecke ohne Schema-Aenderung gepusht (Phase 3 hat genau eine Migration 0004 dabei), und ein Release-Tag mit Rehearsal ist die naechste Disziplin-Stelle aus dem Workflow. Welle 7 + 8 koennen danach.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen fuenf Datenbasis-Wellen
-- `src/backend/app/social_sentiment_service.py` als juengstes Adapter-Pattern fuer Welle 6 (Modul-Singleton, Cache, defensive Failure-Pfade)
-- `src/backend/app/macro_service.py` als yfinance-Adapter-Pattern fuer Welle 6
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen sechs Datenbasis-Wellen
+- `tests/run-upgrade-rehearsal.sh` als Pflicht-Gate fuer den Release-Tag
+- `src/backend/app/options_flow_service.py` als juengstes Adapter-Pattern
 
 ## Stand Beim Letzten Handover
 

@@ -224,6 +224,31 @@ type SocialSentiment = {
   };
 };
 
+type OptionsStrike = {
+  strike?: number | null;
+  volume?: number | null;
+  openInterest?: number | null;
+  impliedVolatility?: number | null;
+  lastPrice?: number | null;
+};
+
+type OptionsFlow = {
+  symbol?: string;
+  expiry?: string | null;
+  lastClose?: number | null;
+  putCallVolumeRatio?: number | null;
+  putCallOpenInterestRatio?: number | null;
+  avgImpliedVolatilityAtm?: number | null;
+  atmStrikeWindow?: [number, number] | null;
+  totalCallVolume?: number;
+  totalPutVolume?: number;
+  totalCallOpenInterest?: number;
+  totalPutOpenInterest?: number;
+  topCalls?: OptionsStrike[];
+  topPuts?: OptionsStrike[];
+  putCallSignal?: "bullish_skew" | "bearish_skew" | "neutral" | null;
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
@@ -268,6 +293,7 @@ type ResearchPayload = {
   cryptoMetrics?: CryptoMetrics | null;
   fearGreedIndex?: FearGreedIndex | null;
   socialSentiment?: SocialSentiment | null;
+  optionsFlow?: OptionsFlow | null;
   news?: {
     items?: Array<{
       title?: string;
@@ -480,6 +506,7 @@ export function AnalysisPage() {
       <EarningsCallsSection calls={research?.earningsCalls} />
       <CryptoMetricsSection metrics={research?.cryptoMetrics} />
       <SocialSentimentSection social={research?.socialSentiment} />
+      <OptionsFlowSection flow={research?.optionsFlow} />
       <MacroContextSection
         macro={research?.macroContext}
         fearGreed={research?.fearGreedIndex}
@@ -1553,6 +1580,155 @@ function SocialSentimentSection({ social }: { social: SocialSentiment | null | u
           ) : null}
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) {
+  if (!flow || !flow.expiry) return null;
+  const totalActivity =
+    (flow.totalCallVolume ?? 0) +
+    (flow.totalPutVolume ?? 0) +
+    (flow.totalCallOpenInterest ?? 0) +
+    (flow.totalPutOpenInterest ?? 0);
+  if (totalActivity === 0) return null;
+
+  const fmtRatio = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    return value.toFixed(2);
+  };
+
+  const fmtIv = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    return `${(value * 100).toFixed(2)}%`;
+  };
+
+  const fmtNumber = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    return Math.round(value).toLocaleString();
+  };
+
+  const ratioColor = (value: number | null | undefined): string => {
+    if (value == null) return "text-slate-400";
+    if (value >= 1.2) return "text-red-300";
+    if (value <= 0.7) return "text-bergt-green";
+    return "text-slate-300";
+  };
+
+  const signalLabel: Record<string, string> = {
+    bullish_skew: "Bullish skew",
+    bearish_skew: "Bearish skew",
+    neutral: "Neutral",
+  };
+
+  const signalClass: Record<string, string> = {
+    bullish_skew: "border-bergt-green/40 bg-bergt-green/10 text-bergt-green",
+    bearish_skew: "border-red-700/50 bg-red-900/40 text-red-300",
+    neutral: "border-slate-700 bg-slate-900 text-slate-300",
+  };
+
+  const renderStrikes = (rows: OptionsStrike[] | undefined, side: "calls" | "puts") => {
+    if (!rows || rows.length === 0) {
+      return <p className="mt-2 text-xs text-slate-500">No top strikes.</p>;
+    }
+    return (
+      <table className="mt-2 w-full text-left text-xs">
+        <thead className="text-slate-500">
+          <tr>
+            <th className="py-1">Strike</th>
+            <th className="text-right">Volume</th>
+            <th className="text-right">OI</th>
+            <th className="text-right">IV</th>
+            <th className="text-right">Last</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => (
+            <tr key={`${side}-${idx}`} className="border-t border-slate-800">
+              <td className="py-1 font-mono">{fmtRatio(row.strike)}</td>
+              <td className="text-right">{fmtNumber(row.volume)}</td>
+              <td className="text-right">{fmtNumber(row.openInterest)}</td>
+              <td className="text-right">{fmtIv(row.impliedVolatility)}</td>
+              <td className="text-right">{fmtRatio(row.lastPrice)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  return (
+    <section className="card space-y-3" data-testid="options-flow-section">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Options flow
+          </h2>
+          <p className="text-xs text-slate-500">
+            Nearest expiry {flow.expiry} · spot {fmtRatio(flow.lastClose)}
+          </p>
+        </div>
+        {flow.putCallSignal ? (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+              signalClass[flow.putCallSignal] ?? signalClass.neutral
+            }`}
+          >
+            {signalLabel[flow.putCallSignal] ?? flow.putCallSignal}
+          </span>
+        ) : null}
+      </header>
+
+      <dl className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            P/C volume ratio
+          </dt>
+          <dd className={`mt-1 font-mono text-base ${ratioColor(flow.putCallVolumeRatio)}`}>
+            {fmtRatio(flow.putCallVolumeRatio)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {fmtNumber(flow.totalPutVolume)} puts / {fmtNumber(flow.totalCallVolume)} calls today
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            P/C OI ratio
+          </dt>
+          <dd className={`mt-1 font-mono text-base ${ratioColor(flow.putCallOpenInterestRatio)}`}>
+            {fmtRatio(flow.putCallOpenInterestRatio)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {fmtNumber(flow.totalPutOpenInterest)} put OI / {fmtNumber(flow.totalCallOpenInterest)} call OI
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            ATM implied vol
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {fmtIv(flow.avgImpliedVolatilityAtm)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            ATM band {flow.atmStrikeWindow ? `${flow.atmStrikeWindow[0]} – ${flow.atmStrikeWindow[1]}` : "—"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500">
+            Top calls by volume
+          </h3>
+          {renderStrikes(flow.topCalls, "calls")}
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500">
+            Top puts by volume
+          </h3>
+          {renderStrikes(flow.topPuts, "puts")}
+        </div>
+      </div>
     </section>
   );
 }

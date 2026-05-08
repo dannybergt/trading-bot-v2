@@ -36,6 +36,7 @@ from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.macro_service import get_macro_service
 from app.migrate_watchlists import migrate as migrate_watchlists
+from app.options_flow_service import get_options_flow_service
 from app.social_sentiment_service import get_social_sentiment_service
 from app.models import (
     AlertEvent as AlertEventRecord,
@@ -1752,6 +1753,10 @@ def get_symbol_research(
         asset_profile["symbol"], asset_class=asset_profile.get("assetClass")
     )
 
+    options_flow = get_options_flow_service().get_options_flow(
+        asset_profile["symbol"], asset_class=asset_profile.get("assetClass")
+    )
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1768,6 +1773,7 @@ def get_symbol_research(
         "cryptoMetrics": crypto_metrics,
         "fearGreedIndex": fear_greed,
         "socialSentiment": social_sentiment,
+        "optionsFlow": options_flow,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),

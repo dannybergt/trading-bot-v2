@@ -251,6 +251,13 @@ for key in ("insiderTrades", "insiderSummary", "institutionalHoldings", "earning
     assert key in research_signals, f"missing researchSignals key {key}"
 # earningsCalls is a list (possibly empty for FMP-free-tier symbols)
 assert isinstance(stock_research_payload.get("earningsCalls"), list)
+# optionsFlow is always a dict (empty payload when no options chain available)
+options_flow = stock_research_payload.get("optionsFlow")
+assert isinstance(options_flow, dict)
+for key in ("symbol", "expiry", "putCallVolumeRatio", "putCallOpenInterestRatio", "topCalls", "topPuts", "putCallSignal"):
+    assert key in options_flow, f"missing optionsFlow key {key}"
+assert isinstance(options_flow.get("topCalls"), list)
+assert isinstance(options_flow.get("topPuts"), list)
 macro_context = stock_research_payload.get("macroContext")
 assert isinstance(macro_context, dict)
 for instr in ("vix", "yield10y", "dxy"):

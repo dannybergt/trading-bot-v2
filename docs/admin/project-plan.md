@@ -127,9 +127,12 @@ Bereits umgesetzt (Welle 5, 2026-05-08):
 
 - Earnings-Call-Transcripts via FMP v4-Batch-Endpoint (`/batch_earning_call_transcript/{SYMBOL}?year=YYYY`); pro Quartal Volltext + VADER-Aggregation; Sentence-Tokenisierung extrahiert die hoechst-positive und hoechst-negative Quote; `/api/research/{symbol}` reicht `earningsCalls`-Liste durch. Frontend `EarningsCallsSection` rendert pro Quartal eine Card mit VADER-Pille und beiden Quotes als farbige Blockquotes
 
+Bereits umgesetzt (Welle 6, 2026-05-08):
+
+- Options-Flow-Adapter `app/options_flow_service.py` zieht yfinance `Ticker.option_chain` fuer das nearest-expiry mit >=7 Tagen Restlaufzeit. Aggregiert Put/Call-Volume-Ratio, Put/Call-OI-Ratio, Average-IV ATM (±5%-Band um Last-Close), Top-3-Strikes Calls und Puts nach Volume. Cache 60 min pro Symbol; Crypto skipped. `/api/research/{symbol}` ergaenzt um `optionsFlow`. Frontend `OptionsFlowSection` rendert KPI-Cards plus Top-Strike-Tabellen mit Skew-Pille (bullish/bearish/neutral)
+
 Naechste Wellen (priorisiert):
 
-- Welle 6: Options-Flow (Put/Call-Ratio, Open Interest) ueber yfinance options chain
 - Welle 7: FinBERT-Aktivierung als optionaler Premium-Schalter (transformers-Dependency + Container-Groesse-Akzeptanz)
 - Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren
 
