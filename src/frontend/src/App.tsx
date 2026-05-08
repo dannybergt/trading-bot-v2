@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
+import { AdminPage } from "./pages/AdminPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
@@ -22,9 +23,6 @@ import { WatchlistsPage } from "./pages/WatchlistsPage";
 // initial Login/Dashboard route stays fast.
 const AnalysisPage = lazy(() =>
   import("./pages/AnalysisPage").then((m) => ({ default: m.AnalysisPage })),
-);
-const AdminPage = lazy(() =>
-  import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })),
 );
 // DocsPage pulls in react-markdown + remark-gfm — lazy so the docs
 // dependency stack only loads when the user actually opens help.
@@ -96,14 +94,7 @@ function App() {
           }
         />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route
-          path="/admin"
-          element={
-            <Suspense fallback={<ChartFallback />}>
-              <AdminPage />
-            </Suspense>
-          }
-        />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

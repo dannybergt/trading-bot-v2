@@ -1674,13 +1674,37 @@ def get_watchlist_alerts(
     db: Session = Depends(get_db),
 ):
     record = get_watchlist_record_or_404(db, current_user, id)
-    return build_watchlist_alert_payload(
-        db,
-        current_user,
-        record,
-        limit=limit,
-        news_limit=news_limit,
-    )
+    try:
+        return build_watchlist_alert_payload(
+            db,
+            current_user,
+            record,
+            limit=limit,
+            news_limit=news_limit,
+        )
+    except Exception:
+        # Yahoo 429 / provider hiccup must not 500 the whole dashboard.
+        # Return a degraded but well-shaped payload so the UI keeps rendering
+        # the watchlist while the alerts column shows an empty state.
+        logger.exception(
+            "watchlist_alert_payload_failed watchlist_id=%s user_id=%s",
+            id,
+            current_user.id,
+        )
+        return {
+            "watchlist": {"id": record.id, "name": record.name},
+            "alertSettings": {},
+            "notificationPlan": {"popupCount": 0, "pushCount": 0},
+            "trackedAssets": [],
+            "items": [],
+            "summary": {
+                "trackedSymbols": len(record.items),
+                "popupEligible": 0,
+                "pushEligible": 0,
+                "degraded": True,
+                "degradedReason": "provider_temporarily_unavailable",
+            },
+        }
 
 
 # --- ALERT RULES / EVENTS ---
@@ -2132,7 +2156,7 @@ def get_symbol_research(
     }
 
 
-@app.get("/api/research/{symbol:path}/data-quality")
+@app.get("/api/data-quality/{symbol:path}")
 def get_symbol_data_quality(
     symbol: str,
     current_user: User = Depends(get_current_user),
@@ -2185,7 +2209,7 @@ def list_data_sources(admin: User = Depends(get_current_admin_user)):
     return {"providers": data_quality_service.get_provider_catalogue()}
 
 
-@app.get("/api/research/{symbol:path}/backtest")
+@app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,
     current_user: User = Depends(get_current_user),

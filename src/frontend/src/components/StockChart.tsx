@@ -113,8 +113,18 @@ const SUB_PANE_DEFS: Array<{ key: SubPaneKey; label: string }> = [
 ];
 
 function toTime(value: string): UTCTimestamp {
-  // Backend formats either "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" (intraday).
-  const iso = value.includes("T") ? value : value.replace(" ", "T") + ":00Z";
+  // Backend formats either "YYYY-MM-DD" (daily/weekly) or "YYYY-MM-DD HH:MM"
+  // (intraday). The space-separated form needs a T separator AND a seconds
+  // component before Date.parse will accept it; the date-only form needs a
+  // full midnight-UTC suffix.
+  let iso: string;
+  if (value.includes("T")) {
+    iso = value;
+  } else if (value.includes(" ")) {
+    iso = `${value.replace(" ", "T")}:00Z`;
+  } else {
+    iso = `${value}T00:00:00Z`;
+  }
   const ms = Date.parse(iso.endsWith("Z") ? iso : `${iso}Z`);
   return Math.floor(ms / 1000) as UTCTimestamp;
 }

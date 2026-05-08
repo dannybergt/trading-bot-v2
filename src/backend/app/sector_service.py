@@ -116,6 +116,12 @@ class SectorService:
     def _fetch_closes(self, symbol: str) -> list[float]:
         if not symbol:
             return []
+        # Defensive: a sub-path leak (e.g. "NVDA/data-quality") would burn
+        # rate-limit budget on a guaranteed-empty yfinance lookup. Skip
+        # anything that isn't a clean ticker.
+        if "/" in symbol or symbol.startswith("^") and any(c in symbol for c in "/\\"):
+            logger.warning("sector_skip_invalid_symbol symbol=%s", symbol)
+            return []
         if not acquire_rate_limit("yfinance", timeout=2.0):
             logger.warning("sector_yfinance_rate_limit_skip symbol=%s", symbol)
             return []

@@ -475,7 +475,7 @@ export function AnalysisPage() {
   const backtestQuery = useQuery({
     queryKey: ["backtest", decoded],
     queryFn: () =>
-      apiFetch<BacktestPayload>(`/api/research/${encodeURIComponent(decoded)}/backtest`),
+      apiFetch<BacktestPayload>(`/api/backtest/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
     staleTime: 30 * 60_000,
   });
@@ -483,7 +483,7 @@ export function AnalysisPage() {
   const dataQualityQuery = useQuery({
     queryKey: ["data-quality", decoded],
     queryFn: () =>
-      apiFetch<DataQualityReport>(`/api/research/${encodeURIComponent(decoded)}/data-quality`),
+      apiFetch<DataQualityReport>(`/api/data-quality/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
     staleTime: 5 * 60_000,
   });
