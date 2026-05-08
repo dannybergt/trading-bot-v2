@@ -1163,6 +1163,11 @@ async def auto_execution_paper_loop_task():
         try:
             db = SessionLocal()
             try:
+                # Strict allowlist: only users explicitly on `mode=paper`.
+                # Even if a future bug somehow stored "live" in the column,
+                # this loop never picks them up — and the live-mode branch
+                # below would still refuse to place anything because the
+                # paper_trading.place_order path is the only thing wired in.
                 eligible_users = (
                     db.query(User)
                     .join(AutoExecutionLimitsRecord, AutoExecutionLimitsRecord.user_id == User.id)

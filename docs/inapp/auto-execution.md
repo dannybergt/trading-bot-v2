@@ -12,7 +12,7 @@ The master switch is **disabled by default**. No automation will run until you e
 The page has a **Mode** selector with two values:
 
 - **Paper (safe)** — default. Accepted proposals are routed into the internal paper-trading book. There is NO Alpaca call. Use this to validate the loop end-to-end with zero real-money exposure.
-- **Live (Alpaca)** — accepted proposals go to your configured Alpaca account. **Important caveat: Alpaca is NOT a production broker for the operator of this instance** — Alpaca was wired up for paper-trading and live-quote streaming. The actual production broker (a separate adapter for the operator's real-money broker) is a follow-up phase. Until that adapter ships, treat Live-mode as "Alpaca-account routing only" — useful for testing the live-broker code path against a real broker API, NOT for routing your actual real-money trades. Switching into live mode requires an explicit confirmation step and is audited as a separate `auto_execution.live_mode_enabled` event.
+- **Live — currently HARD-LOCKED in code.** The radio button is disabled and labeled "Locked". The backend silently refuses any payload that tries to set `mode=live`. The lock comes off only when Phase 4f delivers a verified broker adapter for the operator's chosen real-money broker (Trade Republic, Flatex, Comdirect, Bitvavo, Kraken, Interactive Brokers, …). See `docs/admin/broker-roadmap.md` for the full plan. There is no env-variable, settings page, or admin button that can flip this — only a code change + security review can.
 
 The recommended path is: turn the master switch on → leave the mode on Paper → watch a few loop cycles → review the events log → only then consider Live.
 

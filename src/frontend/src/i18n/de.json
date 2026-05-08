@@ -364,6 +364,8 @@
     "modeLive": "Live (echtes Geld)",
     "modePaperHint": "Akzeptierte Vorschlaege landen im internen Paper-Trading-Book. Kein Alpaca, kein echtes Geld.",
     "modeLiveHint": "Akzeptierte Vorschlaege gehen an dein Alpaca-Konto. Echtes Geld bewegt sich.",
+    "modeLockedBadge": "Gesperrt",
+    "modeLiveLockedHint": "Live-Modus ist im Code hart gesperrt, bis Phase 4f einen echten Broker-Adapter liefert (Trade Republic, Flatex, Comdirect, Bitvavo, …). Kann nicht aus Versehen aktiviert werden.",
     "feedback": {
       "saved": "Gespeichert.",
       "halted": "Halt bestaetigt. {{count}} offene Positionen protokolliert."

@@ -364,6 +364,8 @@
     "modeLive": "Live (real money)",
     "modePaperHint": "Routes accepted proposals into the internal paper-trading book. No Alpaca, no real money.",
     "modeLiveHint": "Routes accepted proposals to your configured Alpaca account. Real money moves.",
+    "modeLockedBadge": "Locked",
+    "modeLiveLockedHint": "Live mode is hard-locked in code until Phase 4f delivers a real broker adapter (Trade Republic, Flatex, Comdirect, Bitvavo, …). Cannot be enabled by accident.",
     "feedback": {
       "saved": "Saved.",
       "halted": "Halt confirmed. {{count}} open positions logged."

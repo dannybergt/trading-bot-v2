@@ -60,6 +60,28 @@ DEFAULT_LIMITS: dict[str, Any] = {
 
 VALID_ASSET_CLASSES = {"stock", "etf", "crypto"}
 VALID_MODES = {"paper", "live"}
+
+# HARD CODE LOCK. Do not flip this without:
+# 1) shipping a real broker adapter (`app/brokers/<name>.py`),
+# 2) a security review of the order-placement code path,
+# 3) explicit user opt-in audited as `auto_execution.live_mode_unlocked`.
+#
+# Rationale: Alpaca is NOT the operator's real-money broker. Routing live-mode
+# at Alpaca would be technically harmless (still a paper-tier in the operator's
+# Alpaca account) but conceptually misleading — the user could believe live-mode
+# means "real broker" and act accordingly. We refuse to surface live-mode at
+# all until Phase 4f delivers the actual broker adapter.
+LIVE_MODE_LOCKED = True
+
+
+def is_live_mode_available() -> bool:
+    """Single source of truth for the live-mode kill-switch.
+
+    Surfaced via `/api/auto-execution/limits` as `liveModeAvailable` so the
+    frontend can reliably disable the radio button without trying to
+    re-derive the state from a list of feature flags.
+    """
+    return not LIVE_MODE_LOCKED
 EARNINGS_HALT_DAYS = 7
 FOMC_HALT_HOURS = 24
 
@@ -116,6 +138,7 @@ def serialize_limits(row: AutoExecutionLimits) -> dict[str, Any]:
     return {
         "enabled": bool(row.enabled),
         "mode": mode,
+        "liveModeAvailable": is_live_mode_available(),
         "maxPositionSizeUsd": float(row.max_position_size_usd or 0),
         "maxDailyLossUsd": float(row.max_daily_loss_usd or 0),
         "maxOpenPositions": int(row.max_open_positions or 0),
@@ -142,7 +165,17 @@ def update_limits(db: Session, user: User, payload: dict[str, Any]) -> AutoExecu
         # Unknown values silently drop to paper. The frontend has the
         # confirmation flow that gates live-mode; the API layer additionally
         # logs the live-mode flip via audit_service.
-        row.mode = candidate if candidate in VALID_MODES else "paper"
+        if candidate == "live" and LIVE_MODE_LOCKED:
+            # Hard-coded refusal. Even a malicious or buggy frontend
+            # cannot bypass this — the only way to flip into live-mode
+            # is to ship the broker adapter and remove the lock.
+            logger.warning(
+                "auto_execution_live_mode_blocked_locked user_id=%s",
+                getattr(user, "id", None),
+            )
+            row.mode = "paper"
+        else:
+            row.mode = candidate if candidate in VALID_MODES else "paper"
     if "maxPositionSizeUsd" in payload:
         row.max_position_size_usd = max(0.0, float(payload["maxPositionSizeUsd"] or 0))
     if "maxDailyLossUsd" in payload:

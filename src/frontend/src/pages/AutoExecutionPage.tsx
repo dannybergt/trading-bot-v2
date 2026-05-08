@@ -7,6 +7,7 @@ import { ApiError, apiFetch } from "../api/client";
 type Limits = {
   enabled: boolean;
   mode: "paper" | "live";
+  liveModeAvailable: boolean;
   maxPositionSizeUsd: number;
   maxDailyLossUsd: number;
   maxOpenPositions: number;
@@ -126,6 +127,10 @@ export function AutoExecutionPage() {
   const handleModeChange = (next: "paper" | "live") => {
     if (next === draft.mode) return;
     if (next === "live") {
+      // Hard refusal at the UI layer too — backend would silently drop the
+      // value back to paper anyway, but we don't even let the modal open
+      // until liveModeAvailable is true.
+      if (!draft.liveModeAvailable) return;
       setConfirmLiveMode(true);
       return;
     }
@@ -219,20 +224,33 @@ export function AutoExecutionPage() {
             />
             <span>{t("autoExecution.modePaper")}</span>
           </label>
-          <label className="flex items-center gap-1 text-sm">
+          <label
+            className={`flex items-center gap-1 text-sm ${
+              draft.liveModeAvailable ? "" : "opacity-40"
+            }`}
+            title={draft.liveModeAvailable ? "" : t("autoExecution.modeLiveLockedHint")}
+          >
             <input
               type="radio"
               name="auto-execution-mode"
               value="live"
               checked={draft.mode === "live"}
+              disabled={!draft.liveModeAvailable}
               onChange={() => handleModeChange("live")}
               data-testid="auto-execution-mode-live"
             />
             <span>{t("autoExecution.modeLive")}</span>
+            {!draft.liveModeAvailable ? (
+              <span className="ml-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[9px] uppercase tracking-wide text-slate-400">
+                {t("autoExecution.modeLockedBadge")}
+              </span>
+            ) : null}
           </label>
           <span className="text-[10px] text-slate-500">
             {draft.mode === "paper"
-              ? t("autoExecution.modePaperHint")
+              ? draft.liveModeAvailable
+                ? t("autoExecution.modePaperHint")
+                : t("autoExecution.modeLiveLockedHint")
               : t("autoExecution.modeLiveHint")}
           </span>
         </div>

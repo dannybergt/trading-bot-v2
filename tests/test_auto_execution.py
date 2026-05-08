@@ -243,12 +243,35 @@ class AutoExecutionTests(unittest.TestCase):
         row = auto_execution.get_limits(self.db, self.user)
         self.assertEqual("paper", row.mode)
 
-    def test_update_mode_to_live_persists(self):
+    def test_live_mode_is_hard_locked_by_default(self):
+        # The shipped default has LIVE_MODE_LOCKED=True so live-mode must
+        # be silently rejected at the service layer no matter what payload
+        # the frontend sent.
+        self.assertTrue(auto_execution.LIVE_MODE_LOCKED)
+        self.assertFalse(auto_execution.is_live_mode_available())
         row = auto_execution.update_limits(self.db, self.user, {"mode": "live"})
-        self.assertEqual("live", row.mode)
-        # Unknown values silently fall back to paper.
+        self.assertEqual("paper", row.mode)
+        # Unknown values still fall back to paper.
         row = auto_execution.update_limits(self.db, self.user, {"mode": "fantasy"})
         self.assertEqual("paper", row.mode)
+
+    def test_live_mode_persists_when_lock_is_off(self):
+        # Temporarily disable the code-lock for this test, then restore it.
+        # This is the only sanctioned way to reach live-mode at the service
+        # layer; production code must never flip the constant at runtime.
+        original = auto_execution.LIVE_MODE_LOCKED
+        auto_execution.LIVE_MODE_LOCKED = False
+        try:
+            row = auto_execution.update_limits(self.db, self.user, {"mode": "live"})
+            self.assertEqual("live", row.mode)
+        finally:
+            auto_execution.LIVE_MODE_LOCKED = original
+
+    def test_serialize_limits_surfaces_live_mode_availability(self):
+        row = auto_execution.get_limits(self.db, self.user)
+        payload = auto_execution.serialize_limits(row)
+        self.assertIn("liveModeAvailable", payload)
+        self.assertEqual(payload["liveModeAvailable"], not auto_execution.LIVE_MODE_LOCKED)
 
     def test_evaluate_proposal_from_prediction_actionable_passes(self):
         self._enable_with_defaults()
