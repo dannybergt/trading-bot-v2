@@ -141,6 +141,11 @@ Bereits umgesetzt (Welle 8, 2026-05-08):
 
 - Twelve Data als dritter Provider-Fallback hinter yfinance + FMP. Schliesst die Non-US-Coverage-Luecke (Frankfurt, Paris, London, Tokio, Hong Kong) — `MarketDataService.get_ticker_info` chained jetzt yfinance → FMP → Twelve Data. Optionaler `TWELVE_DATA_API_KEY`. Adapter analog zu FMP-Pattern, normalisiert auf yfinance-kompatible Felder, defensiv gegen Twelve-Data-typische `{"status":"error"}`-Responses
 
+Bereits umgesetzt (ML-Persistenz + Backtest, 2026-05-08, Phase-4-Vorbedingung):
+
+- Per-Symbol-Modell-Persistenz: `app/ml_persistence.py` mit XGBoost-JSON unter `state/runtime/data/ml_models/<SYMBOL>.json` plus `<SYMBOL>.meta.json`. Default-TTL 24 h. `MarketDataService._get_or_train_predictor(symbol, df)` checkt Memory-Cache (1h) → Disk → Train+Persist. Damit lernt das Modell von Tag zu Tag, statt bei jedem Request neu zu starten
+- Walk-Forward-Backtest-Framework: `app/backtest_service.py::run_backtest(df, train_window, step)` trainiert in Slots, sammelt Predictions, berechnet Accuracy, Mann-Whitney-AUC, Brier-Score, Strategy-vs-Buy-Hold-Cum-Return und 10-Bucket-Reliability-Tabelle fuer Confidence-Calibration. Endpoint `GET /api/research/{symbol}/backtest`. Frontend `ModelPerformanceSection` auf `/analysis/<symbol>`
+
 Naechste Wellen (priorisiert):
 
 - Welle 9 (optional): FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage damit Premium-Nutzer ein vorgewaermtes Image ziehen koennen

@@ -11,12 +11,14 @@ from app.fmp_service import FmpService
 from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_news
 from app.ml_models import PricePredictor
+from app import ml_persistence
 from app.twelve_data_service import TwelveDataService
 
 logger = logging.getLogger(__name__)
 
 TICKER_INFO_TTL_SECONDS = 5 * 60
 NEWS_CACHE_TTL_SECONDS = 60
+PREDICTOR_MEMORY_TTL_SECONDS = 60 * 60
 
 class MarketDataService:
     def __init__(
@@ -26,6 +28,10 @@ class MarketDataService:
         fmp_service=None,
         twelve_data_service=None,
     ):
+        # Kept as a backwards-compatible default predictor for consumers /
+        # tests that still patch `service.predictor` directly. The hot path
+        # in `get_stock_data` now goes through `_get_or_train_predictor`,
+        # which returns a per-symbol persisted instance.
         self.predictor = PricePredictor()
         self.alpaca = alpaca_service
         self.alpha_vantage = alpha_vantage_service or AlphaVantageService()
@@ -33,6 +39,10 @@ class MarketDataService:
         self.twelve_data = twelve_data_service or TwelveDataService()
         self._ticker_info_cache: dict[str, dict] = {}
         self._news_cache: dict[str, dict] = {}
+        # Per-symbol predictor cache: symbol -> {predictor, metadata, expires_at}.
+        # Filled on demand so a request never blocks on disk I/O for symbols
+        # that are already warm in memory.
+        self._predictor_cache: dict[str, dict] = {}
 
     def _get_cached_payload(self, cache: dict[str, dict], key: str):
         entry = cache.get(key)
@@ -98,6 +108,50 @@ class MarketDataService:
         if asset_class not in {"etf", "crypto"}:
             return pd.DataFrame()
         return self.alpha_vantage.get_history_df(profile["symbol"], asset_class, limit=limit)
+
+    def _get_or_train_predictor(
+        self, symbol: str, df: pd.DataFrame
+    ) -> tuple[PricePredictor, dict | None]:
+        """Return a (predictor, metadata) pair for `symbol`, persisted on disk.
+
+        Memory cache (1h TTL) → on-disk cache (24h TTL via `ml_persistence`)
+        → train fresh + persist. The 1h memory cache exists to keep
+        repeated `/api/stock/{symbol}` calls within a session from going
+        to disk every time, while the 24h on-disk TTL keeps the model
+        roughly aligned with daily-bar updates.
+        """
+        cached = self._predictor_cache.get(symbol)
+        if cached and cached["expires_at"] > monotonic():
+            return cached["predictor"], cached.get("metadata")
+
+        loaded = ml_persistence.load_predictor(symbol, PricePredictor)
+        if loaded is not None:
+            predictor, metadata = loaded
+            if not ml_persistence.is_stale(metadata):
+                self._predictor_cache[symbol] = {
+                    "predictor": predictor,
+                    "metadata": metadata,
+                    "expires_at": monotonic() + PREDICTOR_MEMORY_TTL_SECONDS,
+                }
+                return predictor, metadata
+
+        predictor = PricePredictor()
+        metrics = predictor.train(df)
+        metadata = None
+        if predictor.is_trained:
+            metadata = ml_persistence.save_predictor(
+                symbol,
+                predictor,
+                accuracy=metrics.get("accuracy", 0.0),
+                features=metrics.get("features", []),
+                n_samples=len(df.index) if df is not None else 0,
+            )
+            self._predictor_cache[symbol] = {
+                "predictor": predictor,
+                "metadata": metadata,
+                "expires_at": monotonic() + PREDICTOR_MEMORY_TTL_SECONDS,
+            }
+        return predictor, metadata
 
     def get_avg_daily_volume(self, symbol: str, *, lookback_days: int = 20) -> float | None:
         """Best-effort 20-day average daily volume for liquidity-aware sims.
@@ -310,14 +364,20 @@ class MarketDataService:
         df_analyzed['Forward_PE'] = forward_pe
         df_analyzed['Price_To_Book'] = price_to_book
 
-        # Generate Prediction (Mock training on the fly for demo)
+        # Generate Prediction. The predictor is now persisted per symbol
+        # under `state/runtime/ml_models/<SYMBOL>.json` and only refreshed
+        # when the on-disk model is older than ML_MODEL_TTL_HOURS — the
+        # request path no longer pays the cost of an XGBoost retrain on
+        # every call, and identical inputs now produce identical outputs.
         prediction = None
         try:
-            # Train on the fetched data
-            self.predictor.train(df_analyzed)
+            predictor, predictor_metadata = self._get_or_train_predictor(symbol, df_analyzed)
             # Predict next move (user passed through so the zone yield model
             # can apply broker fees + tax rates per individual user)
-            prediction = self.predictor.predict_next_movement(df_analyzed, user=user)
+            prediction = predictor.predict_next_movement(df_analyzed, user=user)
+            if prediction is not None and predictor_metadata:
+                prediction["modelTrainedAt"] = predictor_metadata.get("trainedAt")
+                prediction["modelAccuracy"] = predictor_metadata.get("accuracy")
             
             # Apply user-defined Target Yield threshold constraints
             if prediction and prediction.get('direction') == 'UP' and user:

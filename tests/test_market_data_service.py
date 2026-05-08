@@ -7,11 +7,25 @@ from app.services import MarketDataService
 
 
 class _FakePredictor:
+    is_trained = True
+
     def train(self, df):
         self.last_train_size = len(df.index)
+        return {"accuracy": 0.0, "features": []}
 
     def predict_next_movement(self, df, *, user=None):  # accepts new kwarg
         return {"direction": "HOLD", "confidence": 0.0}
+
+
+def _seed_fake_predictor(service, symbol: str) -> _FakePredictor:
+    """Drop a fake into the per-symbol cache so the persistence layer is bypassed."""
+    fake = _FakePredictor()
+    service._predictor_cache[symbol] = {
+        "predictor": fake,
+        "metadata": None,
+        "expires_at": float("inf"),
+    }
+    return fake
 
 
 class _FakeAlpaca:
@@ -170,7 +184,9 @@ class MarketDataServiceTests(unittest.TestCase):
 
     def test_get_stock_data_can_skip_news_and_fundamentals(self):
         service = MarketDataService()
-        service.predictor = _FakePredictor()
+        # Cache hits bypass _get_or_train_predictor's disk path.
+        _seed_fake_predictor(service, "BTC/USD")
+        _seed_fake_predictor(service, "VOO")
 
         with patch.object(service, "get_market_news", return_value={}) as news_mock, patch.object(
             service,
@@ -194,7 +210,9 @@ class MarketDataServiceTests(unittest.TestCase):
     def test_get_stock_data_uses_alpha_vantage_history_for_etf(self):
         alpha_vantage = _FakeAlphaVantage()
         service = MarketDataService(alpha_vantage_service=alpha_vantage)
-        service.predictor = _FakePredictor()
+        # Cache hits bypass _get_or_train_predictor's disk path.
+        _seed_fake_predictor(service, "BTC/USD")
+        _seed_fake_predictor(service, "VOO")
 
         with patch.object(service, "_generate_mock_data") as mock_data, patch.object(
             service,

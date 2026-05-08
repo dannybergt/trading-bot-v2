@@ -31,6 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
+from app import backtest_service
 from app.coingecko_service import get_coingecko_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
@@ -1781,6 +1782,48 @@ def get_symbol_research(
             "aggregateLabel": (news_payload or {}).get("aggregate_label", "neutral"),
             "provider": (news_payload or {}).get("provider"),
         },
+    }
+
+
+@app.get("/api/research/{symbol:path}/backtest")
+def get_symbol_backtest(
+    symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Walk-forward backtest of the persisted PricePredictor.
+
+    Pulls daily history (without the heavy news/fundamentals chain),
+    runs the backtest service, and returns accuracy + AUC + Brier
+    plus the cumulative strategy P&L vs buy-and-hold and a 10-bucket
+    reliability table for confidence calibration.
+    """
+    fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
+    asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
+    canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
+
+    try:
+        stock_data = service.get_stock_data(
+            symbol,
+            period="2y",
+            interval="1d",
+            user=None,
+            include_news=False,
+            include_fundamentals=False,
+        )
+    except Exception:
+        logger.exception("backtest_history_fetch_failed symbol=%s", symbol)
+        return {"symbol": canonical, "result": backtest_service._empty_payload()}
+
+    df = stock_data.get("data") if isinstance(stock_data, dict) else None
+    if df is None:
+        return {"symbol": canonical, "result": backtest_service._empty_payload()}
+
+    result = backtest_service.run_backtest(df, train_window=180, step=10)
+    return {
+        "symbol": canonical,
+        **asset_response_fields(asset_profile),
+        "result": result,
     }
 
 

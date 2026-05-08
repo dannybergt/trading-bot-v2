@@ -42,6 +42,32 @@ type Prediction = {
     categories?: CategoryContribution[];
   } | null;
   zones?: ChartZones | null;
+  modelTrainedAt?: string | null;
+  modelAccuracy?: number | null;
+};
+
+type BacktestReliability = {
+  bucket: string;
+  predictedMid: number;
+  actualUpRate: number | null;
+  count: number;
+};
+
+type BacktestResult = {
+  samples?: number;
+  accuracy?: number | null;
+  auc?: number | null;
+  brierScore?: number | null;
+  strategyReturnPct?: number | null;
+  buyHoldReturnPct?: number | null;
+  reliability?: BacktestReliability[];
+  trainWindow?: number | null;
+  step?: number | null;
+};
+
+type BacktestPayload = {
+  symbol: string;
+  result: BacktestResult;
 };
 
 type StockResponse = {
@@ -373,6 +399,14 @@ export function AnalysisPage() {
     staleTime: 5 * 60_000,
   });
 
+  const backtestQuery = useQuery({
+    queryKey: ["backtest", decoded],
+    queryFn: () =>
+      apiFetch<BacktestPayload>(`/api/research/${encodeURIComponent(decoded)}/backtest`),
+    enabled: !!decoded,
+    staleTime: 30 * 60_000,
+  });
+
   const transactionsQuery = useQuery({
     queryKey: ["paper-transactions", "for-analysis"],
     queryFn: () =>
@@ -501,6 +535,10 @@ export function AnalysisPage() {
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
+      <ModelPerformanceSection
+        backtest={backtestQuery.data?.result}
+        modelTrainedAt={stock?.prediction?.modelTrainedAt}
+      />
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
       <EarningsCallsSection calls={research?.earningsCalls} />
@@ -1064,6 +1102,145 @@ function DebtTable({
         })}
       </ul>
     </div>
+  );
+}
+
+function ModelPerformanceSection({
+  backtest,
+  modelTrainedAt,
+}: {
+  backtest: BacktestResult | undefined;
+  modelTrainedAt?: string | null;
+}) {
+  if (!backtest || !backtest.samples) return null;
+
+  const fmtPct = (value: number | null | undefined): string => {
+    if (value == null || Number.isNaN(value)) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}%`;
+  };
+
+  const fmtScore = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    return value.toFixed(3);
+  };
+
+  const accuracyPct = backtest.accuracy != null ? backtest.accuracy * 100 : null;
+  const accuracyColor =
+    accuracyPct == null
+      ? "text-slate-400"
+      : accuracyPct >= 55
+      ? "text-bergt-green"
+      : accuracyPct >= 50
+      ? "text-slate-300"
+      : "text-red-300";
+  const strategyEdge =
+    backtest.strategyReturnPct != null && backtest.buyHoldReturnPct != null
+      ? backtest.strategyReturnPct - backtest.buyHoldReturnPct
+      : null;
+  const strategyColor =
+    strategyEdge == null
+      ? "text-slate-400"
+      : strategyEdge > 0
+      ? "text-bergt-green"
+      : "text-red-300";
+
+  return (
+    <section className="card space-y-3" data-testid="model-performance-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Model performance
+        </h2>
+        <p className="text-xs text-slate-500">
+          Walk-forward backtest of the persisted predictor over the last{" "}
+          {backtest.samples} predicted bars
+          {modelTrainedAt ? ` · model retrained ${new Date(modelTrainedAt).toLocaleString()}` : ""}.
+        </p>
+      </header>
+
+      <dl className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Direction accuracy
+          </dt>
+          <dd className={`mt-1 font-mono text-base ${accuracyColor}`}>
+            {accuracyPct != null ? `${accuracyPct.toFixed(1)}%` : "—"}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            AUC {fmtScore(backtest.auc)} · Brier {fmtScore(backtest.brierScore)}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Strategy vs buy-hold
+          </dt>
+          <dd className={`mt-1 font-mono text-base ${strategyColor}`}>
+            {fmtPct(strategyEdge)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            Strategy {fmtPct(backtest.strategyReturnPct)} · Hold {fmtPct(backtest.buyHoldReturnPct)}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Backtest setup
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {backtest.trainWindow ?? "—"} train / {backtest.step ?? "—"} step
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {backtest.samples} predicted bars
+          </dd>
+        </div>
+      </dl>
+
+      {backtest.reliability && backtest.reliability.length > 0 ? (
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500">
+            Confidence calibration
+          </h3>
+          <p className="text-[10px] text-slate-500">
+            Predicted P(UP) bucket vs actual UP-rate. A well-calibrated model has
+            actual ≈ predicted across buckets.
+          </p>
+          <table className="mt-2 w-full text-left text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1">P(UP) bucket</th>
+                <th className="text-right">Predictions</th>
+                <th className="text-right">Actual UP rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {backtest.reliability
+                .filter((b) => b.count > 0)
+                .map((b) => {
+                  const expected = b.predictedMid * 100;
+                  const actual = b.actualUpRate != null ? b.actualUpRate * 100 : null;
+                  const drift = actual != null ? actual - expected : null;
+                  const driftColor =
+                    drift == null
+                      ? "text-slate-400"
+                      : Math.abs(drift) <= 5
+                      ? "text-bergt-green"
+                      : Math.abs(drift) <= 15
+                      ? "text-slate-300"
+                      : "text-red-300";
+                  return (
+                    <tr key={b.bucket} className="border-t border-slate-800">
+                      <td className="py-1 font-mono">{b.bucket}</td>
+                      <td className="text-right">{b.count}</td>
+                      <td className={`text-right ${driftColor}`}>
+                        {actual != null ? `${actual.toFixed(1)}%` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

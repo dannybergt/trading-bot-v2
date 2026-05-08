@@ -14,9 +14,16 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution + Welle 10
+## Naechster Einstieg 2026-05-09: Audit-Log + Reconciliation, dann Phase 4
 
-Sitzung 2026-05-08 hat alle bisherigen Bauteile abgeschlossen:
+Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung den ersten Phase-4-Vorbedingungs-Block geliefert:
+
+- **ML-Persistenz**: per-Symbol-Modell auf Disk unter `state/runtime/data/ml_models/`, Memory+Disk-Cache (1h+24h TTL), `_get_or_train_predictor` ersetzt das bisherige on-the-fly-Training
+- **Backtest-Framework**: `backtest_service.run_backtest` mit Walk-Forward-Loop, Accuracy/AUC/Brier-Score/Strategy-vs-Buy-Hold/10-Bucket-Reliability. Endpoint `GET /api/research/{symbol}/backtest`. Frontend `ModelPerformanceSection`
+
+Damit ist die wichtigste Frage "ist das Modell besser als Buy-Hold und sind die Confidence-Werte kalibriert?" beantwortbar. Naechste Phase-4-Vorbedingung:
+
+
 
 - Phase 3 Paper-Trading **komplett** (vier Schnitte: Erststand, Background-Fill+Chart-Marker+Recommendation-Verlinkung, asset-spezifische Slippage, dynamische Slippage + Fee-Multipliers)
 - Datenbasis-Wellen 1-8: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, FinBERT-Premium-Schalter (opt-in), Twelve Data fuer Non-US
