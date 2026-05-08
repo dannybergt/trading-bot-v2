@@ -15,6 +15,8 @@ COPY src/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/backend/ /app/
+# In-app help/doc markdown sources — read by docs_service at request time.
+COPY docs/inapp/ /app/docs/inapp/
 
 RUN mkdir -p /app/data && \
     useradd -m appuser && \

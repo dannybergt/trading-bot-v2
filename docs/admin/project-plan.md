@@ -146,10 +146,23 @@ Bereits umgesetzt (ML-Persistenz + Backtest, 2026-05-08, Phase-4-Vorbedingung):
 - Per-Symbol-Modell-Persistenz: `app/ml_persistence.py` mit XGBoost-JSON unter `state/runtime/data/ml_models/<SYMBOL>.json` plus `<SYMBOL>.meta.json`. Default-TTL 24 h. `MarketDataService._get_or_train_predictor(symbol, df)` checkt Memory-Cache (1h) → Disk → Train+Persist. Damit lernt das Modell von Tag zu Tag, statt bei jedem Request neu zu starten
 - Walk-Forward-Backtest-Framework: `app/backtest_service.py::run_backtest(df, train_window, step)` trainiert in Slots, sammelt Predictions, berechnet Accuracy, Mann-Whitney-AUC, Brier-Score, Strategy-vs-Buy-Hold-Cum-Return und 10-Bucket-Reliability-Tabelle fuer Confidence-Calibration. Endpoint `GET /api/research/{symbol}/backtest`. Frontend `ModelPerformanceSection` auf `/analysis/<symbol>`
 
+Bereits umgesetzt (Audit-Log + Daily-Re-Train, 2026-05-08, Phase-4-Vorbedingung):
+
+- `audit_events`-Tabelle (Alembic 0005), `app/audit_service.log_event` mit 14 Hooks an sensitiven Endpoints (auth, settings, paper-orders, backups, admin-user-ops). Identifizierende Werte als 16-char-SHA256-Fingerprint. Admin-Endpoint `GET /api/admin/audit-events` mit pagination. Backup/Export/Import deckt audit_events mit
+- Background-Task `ml_retrain_task` (1h Intervall) refreshed stale persistierte Predictors proaktiv
+
+Bereits umgesetzt (In-App-Hilfe + Doku, 2026-05-08):
+
+- `docs/inapp/<topic>.md` als Quelle. Endpoints `GET /api/docs/topics` und `GET /api/docs/{slug}` (no-auth, defensiv gegen Path-Escapes). Frontend `HelpDrawer` (?-Button im Layout, kontextueller Slide-Over fuer die aktuelle Page) plus `/docs` Route mit Side-Nav + Markdown-Rendering via lazy-loaded react-markdown + remark-gfm. 9 Markdown-Topics initial (getting-started, dashboard, watchlists, scanner, analysis, alerts, paper-trading, settings, admin). Default EN; DE-Uebersetzungen als spaetere Welle
+
 Naechste Wellen (priorisiert):
 
-- Welle 9 (optional): FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage damit Premium-Nutzer ein vorgewaermtes Image ziehen koennen
-- Welle 10 (offen): SEC-Filings (10-K/10-Q/8-K) ueber FMP `/sec_filings`, Macro-Calendar (Fed-/CPI-/Jobs-Termine) ueber FRED, Insider-Cluster-Detection
+- **Welle 9 — News-Hub**: dedizierter Menuepunkt `/news` mit chronologischer Liste aller Nachrichten ueber alle Watchlist-Symbole hinweg. Aggregiert Alpaca + FMP + Alpha-Vantage (vorhanden) plus zusaetzliche RSS-Feeds (boerse.de, ariva.de, reuters/bloomberg-RSS). Filterbar nach Symbol, Quelle, Sentiment und Zeitfenster. VADER-Score pro Item. Pagination + Source-Filter-Dropdown
+- **Welle 10 — Security-Welle**: Container-Image-Vulnerability-Scan (trivy/grype als CI-Step), CSP/HSTS-Header auf Frontend, Upload-MIME-Validation + Size-Limits fuer Backup-Imports, Per-User-Rate-Limit fuer Login (heute global). Echtes Anti-Malware (Binary-Scan) erst wenn Binary-Uploads kommen
+- **Welle 11 — Android (PWA-First-Strategie)**: Phase A = Manifest + Service-Worker fuer "Installierbar auf Homescreen", offline-Fallback (~1-2 Tage). Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth (~3-5 Tage). Phase C = React-Native nur wenn UX-Anforderungen das wirklich brauchen
+- **Welle 12 — DE-Uebersetzungen** der sechs neuen Sektionen + neuen Doku-Topics: ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance + alle 9 Markdown-Topics
+- **Welle 13 (optional)** — FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage
+- **Welle 14 — Datenbasis-Tiefe**: SEC-Filings (10-K/10-Q/8-K) ueber FMP, Macro-Calendar (Fed/CPI/Jobs) ueber FRED, Insider-Cluster-Detection, Sektor-/Index-Relativstaerke (SPY/QQQ/XLK/XLF/XLE), Korrelations-/Beta-zu-Benchmark, Yield-Curve-Spread (2Y/10Y), Commodities (Oil/Gold)
 
 ### Phase 3: Paper-Trading
 
@@ -188,11 +201,13 @@ Status: bewusst spaeter.
 
 Vorbedingungen:
 
-- Phase-2-Empfehlungen vollstaendig (Auto-Support/Resistance, Fundamentals-Tiefe, Erklaerbarkeit gepraegt)
-- Phase 3 Paper-Trading stabil mit Net-Yield-Gate verifiziert
-- Risk-Modell, Limits, Budgetsteuerung und Audit-Logs belastbar
-- manuelle Freigabelogik und Not-Aus vorhanden
-- Broker-Fehlerpfade und Recovery getestet
+- Phase-2-Empfehlungen vollstaendig (Auto-Support/Resistance, Fundamentals-Tiefe, Erklaerbarkeit gepraegt) — erfuellt
+- Phase 3 Paper-Trading stabil mit Net-Yield-Gate verifiziert — erfuellt
+- ML-Persistenz + Backtest-Framework (Modell-Validierung gegen historische Daten) — erfuellt am 2026-05-08
+- Audit-Trail in eigener DB-Tabelle, im Backup mitgefuehrt — erfuellt am 2026-05-08
+- Risk-Modell, Limits, Budgetsteuerung — offen, Phase-4-Block 1
+- manuelle Freigabelogik und Not-Aus — offen, Phase-4-Block 2
+- Broker-Fehlerpfade und Recovery (Order-Reconciliation gegen Alpaca) — offen, Phase-4-Block 3
 - Auto-Trade darf nur ausloesen, wenn die Empfehlung den Net-Yield-Gate erfuellt UND der Nutzer den Asset/Strategie-Korridor explizit freigegeben hat
 
 ## UX-Direktive
@@ -248,11 +263,17 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 ## Naechste Prioritaeten
 
-1. Frontend-UI-Regression auf neue React-Selektoren umschreiben.
-2. Frontend-Dockerfile-Swap (`ops/docker/frontend.Dockerfile`) auf Vite-Multi-Stage-Build, Bundle entfernen.
-3. Phase-2-Tiefe (optional vor Phase 3): breitere Fundamentals (Cashflow, Debt, Guidance, Ratings).
-4. Phase 3 Paper-Trading sauber modellieren — Order-Lebenszyklus, Transaktionsjournal, PnL, Net-Yield-Gate als Filter.
-5. Phase 4 Auto-Execution erst nach Paper-Trading-Stabilitaet und Risk-Hardening.
+Stand 2026-05-08 nach Abschluss von Phase 3, allen acht Datenbasis-Wellen, ML-Persistenz/Backtest, Audit-Log, In-App-Hilfe:
+
+1. **Welle 9 — News-Hub** (`/news`-Page, chronologisch ueber alle Watchlist-Symbole, RSS-Quellen wie boerse.de/ariva.de/Reuters dazu)
+2. **Welle 10 — Security-Welle** (Container-Image-Scan in CI, CSP/HSTS-Header, Upload-MIME-Validation, Per-User-Login-Rate-Limit)
+3. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
+4. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
+5. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 9-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+6. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
+7. Welle 14 (Datenbasis-Tiefe): SEC-Filings, FRED-Calendar, Insider-Cluster, Sektor-Relativstaerke, Korrelations-/Beta-Tabellen, Yield-Curve-Spread, Commodities
+
+Erfuellte Phase-4-Vorbedingungen (Phase 3 + ML-Persistenz + Backtest + Audit-Trail) muessen jetzt nicht mehr neu eroertert werden.
 
 ## Entscheidungsregel
 

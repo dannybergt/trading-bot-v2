@@ -14,14 +14,34 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Audit-Log + Reconciliation, dann Phase 4
+## Naechster Einstieg 2026-05-09: News-Hub-Welle 9
 
-Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung den ersten Phase-4-Vorbedingungs-Block geliefert:
+Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert:
 
-- **ML-Persistenz**: per-Symbol-Modell auf Disk unter `state/runtime/data/ml_models/`, Memory+Disk-Cache (1h+24h TTL), `_get_or_train_predictor` ersetzt das bisherige on-the-fly-Training
-- **Backtest-Framework**: `backtest_service.run_backtest` mit Walk-Forward-Loop, Accuracy/AUC/Brier-Score/Strategy-vs-Buy-Hold/10-Bucket-Reliability. Endpoint `GET /api/research/{symbol}/backtest`. Frontend `ModelPerformanceSection`
+- **ML-Persistenz + Backtest** (Phase-4-Vorbedingung)
+- **Audit-Log + Daily-Re-Train-Task** (Phase-4-Vorbedingung)
+- **In-App-Hilfe + Online-Doku** auf direkten User-Wunsch
 
-Damit ist die wichtigste Frage "ist das Modell besser als Buy-Hold und sind die Confidence-Werte kalibriert?" beantwortbar. Naechste Phase-4-Vorbedingung:
+User hat zusaetzlich diese drei Themen aufgemacht und in den Plan aufgenommen:
+
+- **Welle 9**: dedizierter News-Hub `/news` (Menuepunkt, chronologisch, alle Quellen inkl. RSS-Feeds wie boerse.de/ariva.de/Reuters)
+- **Welle 10**: Security-Welle (Container-Image-Scan, CSP/HSTS, Upload-MIME-Validation, Per-User-Login-Rate-Limit)
+- **Welle 11**: Android via PWA (Phase A: Manifest+Service-Worker; Phase B: Capacitor+Biometric)
+
+Naechster konkreter Schnitt = **Welle 9 News-Hub**:
+
+1. Backend: neuer `GET /api/news/feed?limit=&offset=&symbol=&source=&sentiment=&since=` aggregiert Alpaca-News + FMP-News + Alpha-Vantage-NEWS_SENTIMENT-Items ueber alle Watchlist-Symbole, plus optional ein paar RSS-Feeds (boerse.de, ariva.de, Reuters). Modul-Cache 5 min, sortiert by Timestamp desc.
+2. RSS-Adapter `app/rss_news_service.py`: parsed RSS-Feeds (z.B. via `feedparser` oder selbst XML), normalisiert auf das gleiche News-Item-Format (title, summary, url, source, timestamp, score, label). VADER auf Title+Summary fuer Sentiment.
+3. Frontend `NewsHubPage` (`/news`): chronologische Liste, Filter-Dropdowns (Symbol, Source, Sentiment, Time-Window), Pagination. Per-Item Sentiment-Badge.
+4. Layout-Nav-Eintrag "News".
+5. Help-Topic `news.md` mit Erklaerung der Quellen + Filter.
+
+Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
+
+- `docs/admin/project-plan.md` Stand 2026-05-08 + "Naechste Prioritaeten" + "Phase 4"
+- `state/decisions.md` letzte vier Decision-Bloecke (In-App-Hilfe, Audit, ML-Persistenz, Phase-3-Slippage)
+- `src/backend/app/services.py::MarketDataService.get_market_news` als Pattern fuer den Aggregator
+- `docs/inapp/*.md` als Vorlage fuer das neue news.md
 
 
 

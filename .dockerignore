@@ -3,5 +3,6 @@
 .env
 .env.local
 docs
+!docs/inapp
 state
 tests

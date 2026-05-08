@@ -23,6 +23,11 @@ const AnalysisPage = lazy(() =>
 const AdminPage = lazy(() =>
   import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })),
 );
+// DocsPage pulls in react-markdown + remark-gfm — lazy so the docs
+// dependency stack only loads when the user actually opens help.
+const DocsPage = lazy(() =>
+  import("./pages/DocsPage").then((m) => ({ default: m.DocsPage })),
+);
 
 function ChartFallback() {
   return (
@@ -68,6 +73,22 @@ function App() {
         />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/paper-trading" element={<PaperTradingPage />} />
+        <Route
+          path="/docs"
+          element={
+            <Suspense fallback={<ChartFallback />}>
+              <DocsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/docs/:slug"
+          element={
+            <Suspense fallback={<ChartFallback />}>
+              <DocsPage />
+            </Suspense>
+          }
+        />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/admin"

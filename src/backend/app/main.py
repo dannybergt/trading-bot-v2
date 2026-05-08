@@ -31,7 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
-from app import audit_service, backtest_service
+from app import audit_service, backtest_service, docs_service
 from app.coingecko_service import get_coingecko_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
@@ -1250,6 +1250,24 @@ class OrderRequest(BaseModel):
 @app.get("/")
 def read_root():
     return {"status": "online", "message": "AI Trading Bot Backend V2"}
+
+@app.get("/api/docs/topics")
+def list_doc_topics():
+    """Public list of in-app help topics. No auth — the docs are
+    descriptive, not sensitive."""
+    return {
+        "topics": docs_service.list_topics(),
+        "pageMap": docs_service.get_page_to_topic_map(),
+    }
+
+
+@app.get("/api/docs/{slug}")
+def get_doc_topic(slug: str):
+    topic = docs_service.get_topic(slug)
+    if topic is None:
+        raise HTTPException(status_code=404, detail="Doc topic not found")
+    return topic
+
 
 @app.get("/api/health")
 def health_check():

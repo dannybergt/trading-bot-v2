@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../auth/AuthContext";
+import { HelpDrawer } from "./HelpDrawer";
 import { LanguageToggle } from "./LanguageToggle";
 
 type NavLinkSpec = {
@@ -17,6 +18,7 @@ const NAV_LINKS: NavLinkSpec[] = [
   { to: "/scanner", labelKey: "nav.scanner" },
   { to: "/alerts", labelKey: "nav.alerts" },
   { to: "/paper-trading", labelKey: "nav.paperTrading" },
+  { to: "/docs", labelKey: "nav.docs" },
   { to: "/settings", labelKey: "nav.settings" },
   { to: "/onboarding", labelKey: "nav.setup" },
   { to: "/admin", labelKey: "nav.admin", adminOnly: true },
@@ -57,6 +59,7 @@ export function Layout() {
             ))}
           </nav>
           <div className="flex items-center gap-3 text-sm text-slate-400">
+            <HelpDrawer />
             <LanguageToggle compact />
             {user ? (
               <>
