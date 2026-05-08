@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "../api/client";
 
@@ -66,12 +67,6 @@ function fmtUsd(value: number | null | undefined): string {
   return `$${value.toFixed(2)}`;
 }
 
-const directionLabel: Record<InsiderCluster["direction"], string> = {
-  buy_cluster: "Buy cluster",
-  sell_cluster: "Sell cluster",
-  mixed: "Mixed",
-};
-
 const directionClass: Record<InsiderCluster["direction"], string> = {
   buy_cluster: "border-bergt-green/40 bg-bergt-green/10 text-bergt-green",
   sell_cluster: "border-red-700/50 bg-red-900/40 text-red-200",
@@ -79,6 +74,12 @@ const directionClass: Record<InsiderCluster["direction"], string> = {
 };
 
 export function DiscoverPage() {
+  const { t } = useTranslation();
+  const directionLabel: Record<InsiderCluster["direction"], string> = {
+    buy_cluster: t("discover.clusters.labelBuy"),
+    sell_cluster: t("discover.clusters.labelSell"),
+    mixed: t("discover.clusters.labelMixed"),
+  };
   const query = useQuery({
     queryKey: ["discover-dashboard"],
     queryFn: () => apiFetch<DiscoveryDashboard>("/api/discover"),
@@ -93,29 +94,21 @@ export function DiscoverPage() {
   return (
     <div className="space-y-6" data-testid="discover-page">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Discover</h1>
-        <p className="text-sm text-slate-400">
-          Tickers worth a closer look — trending in the news right now, biggest
-          movers today, and insider activity clusters from the last 90 days. Click any
-          symbol to jump into its analysis page.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("discover.title")}</h1>
+        <p className="text-sm text-slate-400">{t("discover.subtitle")}</p>
       </header>
 
-      {query.isLoading ? <p className="text-sm text-slate-400">Loading discovery feed…</p> : null}
+      {query.isLoading ? <p className="text-sm text-slate-400">{t("discover.loading")}</p> : null}
 
       <section className="card space-y-3" data-testid="discover-trending">
         <header>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Trending in the news
+            {t("discover.trending.title")}
           </h2>
-          <p className="text-xs text-slate-500">
-            Symbols mentioned in the global news feed over the last 24 h, ranked by mention
-            count. The trend percent compares against the previous 6-day baseline; the
-            sentiment-burst delta tells you whether the chatter is shifting bullish or bearish.
-          </p>
+          <p className="text-xs text-slate-500">{t("discover.trending.subtitle")}</p>
         </header>
         {trending.length === 0 ? (
-          <p className="text-xs text-slate-500">No trending tickers in the last news cycle.</p>
+          <p className="text-xs text-slate-500">{t("discover.trending.empty")}</p>
         ) : (
           <table className="w-full text-left text-xs">
             <thead className="text-slate-500">
@@ -177,12 +170,9 @@ export function DiscoverPage() {
       <section className="card space-y-3" data-testid="discover-movers">
         <header>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Top movers today
+            {t("discover.movers.title")}
           </h2>
-          <p className="text-xs text-slate-500">
-            Today's gainers, losers, and most-active US tickers (FMP). The most-active
-            column is a useful starting point for unusual-volume scenarios.
-          </p>
+          <p className="text-xs text-slate-500">{t("discover.movers.subtitle")}</p>
         </header>
         <div className="grid gap-3 md:grid-cols-3">
           {(["gainers", "losers", "actives"] as const).map((bucket) => (
@@ -218,7 +208,7 @@ export function DiscoverPage() {
                   </li>
                 ))}
                 {(movers[bucket] ?? []).length === 0 ? (
-                  <li className="text-slate-500">No data — FMP unconfigured?</li>
+                  <li className="text-slate-500">{t("discover.movers.noData")}</li>
                 ) : null}
               </ul>
             </div>
@@ -229,19 +219,12 @@ export function DiscoverPage() {
       <section className="card space-y-3" data-testid="discover-clusters">
         <header>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Insider clusters
+            {t("discover.clusters.title")}
           </h2>
-          <p className="text-xs text-slate-500">
-            Symbols where 3+ unique insiders filed transactions in the last 90 days,
-            ranked by insider count and absolute net value. A "buy cluster" with a
-            large positive net value is one of the strongest non-public signals
-            you can read.
-          </p>
+          <p className="text-xs text-slate-500">{t("discover.clusters.subtitle")}</p>
         </header>
         {clusters.length === 0 ? (
-          <p className="text-xs text-slate-500">
-            No insider clusters in the last 90 days — or FMP unconfigured.
-          </p>
+          <p className="text-xs text-slate-500">{t("discover.clusters.empty")}</p>
         ) : (
           <table className="w-full text-left text-xs">
             <thead className="text-slate-500">

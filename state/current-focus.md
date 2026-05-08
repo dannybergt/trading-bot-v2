@@ -14,26 +14,39 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Welle 12 DE-Uebersetzungen
+## Port-Disziplin (Pflicht ab 2026-05-08)
 
-Sitzung 2026-05-08 hat geliefert (in dieser Reihenfolge):
+Es laufen mehrere Claude-Agents parallel auf demselben Docker-Daemon. **Vor jedem Compose-/Regression-Lauf** zuerst pruefen:
 
-- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub, **Data-Source-Transparency** (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters, **Welle 10 Security-Welle** (Trivy, CSP/HSTS, Upload-MIME, Per-Account-Rate-Limit), **Welle 11 Phase A Android via PWA** (Manifest + Service-Worker + Offline-Caching + Install-Prompt).
+```bash
+docker ps --format '{{.Names}} {{.Ports}}' | grep -E '180[89]|181[0-9]{2}'
+```
 
-Naechste sinnvolle Schnitte:
+Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars umlenken statt fremde Stacks zu killen:
 
-**Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen (ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance, NewsHubPage, DiscoverPage, DataQualitySection, HelpDrawer, DocsPage, PwaUpdatePrompt) plus die 12 Markdown-Topics in `docs/inapp/`. i18n-Pattern existiert schon (PaperTradingPage komplett DE/EN), Vorlage ist bereit.
+- `BACKEND_PORT` / `FRONTEND_PORT` fuer den lokalen Devstack (Default 18090 / 18094)
+- `PRIMARY_BACKEND_PORT` / `PRIMARY_FRONTEND_PORT` fuer `tests/run-api-regression.sh` und `tests/run-ui-regression.sh` (Default 18150/18154)
+- `RESTORE_BACKEND_PORT` / `RESTORE_FRONTEND_PORT` fuer `tests/run-upgrade-rehearsal.sh` (Default 18160/18164)
 
-**Phase 4 Auto-Execution** beginnt erst NACH Welle 12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
+Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-**Welle 11 Phase B** (Capacitor + Biometric + App-Store) bleibt zurueckgestellt bis echter Native-App-Bedarf entsteht.
+## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution oder Welle 14
+
+Welle 12 (DE-Uebersetzungen) ist abgeschlossen und in `main` (Frontend-Bundle 132 KB gz). Damit sind alle 12 vorab gezogenen Wellen ausgeliefert. Wahl-Frage an den User beim naechsten Resume:
+
+- **A) Phase 4 Auto-Execution** — Risk-Modell (`auto_execution_limits` + `auto_execution_events`), manuelle Freigabe-Logik (Default off, Bestaetigungs-Dialog, Net-Yield-Gate UND Risk-Modell), Not-Aus (`POST /api/auto-execution/halt`) und Order-Reconciliation gegen Alpaca.
+- **B) Welle 14 Datenbasis-Tiefe** — SEC-Filings (10-K/10-Q/8-K via FMP), Macro-Calendar via FRED (Fed Funds, CPI, NFP), Sektor-/Index-Relativstaerke (SPY/QQQ/XLK/XLF/XLE), Korrelations-/Beta-zu-Benchmark, Yield-Curve-Spread (2Y/10Y), Commodities (Oil/Gold).
+- **C) Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
+- **D) Welle 11 Phase B** — Capacitor + Biometric + App-Store (zurueckgestellt bis echter Native-App-Bedarf).
+
+Empfehlung: **B vor A**. Phase 4 ist der gefaehrliche Block und profitiert von noch besserer Datenbasis. SEC-Filings + Macro-Calendar liefern dann auch konkrete Auto-Execution-Halt-Trigger ("Earnings naeher als 24h", "FOMC-Tag heute").
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Sektion "Naechste Prioritaeten" und "Phase 4"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 (Welle 9b, Data-Source-Transparency, Welle 9a, In-App-Hilfe)
-- `.github/workflows/` als Stelle fuer trivy-Image-Scan-Integration
-- `src/frontend/src/i18n/de.json` und `en.json` als bestehende Uebersetzungs-Quelle
+- `docs/admin/project-plan.md` Sektion "Naechste Prioritaeten" + "Phase 4" + "Sicherheitsachsen"
+- `state/decisions.md` Decision-Bloecke 2026-05-08 (Welle 12, Welle 11, Welle 10, Welle 9b, Data-Source-Transparency, Welle 9a, In-App-Hilfe)
+- `src/backend/app/paper_trading.py` als Pattern-Referenz (Order-Lifecycle, Net-Yield-Gate) fuer Phase-4-Auto-Execution
+- `src/backend/app/alpaca_service.py::submit_order` als Broker-Pfad fuer echte Auto-Trades
 
 
 

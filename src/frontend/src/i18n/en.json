@@ -198,5 +198,121 @@
       "openPositions": "Open positions",
       "transactionCount": "Transactions"
     }
+  },
+  "analysis": {
+    "modelPerformance": {
+      "title": "Model performance",
+      "subtitle": "Walk-forward backtest of the persisted predictor over the last {{count}} predicted bars{{trained}}.",
+      "trainedAt": " · model retrained {{when}}",
+      "directionAccuracy": "Direction accuracy",
+      "strategyVsHold": "Strategy vs buy-hold",
+      "backtestSetup": "Backtest setup",
+      "calibration": "Confidence calibration",
+      "calibrationHint": "Predicted P(UP) bucket vs actual UP-rate. A well-calibrated model has actual ≈ predicted across buckets."
+    },
+    "dataQuality": {
+      "title": "Data quality",
+      "subtitle": "Which provider answered for which field. The recommendation rests on this — the badge below the prediction reflects the same overall confidence.",
+      "overallPrefix": "Overall confidence",
+      "upgradeHints": "Upgrade hints — these would improve the data foundation for this symbol"
+    },
+    "researchSignals": {
+      "title": "Research signals",
+      "subtitle": "Insider activity, institutional ownership, earnings beat history, next earnings."
+    },
+    "earningsCalls": {
+      "title": "Earnings call digest",
+      "subtitle": "VADER-scored summary of the most recent transcripts (FMP). Each card shows the highest- and lowest-scoring sentence as concrete quotes.",
+      "mostPositive": "Most positive",
+      "mostNegative": "Most negative",
+      "noSnippets": "Transcript scored {{score}} but no eligible sentences passed the snippet filter."
+    },
+    "macroContext": {
+      "title": "Macro context",
+      "subtitle": "Market-wide weather report. Read every per-symbol signal in this context."
+    },
+    "cryptoMetrics": {
+      "title": "Crypto metrics",
+      "subtitle": "Market depth, ATH/ATL distance, developer + community activity (CoinGecko)."
+    },
+    "socialSentiment": {
+      "title": "Retail sentiment",
+      "subtitle": "Combined StockTwits + Reddit chatter from the last 24 hours."
+    },
+    "optionsFlow": {
+      "title": "Options flow",
+      "subtitleExpiry": "Nearest expiry {{expiry}} · spot {{spot}}",
+      "skewBullish": "Bullish skew",
+      "skewBearish": "Bearish skew",
+      "skewNeutral": "Neutral"
+    }
+  },
+  "news": {
+    "title": "News hub",
+    "subtitle": "Headlines from every configured provider — Alpaca + FMP + Alpha Vantage news plus curated RSS feeds (boerse.de, ariva.de, Reuters). Filter by source, sentiment, time window, or symbol to find new tickers worth a closer look.",
+    "filters": {
+      "source": "Source",
+      "sourceAll": "All providers",
+      "sentiment": "Sentiment",
+      "sentimentAny": "Any",
+      "sentimentBullish": "Bullish",
+      "sentimentBearish": "Bearish",
+      "sentimentNeutral": "Neutral",
+      "timeWindow": "Time window",
+      "windowAny": "Any time",
+      "window1h": "Last 1h",
+      "window6h": "Last 6h",
+      "window24h": "Last 24h",
+      "window3d": "Last 3d",
+      "window7d": "Last 7d",
+      "symbolContains": "Symbol contains"
+    },
+    "loading": "Loading…",
+    "matchSummary": "{{count}} items match the filters · sources active: {{sources}}",
+    "empty": "No news matches the current filters.",
+    "newer": "← Newer",
+    "older": "Older →",
+    "showing": "Showing {{from}}–{{to}} of {{total}}"
+  },
+  "discover": {
+    "title": "Discover",
+    "subtitle": "Tickers worth a closer look — trending in the news right now, biggest movers today, and insider activity clusters from the last 90 days. Click any symbol to jump into its analysis page.",
+    "loading": "Loading discovery feed…",
+    "trending": {
+      "title": "Trending in the news",
+      "subtitle": "Symbols mentioned in the global news feed over the last 24 h, ranked by mention count. The trend percent compares against the previous 6-day baseline; the sentiment-burst delta tells you whether the chatter is shifting bullish or bearish.",
+      "empty": "No trending tickers in the last news cycle."
+    },
+    "movers": {
+      "title": "Top movers today",
+      "subtitle": "Today's gainers, losers, and most-active US tickers (FMP). The most-active column doubles as a starting point for unusual-volume scenarios.",
+      "noData": "No data — FMP unconfigured?"
+    },
+    "clusters": {
+      "title": "Insider clusters",
+      "subtitle": "Symbols where 3+ unique insiders filed transactions in the last 90 days, ranked by insider count and absolute net value. A \"buy cluster\" with a large positive net value is one of the strongest non-public signals you can read.",
+      "empty": "No insider clusters in the last 90 days — or FMP unconfigured.",
+      "labelBuy": "Buy cluster",
+      "labelSell": "Sell cluster",
+      "labelMixed": "Mixed"
+    }
+  },
+  "docs": {
+    "drawerTitle": "Help",
+    "openFull": "Open the full documentation →",
+    "close": "Close",
+    "loading": "Loading…",
+    "missing": "This documentation page is missing.",
+    "noTopic": "No help available for this page yet.",
+    "loadError": "Could not load help.",
+    "back": "Back to overview",
+    "sidebarTitle": "Documentation"
+  },
+  "pwa": {
+    "updateAvailable": "A new version of NexusPulse Trade is ready.",
+    "reload": "Reload",
+    "later": "Later",
+    "offlineReady": "App ready to work offline.",
+    "ok": "OK"
   }
 }

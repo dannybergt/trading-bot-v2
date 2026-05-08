@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "../api/client";
 
@@ -25,13 +26,13 @@ type FeedResponse = {
 
 type SentimentFilter = "" | "bullish" | "bearish" | "neutral";
 
-const TIME_WINDOWS: Array<{ value: string; label: string }> = [
-  { value: "", label: "Any time" },
-  { value: "1h", label: "Last 1h" },
-  { value: "6h", label: "Last 6h" },
-  { value: "24h", label: "Last 24h" },
-  { value: "3d", label: "Last 3d" },
-  { value: "7d", label: "Last 7d" },
+const TIME_WINDOW_KEYS: Array<{ value: string; key: string }> = [
+  { value: "", key: "news.filters.windowAny" },
+  { value: "1h", key: "news.filters.window1h" },
+  { value: "6h", key: "news.filters.window6h" },
+  { value: "24h", key: "news.filters.window24h" },
+  { value: "3d", key: "news.filters.window3d" },
+  { value: "7d", key: "news.filters.window7d" },
 ];
 
 function windowToSinceIso(value: string): string | undefined {
@@ -71,6 +72,7 @@ function sentimentClass(label: string | null | undefined): string {
 const PAGE_SIZE = 50;
 
 export function NewsHubPage() {
+  const { t } = useTranslation();
   const [source, setSource] = useState("");
   const [sentiment, setSentiment] = useState<SentimentFilter>("");
   const [timeWindow, setTimeWindow] = useState("");
@@ -107,18 +109,14 @@ export function NewsHubPage() {
   return (
     <div className="space-y-4" data-testid="news-hub-page">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">News hub</h1>
-        <p className="text-sm text-slate-400">
-          Headlines from every configured provider — Alpaca + FMP + Alpha Vantage news
-          plus curated RSS feeds (boerse.de, ariva.de, Reuters). Filter by source,
-          sentiment, time window, or symbol to find new tickers worth a closer look.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("news.title")}</h1>
+        <p className="text-sm text-slate-400">{t("news.subtitle")}</p>
       </header>
 
       <section className="card space-y-3">
         <div className="grid gap-3 md:grid-cols-4">
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">Source</span>
+            <span className="text-slate-400">{t("news.filters.source")}</span>
             <select
               className="input"
               value={source}
@@ -127,14 +125,14 @@ export function NewsHubPage() {
                 setOffset(0);
               }}
             >
-              <option value="">All providers</option>
+              <option value="">{t("news.filters.sourceAll")}</option>
               <option value="fmp">FMP</option>
               <option value="alpha_vantage">Alpha Vantage</option>
               <option value="rss">RSS feeds</option>
             </select>
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">Sentiment</span>
+            <span className="text-slate-400">{t("news.filters.sentiment")}</span>
             <select
               className="input"
               value={sentiment}
@@ -143,14 +141,14 @@ export function NewsHubPage() {
                 setOffset(0);
               }}
             >
-              <option value="">Any</option>
-              <option value="bullish">Bullish</option>
-              <option value="bearish">Bearish</option>
-              <option value="neutral">Neutral</option>
+              <option value="">{t("news.filters.sentimentAny")}</option>
+              <option value="bullish">{t("news.filters.sentimentBullish")}</option>
+              <option value="bearish">{t("news.filters.sentimentBearish")}</option>
+              <option value="neutral">{t("news.filters.sentimentNeutral")}</option>
             </select>
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">Time window</span>
+            <span className="text-slate-400">{t("news.filters.timeWindow")}</span>
             <select
               className="input"
               value={timeWindow}
@@ -159,15 +157,15 @@ export function NewsHubPage() {
                 setOffset(0);
               }}
             >
-              {TIME_WINDOWS.map((w) => (
+              {TIME_WINDOW_KEYS.map((w) => (
                 <option key={w.value} value={w.value}>
-                  {w.label}
+                  {t(w.key)}
                 </option>
               ))}
             </select>
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">Symbol contains</span>
+            <span className="text-slate-400">{t("news.filters.symbolContains")}</span>
             <input
               className="input"
               value={symbol}
@@ -180,13 +178,18 @@ export function NewsHubPage() {
           </label>
         </div>
         <p className="text-xs text-slate-500">
-          {feedQuery.isLoading ? "Loading…" : `${total} items match the filters · sources active: ${availableSources.join(", ") || "—"}`}
+          {feedQuery.isLoading
+            ? t("news.loading")
+            : t("news.matchSummary", {
+                count: total,
+                sources: availableSources.join(", ") || "—",
+              })}
         </p>
       </section>
 
       <section className="space-y-3" data-testid="news-hub-feed">
         {items.length === 0 && !feedQuery.isLoading ? (
-          <p className="text-sm text-slate-500">No news matches the current filters.</p>
+          <p className="text-sm text-slate-500">{t("news.empty")}</p>
         ) : null}
         {items.map((item, idx) => (
           <article key={`${item.url ?? "noUrl"}-${idx}`} className="card space-y-2">
@@ -236,10 +239,14 @@ export function NewsHubPage() {
           disabled={offset === 0}
           onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
         >
-          ← Newer
+          {t("news.newer")}
         </button>
         <span>
-          Showing {offset + 1}–{Math.min(offset + items.length, total)} of {total}
+          {t("news.showing", {
+            from: offset + 1,
+            to: Math.min(offset + items.length, total),
+            total,
+          })}
         </span>
         <button
           type="button"
@@ -247,7 +254,7 @@ export function NewsHubPage() {
           disabled={offset + PAGE_SIZE >= total}
           onClick={() => setOffset(offset + PAGE_SIZE)}
         >
-          Older →
+          {t("news.older")}
         </button>
       </nav>
     </div>

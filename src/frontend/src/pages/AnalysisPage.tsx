@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import {
@@ -590,6 +591,7 @@ export function AnalysisPage() {
 }
 
 function DataQualitySection({ report }: { report?: DataQualityReport }) {
+  const { t } = useTranslation();
   if (!report || !report.fields || report.fields.length === 0) return null;
 
   const overallClass: Record<string, string> = {
@@ -627,11 +629,10 @@ function DataQualitySection({ report }: { report?: DataQualityReport }) {
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Data quality
+            {t("analysis.dataQuality.title")}
           </h2>
           <p className="text-xs text-slate-500">
-            Which provider answered for which field. The recommendation rests on this — the
-            badge below the prediction reflects the same overall confidence.
+            {t("analysis.dataQuality.subtitle")}
           </p>
         </div>
         <span
@@ -639,7 +640,7 @@ function DataQualitySection({ report }: { report?: DataQualityReport }) {
             overallClass[report.overall]
           }`}
         >
-          Overall confidence: {report.overall}
+          {t("analysis.dataQuality.overallPrefix")}: {report.overall}
         </span>
       </header>
 
@@ -663,7 +664,7 @@ function DataQualitySection({ report }: { report?: DataQualityReport }) {
       {report.upgradeHints.length > 0 ? (
         <div className="rounded-md border border-amber-500/40 bg-amber-900/20 p-3 text-xs">
           <h3 className="text-[10px] uppercase tracking-wide text-amber-200">
-            Upgrade hints — these would improve the data foundation for this symbol
+            {t("analysis.dataQuality.upgradeHints")}
           </h3>
           <ul className="mt-2 space-y-2">
             {report.upgradeHints.map((hint) => (
@@ -1251,6 +1252,7 @@ function ModelPerformanceSection({
   backtest: BacktestResult | undefined;
   modelTrainedAt?: string | null;
 }) {
+  const { t } = useTranslation();
   if (!backtest || !backtest.samples) return null;
 
   const fmtPct = (value: number | null | undefined): string => {
@@ -1288,19 +1290,24 @@ function ModelPerformanceSection({
     <section className="card space-y-3" data-testid="model-performance-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Model performance
+          {t("analysis.modelPerformance.title")}
         </h2>
         <p className="text-xs text-slate-500">
-          Walk-forward backtest of the persisted predictor over the last{" "}
-          {backtest.samples} predicted bars
-          {modelTrainedAt ? ` · model retrained ${new Date(modelTrainedAt).toLocaleString()}` : ""}.
+          {t("analysis.modelPerformance.subtitle", {
+            count: backtest.samples,
+            trained: modelTrainedAt
+              ? t("analysis.modelPerformance.trainedAt", {
+                  when: new Date(modelTrainedAt).toLocaleString(),
+                })
+              : "",
+          })}
         </p>
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
           <dt className="text-xs uppercase tracking-wide text-slate-500">
-            Direction accuracy
+            {t("analysis.modelPerformance.directionAccuracy")}
           </dt>
           <dd className={`mt-1 font-mono text-base ${accuracyColor}`}>
             {accuracyPct != null ? `${accuracyPct.toFixed(1)}%` : "—"}
@@ -1311,7 +1318,7 @@ function ModelPerformanceSection({
         </div>
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
           <dt className="text-xs uppercase tracking-wide text-slate-500">
-            Strategy vs buy-hold
+            {t("analysis.modelPerformance.strategyVsHold")}
           </dt>
           <dd className={`mt-1 font-mono text-base ${strategyColor}`}>
             {fmtPct(strategyEdge)}
@@ -1322,7 +1329,7 @@ function ModelPerformanceSection({
         </div>
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
           <dt className="text-xs uppercase tracking-wide text-slate-500">
-            Backtest setup
+            {t("analysis.modelPerformance.backtestSetup")}
           </dt>
           <dd className="mt-1 font-mono text-base">
             {backtest.trainWindow ?? "—"} train / {backtest.step ?? "—"} step
@@ -1336,11 +1343,10 @@ function ModelPerformanceSection({
       {backtest.reliability && backtest.reliability.length > 0 ? (
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
           <h3 className="text-xs uppercase tracking-wide text-slate-500">
-            Confidence calibration
+            {t("analysis.modelPerformance.calibration")}
           </h3>
           <p className="text-[10px] text-slate-500">
-            Predicted P(UP) bucket vs actual UP-rate. A well-calibrated model has
-            actual ≈ predicted across buckets.
+            {t("analysis.modelPerformance.calibrationHint")}
           </p>
           <table className="mt-2 w-full text-left text-xs">
             <thead className="text-slate-500">
@@ -1384,6 +1390,7 @@ function ModelPerformanceSection({
 }
 
 function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefined }) {
+  const { t } = useTranslation();
   if (!signals) return null;
 
   const insiderTrades = signals.insiderTrades ?? [];
@@ -1409,11 +1416,9 @@ function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefi
     <section className="card space-y-3" data-testid="research-signals-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Research signals
+          {t("analysis.researchSignals.title")}
         </h2>
-        <p className="text-xs text-slate-500">
-          Insider activity, institutional ownership, earnings beat history, next earnings.
-        </p>
+        <p className="text-xs text-slate-500">{t("analysis.researchSignals.subtitle")}</p>
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">
@@ -1587,6 +1592,7 @@ function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefi
 }
 
 function EarningsCallsSection({ calls }: { calls: EarningsCall[] | undefined }) {
+  const { t } = useTranslation();
   if (!calls || calls.length === 0) return null;
 
   const labelClass = (label?: string | null): string => {
@@ -1605,12 +1611,9 @@ function EarningsCallsSection({ calls }: { calls: EarningsCall[] | undefined }) 
     <section className="card space-y-3" data-testid="earnings-calls-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Earnings call digest
+          {t("analysis.earningsCalls.title")}
         </h2>
-        <p className="text-xs text-slate-500">
-          VADER-scored summary of the most recent transcripts (FMP). Each card
-          shows the highest- and lowest-scoring sentence as concrete quotes.
-        </p>
+        <p className="text-xs text-slate-500">{t("analysis.earningsCalls.subtitle")}</p>
       </header>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -1665,6 +1668,7 @@ function EarningsCallsSection({ calls }: { calls: EarningsCall[] | undefined }) 
 }
 
 function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | undefined }) {
+  const { t } = useTranslation();
   if (!metrics) return null;
 
   const fmtUsd = (value: number | null | undefined): string => {
@@ -1690,11 +1694,9 @@ function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | und
     <section className="card space-y-3" data-testid="crypto-metrics-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Crypto metrics
+          {t("analysis.cryptoMetrics.title")}
         </h2>
-        <p className="text-xs text-slate-500">
-          Market depth, ATH/ATL distance, developer + community activity (CoinGecko).
-        </p>
+        <p className="text-xs text-slate-500">{t("analysis.cryptoMetrics.subtitle")}</p>
       </header>
       <dl className="grid gap-3 md:grid-cols-3">
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
@@ -1765,6 +1767,7 @@ function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | und
 }
 
 function SocialSentimentSection({ social }: { social: SocialSentiment | null | undefined }) {
+  const { t } = useTranslation();
   if (!social) return null;
   const st = social.stocktwits ?? {};
   const rd = social.reddit ?? {};
@@ -1805,11 +1808,9 @@ function SocialSentimentSection({ social }: { social: SocialSentiment | null | u
     <section className="card space-y-3" data-testid="social-sentiment-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Retail sentiment
+          {t("analysis.socialSentiment.title")}
         </h2>
-        <p className="text-xs text-slate-500">
-          Combined StockTwits + Reddit chatter from the last 24 hours.
-        </p>
+        <p className="text-xs text-slate-500">{t("analysis.socialSentiment.subtitle")}</p>
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">
@@ -1901,6 +1902,7 @@ function SocialSentimentSection({ social }: { social: SocialSentiment | null | u
 }
 
 function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) {
+  const { t } = useTranslation();
   if (!flow || !flow.expiry) return null;
   const totalActivity =
     (flow.totalCallVolume ?? 0) +
@@ -1932,9 +1934,9 @@ function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) 
   };
 
   const signalLabel: Record<string, string> = {
-    bullish_skew: "Bullish skew",
-    bearish_skew: "Bearish skew",
-    neutral: "Neutral",
+    bullish_skew: t("analysis.optionsFlow.skewBullish"),
+    bearish_skew: t("analysis.optionsFlow.skewBearish"),
+    neutral: t("analysis.optionsFlow.skewNeutral"),
   };
 
   const signalClass: Record<string, string> = {
@@ -1978,10 +1980,13 @@ function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) 
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Options flow
+            {t("analysis.optionsFlow.title")}
           </h2>
           <p className="text-xs text-slate-500">
-            Nearest expiry {flow.expiry} · spot {fmtRatio(flow.lastClose)}
+            {t("analysis.optionsFlow.subtitleExpiry", {
+              expiry: flow.expiry,
+              spot: fmtRatio(flow.lastClose),
+            })}
           </p>
         </div>
         {flow.putCallSignal ? (
@@ -2056,6 +2061,7 @@ function MacroContextSection({
   macro: MacroContext | undefined;
   fearGreed: FearGreedIndex | null | undefined;
 }) {
+  const { t } = useTranslation();
   const items: Array<[string, MacroInstrument | undefined]> = [
     ["VIX", macro?.vix],
     ["10Y Yield", macro?.yield10y],
@@ -2069,11 +2075,9 @@ function MacroContextSection({
     <section className="card space-y-2" data-testid="macro-context-section">
       <header>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-          Macro context
+          {t("analysis.macroContext.title")}
         </h2>
-        <p className="text-xs text-slate-500">
-          Market-wide weather report. Read every per-symbol signal in this context.
-        </p>
+        <p className="text-xs text-slate-500">{t("analysis.macroContext.subtitle")}</p>
       </header>
       <dl className="grid gap-3 sm:grid-cols-4">
         {items.map(([label, instr]) => {

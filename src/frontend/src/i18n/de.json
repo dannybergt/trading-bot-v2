@@ -198,5 +198,121 @@
       "openPositions": "Offene Positionen",
       "transactionCount": "Transaktionen"
     }
+  },
+  "analysis": {
+    "modelPerformance": {
+      "title": "Modell-Performance",
+      "subtitle": "Walk-Forward-Backtest des persistierten Modells über die letzten {{count}} vorhergesagten Bars{{trained}}.",
+      "trainedAt": " · Modell zuletzt trainiert {{when}}",
+      "directionAccuracy": "Richtungs-Trefferquote",
+      "strategyVsHold": "Strategie vs Buy-and-Hold",
+      "backtestSetup": "Backtest-Setup",
+      "calibration": "Konfidenz-Kalibrierung",
+      "calibrationHint": "Vorhergesagte P(UP)-Bucket vs. tatsächliche UP-Quote. Ein gut kalibriertes Modell hat actual ≈ predicted in jedem Bucket."
+    },
+    "dataQuality": {
+      "title": "Datenqualität",
+      "subtitle": "Welcher Provider hat welches Feld geliefert. Die Empfehlung baut darauf auf — der Badge unter der Vorhersage spiegelt dieselbe Gesamt-Konfidenz.",
+      "overallPrefix": "Gesamt-Konfidenz",
+      "upgradeHints": "Upgrade-Hinweise — diese würden die Datenbasis für dieses Symbol verbessern"
+    },
+    "researchSignals": {
+      "title": "Research-Signale",
+      "subtitle": "Insider-Aktivität, institutionelle Eigentümer, Earnings-Beat-Historie, nächste Earnings."
+    },
+    "earningsCalls": {
+      "title": "Earnings-Call-Digest",
+      "subtitle": "VADER-bewertete Zusammenfassung der jüngsten Transcripts (FMP). Pro Karte werden der höchst- und niedrigst-bewertete Satz als konkrete Quote gezeigt.",
+      "mostPositive": "Höchst-positiv",
+      "mostNegative": "Höchst-negativ",
+      "noSnippets": "Transcript-Score {{score}}, aber keine Sätze haben den Snippet-Filter passiert."
+    },
+    "macroContext": {
+      "title": "Makro-Kontext",
+      "subtitle": "Markt-Wetterbericht. Jedes per-Symbol-Signal sollte in diesem Kontext gelesen werden."
+    },
+    "cryptoMetrics": {
+      "title": "Crypto-Metriken",
+      "subtitle": "Markttiefe, ATH/ATL-Abstand, Entwickler- und Community-Aktivität (CoinGecko)."
+    },
+    "socialSentiment": {
+      "title": "Retail-Sentiment",
+      "subtitle": "Kombinierte StockTwits- und Reddit-Diskussion der letzten 24 Stunden."
+    },
+    "optionsFlow": {
+      "title": "Options-Flow",
+      "subtitleExpiry": "Nächste Expiry {{expiry}} · Spot {{spot}}",
+      "skewBullish": "Bullish-Skew",
+      "skewBearish": "Bearish-Skew",
+      "skewNeutral": "Neutral"
+    }
+  },
+  "news": {
+    "title": "News-Hub",
+    "subtitle": "Headlines von allen konfigurierten Quellen — Alpaca, FMP, Alpha-Vantage plus kuratierte RSS-Feeds (boerse.de, ariva.de, Reuters). Filter nach Quelle, Sentiment, Zeitfenster oder Symbol, um neue Ticker zu entdecken.",
+    "filters": {
+      "source": "Quelle",
+      "sourceAll": "Alle Provider",
+      "sentiment": "Sentiment",
+      "sentimentAny": "Beliebig",
+      "sentimentBullish": "Bullish",
+      "sentimentBearish": "Bearish",
+      "sentimentNeutral": "Neutral",
+      "timeWindow": "Zeitfenster",
+      "windowAny": "Jederzeit",
+      "window1h": "Letzte 1h",
+      "window6h": "Letzte 6h",
+      "window24h": "Letzte 24h",
+      "window3d": "Letzte 3d",
+      "window7d": "Letzte 7d",
+      "symbolContains": "Symbol enthält"
+    },
+    "loading": "Lade…",
+    "matchSummary": "{{count}} Einträge passen zum Filter · aktive Quellen: {{sources}}",
+    "empty": "Keine News passen zu den aktuellen Filtern.",
+    "newer": "← Neuer",
+    "older": "Älter →",
+    "showing": "{{from}}–{{to}} von {{total}}"
+  },
+  "discover": {
+    "title": "Entdecken",
+    "subtitle": "Ticker, die einen näheren Blick lohnen — aktuell trending in den News, größte Tagesbewegungen und Insider-Aktivitäts-Cluster der letzten 90 Tage. Symbol klicken springt zur Analyse-Seite.",
+    "loading": "Lade Discovery-Feed…",
+    "trending": {
+      "title": "Trending in den News",
+      "subtitle": "Symbole mit den meisten Mentions im globalen News-Feed der letzten 24h, sortiert nach Mention-Anzahl. Der Trend-Pct vergleicht gegen die 6-Tage-Baseline davor; der Sentiment-Burst-Delta zeigt, ob die Diskussion bullisch oder bearisch dreht.",
+      "empty": "Keine trending Ticker im letzten News-Zyklus."
+    },
+    "movers": {
+      "title": "Top-Bewegungen heute",
+      "subtitle": "Heutige Gainers, Losers und meistgehandelte US-Ticker (FMP). Die Most-Active-Spalte ist auch ein guter Einstieg für Unusual-Volume-Szenarien.",
+      "noData": "Keine Daten — FMP nicht konfiguriert?"
+    },
+    "clusters": {
+      "title": "Insider-Cluster",
+      "subtitle": "Symbole mit 3+ unabhängigen Insidern in den letzten 90 Tagen, sortiert nach Insider-Anzahl und absolutem Net-Value. Ein \"Buy-Cluster\" mit hohem positiven Net-Value ist eines der stärksten nicht-öffentlichen Signale.",
+      "empty": "Keine Insider-Cluster in den letzten 90 Tagen — oder FMP nicht konfiguriert.",
+      "labelBuy": "Buy-Cluster",
+      "labelSell": "Sell-Cluster",
+      "labelMixed": "Gemischt"
+    }
+  },
+  "docs": {
+    "drawerTitle": "Hilfe",
+    "openFull": "Vollständige Dokumentation öffnen →",
+    "close": "Schließen",
+    "loading": "Lade…",
+    "missing": "Dieser Doku-Eintrag fehlt.",
+    "noTopic": "Für diese Seite gibt es noch keine Hilfe.",
+    "loadError": "Hilfe konnte nicht geladen werden.",
+    "back": "Zurück zur Übersicht",
+    "sidebarTitle": "Dokumentation"
+  },
+  "pwa": {
+    "updateAvailable": "Eine neue Version von NexusPulse Trade ist verfügbar.",
+    "reload": "Neu laden",
+    "later": "Später",
+    "offlineReady": "App ist offline einsatzbereit.",
+    "ok": "OK"
   }
 }

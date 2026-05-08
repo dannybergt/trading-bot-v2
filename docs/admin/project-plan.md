@@ -167,6 +167,10 @@ Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
 - `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
 
+Bereits umgesetzt (Welle 12 — DE-Uebersetzungen, 2026-05-08):
+
+- i18n-Bundles um analysis.* (8 Sub-Sections), news.*, discover.*, docs.*, pwa.* ergaenzt. NewsHubPage + DiscoverPage komplett auf `t()` umgestellt; AnalysisPage acht Sub-Sections mit Title+Subtitle uebersetzt; HelpDrawer + DocsPage + PwaUpdatePrompt vollstaendig. Tabellen-Header und finanztechnische Labels (VADER, AUC, Brier, P/C-Ratio, Strike, $TICKER) bleiben international Englisch. Frontend-Bundle 132 KB gz (vorher 128 KB)
+
 Bereits umgesetzt (Welle 11 Phase A — Android via PWA, 2026-05-08):
 
 - `vite-plugin-pwa` integriert: Web-App-Manifest, Service-Worker via Workbox mit NetworkFirst fuer `/api/*` (5s timeout, 1h cache fallback fuer Offline-Reads) und CacheFirst fuer statische Assets (7d). SVG-Icon `public/icon.svg` mit Brand-Color-Logo, im Manifest mit purpose=any + maskable. `index.html` mit theme-color, apple-touch-icon, viewport viewport-fit=cover, apple-mobile-web-app-capable. Neuer `PwaUpdatePrompt`-Component zeigt In-App-Update-Notification bei neuem Build. Help-Topic `mobile.md`. UI-Regression-Schritt `ui_pwa_manifest ok`. Phase B (Capacitor + Biometric + App-Store) bleibt fuer spaeter

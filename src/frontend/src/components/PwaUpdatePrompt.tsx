@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // Lazy-load the registerSW helper. The virtual module is provided by
 // vite-plugin-pwa at build time; the dynamic import keeps it out of
@@ -7,6 +8,7 @@ import { useEffect, useState } from "react";
 // the app fine).
 
 export function PwaUpdatePrompt() {
+  const { t } = useTranslation();
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
   const [updateFn, setUpdateFn] = useState<(() => Promise<void>) | null>(null);
@@ -52,33 +54,33 @@ export function PwaUpdatePrompt() {
     >
       {needsRefresh ? (
         <div className="space-y-2">
-          <p>A new version of NexusPulse Trade is ready.</p>
+          <p>{t("pwa.updateAvailable")}</p>
           <div className="flex gap-2">
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => updateFn?.()}
             >
-              Reload
+              {t("pwa.reload")}
             </button>
             <button
               type="button"
               className="btn"
               onClick={() => setNeedsRefresh(false)}
             >
-              Later
+              {t("pwa.later")}
             </button>
           </div>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <span>App ready to work offline.</span>
+          <span>{t("pwa.offlineReady")}</span>
           <button
             type="button"
             className="btn"
             onClick={() => setOfflineReady(false)}
           >
-            OK
+            {t("pwa.ok")}
           </button>
         </div>
       )}

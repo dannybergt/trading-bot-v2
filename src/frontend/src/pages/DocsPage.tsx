@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "../api/client";
 import HelpMarkdown from "../components/HelpMarkdown";
@@ -19,6 +20,7 @@ type DocsTopicsResponse = {
 const ROOT_SLUG = "getting-started";
 
 export function DocsPage() {
+  const { t } = useTranslation();
   const { slug } = useParams();
   const targetSlug = slug || ROOT_SLUG;
   const [topics, setTopics] = useState<DocTopic[]>([]);
@@ -39,20 +41,20 @@ export function DocsPage() {
       .then((payload) => setTopic(payload))
       .catch(() => {
         setTopic(null);
-        setError("This documentation page is missing.");
+        setError(t("docs.missing"));
       })
       .finally(() => setLoading(false));
-  }, [targetSlug]);
+  }, [targetSlug, t]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_1fr]" data-testid="docs-page">
       <nav className="card space-y-2 self-start">
         <h2 className="text-xs uppercase tracking-wide text-slate-400">
-          Documentation
+          {t("docs.sidebarTitle")}
         </h2>
         <ul className="space-y-1 text-sm">
           {topics.length === 0 ? (
-            <li className="text-slate-500">Loading…</li>
+            <li className="text-slate-500">{t("docs.loading")}</li>
           ) : null}
           {topics.map((entry) => (
             <li key={entry.slug}>
@@ -73,12 +75,12 @@ export function DocsPage() {
         </ul>
       </nav>
       <article className="card">
-        {loading ? <p className="text-sm text-slate-400">Loading…</p> : null}
+        {loading ? <p className="text-sm text-slate-400">{t("docs.loading")}</p> : null}
         {error ? (
           <div className="space-y-2 text-sm text-amber-300">
             <p>{error}</p>
             <Link to="/docs" className="text-bergt-green hover:underline">
-              Back to overview
+              {t("docs.back")}
             </Link>
           </div>
         ) : null}

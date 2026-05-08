@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "../api/client";
 
@@ -34,6 +35,7 @@ function resolveSlug(pathname: string, pageMap: Record<string, string>): string 
 }
 
 export function HelpDrawer() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [pageMap, setPageMap] = useState<Record<string, string> | null>(null);
   const [topic, setTopic] = useState<DocTopic | null>(null);
@@ -53,16 +55,16 @@ export function HelpDrawer() {
     const slug = resolveSlug(location.pathname, pageMap);
     if (!slug) {
       setTopic(null);
-      setError("No help available for this page yet.");
+      setError(t("docs.noTopic"));
       return;
     }
     setLoading(true);
     setError(null);
     apiFetch<DocTopic>(`/api/docs/${slug}`, { skipAuth: true })
       .then((payload) => setTopic(payload))
-      .catch(() => setError("Could not load help."))
+      .catch(() => setError(t("docs.loadError")))
       .finally(() => setLoading(false));
-  }, [open, location.pathname, pageMap]);
+  }, [open, location.pathname, pageMap, t]);
 
   return (
     <>
@@ -94,19 +96,19 @@ export function HelpDrawer() {
           >
             <header className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-100">
-                {topic?.title ?? "Help"}
+                {topic?.title ?? t("docs.drawerTitle")}
               </h2>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setOpen(false)}
-                aria-label="Close help"
+                aria-label={t("docs.close")}
               >
-                Close
+                {t("docs.close")}
               </button>
             </header>
             <div className="mt-4 space-y-3 text-sm text-slate-200">
-              {loading ? <p className="text-slate-400">Loading…</p> : null}
+              {loading ? <p className="text-slate-400">{t("docs.loading")}</p> : null}
               {error ? <p className="text-amber-300">{error}</p> : null}
               {topic?.content ? (
                 <Suspense fallback={<p className="text-slate-400">Loading…</p>}>
@@ -119,7 +121,7 @@ export function HelpDrawer() {
                   className="hover:text-bergt-green"
                   onClick={() => setOpen(false)}
                 >
-                  Open the full documentation →
+                  {t("docs.openFull")}
                 </Link>
               </div>
             </div>
