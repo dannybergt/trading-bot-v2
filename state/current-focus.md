@@ -14,9 +14,32 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: News-Hub-Welle 9
+## Naechster Einstieg 2026-05-09: Welle 9b Discovery-Engine
 
-Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert:
+Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert (in dieser Reihenfolge):
+
+- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips.
+
+Naechster konkreter Schnitt = **Welle 9b Discovery-Engine** (aufbauend auf 9a):
+
+1. Backend: neuer `app/discovery_service.py` mit:
+   - `get_trending_symbols(window_hours=24)` zaehlt News-Mentions pro Symbol aus dem 9a-Feed, sortiert by count desc, optional gewichtet nach Sentiment-Burst (vs Baseline-Sentiment der letzten 7d)
+   - `get_top_movers(limit=20)` — top-gainers/losers aus dem Alpaca-Bars-Sweep ueber alle aktiven US-Equities (nicht nur Watchlist)
+   - `get_unusual_volume(threshold=3.0)` — Symbole deren Tagesvolumen >=3x das 20d-Average ist
+   - `get_insider_clusters(window_days=90, min_count=3)` — FMP `/insider-trading-rss-feed` global aggregiert, gleichgerichtete Cluster
+2. Endpoint `GET /api/discover` aggregiert alle vier Bloecke
+3. Frontend: entweder neue `/discover`-Page oder Section auf `/news`. Empfehlung: eigene `/discover`-Page weil das Volumen passt und die UX klarer ist
+4. Help-Topic `discover.md`
+
+Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
+
+- `docs/admin/project-plan.md` "Naechste Prioritaeten" Block
+- `state/decisions.md` letzte Decision-Bloecke (News-Hub-9a, In-App-Hilfe, Audit, ML-Persistenz)
+- `src/backend/app/news_hub_service.py` als Datenbasis fuer Trending
+- `src/backend/app/services.py::MarketDataService.get_avg_daily_volume` als Pattern fuer Unusual-Volume
+- `src/backend/app/fmp_service.py::get_insider_trades` als Pattern fuer Insider-Cluster (FMP v4 RSS)
+
+
 
 - **ML-Persistenz + Backtest** (Phase-4-Vorbedingung)
 - **Audit-Log + Daily-Re-Train-Task** (Phase-4-Vorbedingung)

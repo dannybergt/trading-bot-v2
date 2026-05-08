@@ -101,6 +101,7 @@ class ProviderRateLimitRegistry:
         "stocktwits": (1.0, 5),  # public stream API; conservative w/o auth
         "reddit": (0.5, 6),  # public search.json budget is ~60 req/10min
         "twelve_data": (0.13, 5),  # ~8 req/min on the free tier
+        "rss": (1.0, 10),  # public RSS feeds — generous, but cached 5 min
     }
 
     def __init__(self) -> None:

@@ -7,6 +7,7 @@ import { AlertsPage } from "./pages/AlertsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
+import { NewsHubPage } from "./pages/NewsHubPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { PaperTradingPage } from "./pages/PaperTradingPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -72,6 +73,7 @@ function App() {
           }
         />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/news" element={<NewsHubPage />} />
         <Route path="/paper-trading" element={<PaperTradingPage />} />
         <Route
           path="/docs"

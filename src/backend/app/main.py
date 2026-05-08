@@ -33,6 +33,7 @@ from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plau
 from app.backup_service import BackupService, backup_scheduler_task
 from app import audit_service, backtest_service, docs_service
 from app.coingecko_service import get_coingecko_service
+from app.news_hub_service import get_news_hub_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.macro_service import get_macro_service
@@ -2021,6 +2022,33 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
     except Exception:
         logger.exception("symbol_search_failed query=%s", query)
         return []
+
+@app.get("/api/news/feed")
+def get_news_hub_feed(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    sources: str | None = None,
+    sentiment: str | None = None,
+    since: str | None = None,
+    symbol: str | None = None,
+    current_user: User = Depends(get_current_user),
+):
+    """Global news feed across every configured provider, with filters
+    for source / sentiment / since-timestamp / symbol. Used by the
+    news-hub page to surface stories well outside the user's watchlist
+    so new tickers can be discovered."""
+    source_list: list[str] | None = None
+    if sources:
+        source_list = [s.strip() for s in sources.split(",") if s.strip()]
+    return get_news_hub_service().get_global_feed(
+        limit=limit,
+        offset=offset,
+        sources=source_list,
+        sentiment=sentiment,
+        since=since,
+        symbol=symbol.upper() if symbol else None,
+    )
+
 
 @app.get("/api/news/{symbol:path}")
 def get_stock_news(symbol: str, current_user: User = Depends(get_current_user)):
