@@ -18,7 +18,7 @@ und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
 Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert (in dieser Reihenfolge):
 
-- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips.
+- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung).
 
 Naechster konkreter Schnitt = **Welle 9b Discovery-Engine** (aufbauend auf 9a):
 

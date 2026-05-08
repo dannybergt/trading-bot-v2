@@ -31,7 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
-from app import audit_service, backtest_service, docs_service
+from app import audit_service, backtest_service, data_quality_service, docs_service
 from app.coingecko_service import get_coingecko_service
 from app.news_hub_service import get_news_hub_service
 from app.database import init_db, get_db, SessionLocal
@@ -1877,6 +1877,59 @@ def get_symbol_research(
             "provider": (news_payload or {}).get("provider"),
         },
     }
+
+
+@app.get("/api/research/{symbol:path}/data-quality")
+def get_symbol_data_quality(
+    symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Per-symbol data-source transparency report.
+
+    Tells the user *which* provider answered for *which* field and how
+    confident the system is in that answer. Drives the in-app
+    `DataQualitySection` so a buy/sell recommendation is never opaque
+    about its data foundation.
+    """
+    fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
+    asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
+    canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
+
+    # Build the same payloads the analysis page consumes so the report
+    # reflects what the user actually sees.
+    research_payload = get_symbol_research(symbol, current_user=current_user, db=db)
+    try:
+        stock_payload = service.get_stock_data(
+            symbol,
+            period="6mo",
+            interval="1d",
+            user=current_user,
+            include_news=False,
+            include_fundamentals=False,
+        )
+    except Exception:
+        stock_payload = None
+
+    report = data_quality_service.evaluate_symbol_data_quality(
+        symbol=canonical,
+        asset_class=asset_profile.get("assetClass"),
+        research_payload=research_payload,
+        stock_payload=stock_payload if isinstance(stock_payload, dict) else None,
+    )
+    return report
+
+
+@app.get("/api/admin/data-sources")
+def list_data_sources(admin: User = Depends(get_current_admin_user)):
+    """Admin-only provider catalogue with current configuration state.
+
+    Used by the admin coverage matrix to surface which providers are
+    active, what they cost, and where an upgrade would unlock more
+    coverage. The free-tier limits and upgrade prices are static so
+    operators don't have to chase them in vendor docs.
+    """
+    return {"providers": data_quality_service.get_provider_catalogue()}
 
 
 @app.get("/api/research/{symbol:path}/backtest")

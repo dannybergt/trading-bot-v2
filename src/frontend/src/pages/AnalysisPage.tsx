@@ -70,6 +70,26 @@ type BacktestPayload = {
   result: BacktestResult;
 };
 
+type DataQualityField = {
+  key: string;
+  confidence: "full" | "partial" | "fallback" | "missing";
+  provider: string;
+};
+
+type DataQualityUpgrade = {
+  provider: string;
+  label: string;
+  reason: string;
+};
+
+type DataQualityReport = {
+  symbol: string;
+  assetClass?: string;
+  overall: "high" | "medium" | "low";
+  fields: DataQualityField[];
+  upgradeHints: DataQualityUpgrade[];
+};
+
 type StockResponse = {
   symbol: string;
   name?: string;
@@ -407,6 +427,14 @@ export function AnalysisPage() {
     staleTime: 30 * 60_000,
   });
 
+  const dataQualityQuery = useQuery({
+    queryKey: ["data-quality", decoded],
+    queryFn: () =>
+      apiFetch<DataQualityReport>(`/api/research/${encodeURIComponent(decoded)}/data-quality`),
+    enabled: !!decoded,
+    staleTime: 5 * 60_000,
+  });
+
   const transactionsQuery = useQuery({
     queryKey: ["paper-transactions", "for-analysis"],
     queryFn: () =>
@@ -514,7 +542,12 @@ export function AnalysisPage() {
         </div>
       </header>
 
-      <PredictionCard prediction={stock?.prediction} symbol={decoded} />
+      <DataQualitySection report={dataQualityQuery.data} />
+      <PredictionCard
+        prediction={stock?.prediction}
+        symbol={decoded}
+        confidenceOverall={dataQualityQuery.data?.overall}
+      />
       <PatternsCard patterns={patterns} />
 
       {stockQuery.isLoading ? (
@@ -556,12 +589,104 @@ export function AnalysisPage() {
   );
 }
 
+function DataQualitySection({ report }: { report?: DataQualityReport }) {
+  if (!report || !report.fields || report.fields.length === 0) return null;
+
+  const overallClass: Record<string, string> = {
+    high: "border-bergt-green/40 bg-bergt-green/10 text-bergt-green",
+    medium: "border-amber-500/40 bg-amber-900/30 text-amber-200",
+    low: "border-red-700/50 bg-red-900/40 text-red-200",
+  };
+
+  const fieldClass: Record<DataQualityField["confidence"], string> = {
+    full: "border-bergt-green/40 bg-bergt-green/10 text-bergt-green",
+    partial: "border-amber-500/40 bg-amber-900/30 text-amber-200",
+    fallback: "border-slate-700 bg-slate-900 text-slate-300",
+    missing: "border-red-700/50 bg-red-900/40 text-red-300",
+  };
+
+  const fieldLabels: Record<string, string> = {
+    price_history: "Price history",
+    provider_quote: "Provider quote",
+    fundamentals: "Fundamentals",
+    research_depth: "Research depth (FMP)",
+    research_signals: "Insider / institutional",
+    earnings_calls: "Earnings calls",
+    crypto_metrics: "Crypto metrics",
+    options_flow: "Options flow",
+    social_sentiment: "Retail sentiment",
+    news: "News",
+    macro_context: "Macro context",
+  };
+
+  return (
+    <section
+      className="card space-y-3"
+      data-testid="data-quality-section"
+    >
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Data quality
+          </h2>
+          <p className="text-xs text-slate-500">
+            Which provider answered for which field. The recommendation rests on this — the
+            badge below the prediction reflects the same overall confidence.
+          </p>
+        </div>
+        <span
+          className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide ${
+            overallClass[report.overall]
+          }`}
+        >
+          Overall confidence: {report.overall}
+        </span>
+      </header>
+
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {report.fields.map((field) => (
+          <li
+            key={field.key}
+            className={`rounded-md border px-3 py-2 text-xs ${fieldClass[field.confidence]}`}
+          >
+            <div className="text-[10px] uppercase tracking-wide opacity-70">
+              {fieldLabels[field.key] ?? field.key}
+            </div>
+            <div className="mt-0.5 text-sm font-medium">
+              {field.confidence}
+            </div>
+            <div className="text-[10px] opacity-80">{field.provider}</div>
+          </li>
+        ))}
+      </ul>
+
+      {report.upgradeHints.length > 0 ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-900/20 p-3 text-xs">
+          <h3 className="text-[10px] uppercase tracking-wide text-amber-200">
+            Upgrade hints — these would improve the data foundation for this symbol
+          </h3>
+          <ul className="mt-2 space-y-2">
+            {report.upgradeHints.map((hint) => (
+              <li key={hint.provider}>
+                <strong className="text-amber-100">{hint.label}</strong>
+                <span className="ml-1 text-slate-300">— {hint.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function PredictionCard({
   prediction,
   symbol,
+  confidenceOverall,
 }: {
   prediction?: Prediction | null;
   symbol?: string;
+  confidenceOverall?: "high" | "medium" | "low";
 }) {
   if (!prediction || !prediction.direction) return null;
   const dir = prediction.direction;
@@ -583,11 +708,25 @@ function PredictionCard({
         <p className="font-medium">
           ML signal: {dir} ({(confidence * 100).toFixed(1)}% confidence)
         </p>
-        {prediction.zones?.riskReward != null ? (
-          <p className="text-xs opacity-80">
-            R:R = {prediction.zones.riskReward.toFixed(2)}
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2 text-xs opacity-80">
+          {confidenceOverall ? (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                confidenceOverall === "high"
+                  ? "border-bergt-green/40 text-bergt-green"
+                  : confidenceOverall === "medium"
+                  ? "border-amber-500/40 text-amber-200"
+                  : "border-red-700/50 text-red-200"
+              }`}
+              title="Reflects the data-source coverage report above. See the data-quality section for details."
+            >
+              Data: {confidenceOverall}
+            </span>
+          ) : null}
+          {prediction.zones?.riskReward != null ? (
+            <span>R:R = {prediction.zones.riskReward.toFixed(2)}</span>
+          ) : null}
+        </div>
       </header>
 
       <ProbabilityBars probabilityUp={pUp} probabilityDown={pDown} />

@@ -37,9 +37,100 @@ export function AdminPage() {
         </p>
       </header>
       <UsersSection />
+      <DataSourcesSection />
       <BackupsSection />
       <ExportSection />
     </div>
+  );
+}
+
+type DataSourceCatalogueEntry = {
+  key: string;
+  label: string;
+  covers: string[];
+  freeTierLimit: string;
+  upgradeTier: string | null;
+  upgradeCostUsdMonthly: number;
+  upgradeBenefit: string;
+  envFlag: string | null;
+  configured: boolean;
+};
+
+function DataSourcesSection() {
+  const query = useQuery({
+    queryKey: ["admin-data-sources"],
+    queryFn: () => apiFetch<{ providers: DataSourceCatalogueEntry[] }>("/api/admin/data-sources"),
+  });
+  const providers = query.data?.providers ?? [];
+
+  if (providers.length === 0) {
+    return null;
+  }
+
+  const monthlyTotal = providers
+    .filter((p) => p.configured && p.upgradeCostUsdMonthly > 0)
+    .reduce((acc, p) => acc + p.upgradeCostUsdMonthly, 0);
+
+  return (
+    <section className="space-y-3" data-testid="admin-data-sources-section">
+      <header>
+        <h2 className="text-lg font-semibold">Data sources</h2>
+        <p className="text-sm text-slate-400">
+          Which providers feed the recommendation engine. Recommended upgrades
+          point at the next sensible tier per provider so you can decide where
+          paid tiers would actually move the needle for buy/sell decisions.
+        </p>
+      </header>
+      <div className="card overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="py-2">Provider</th>
+              <th>Configured</th>
+              <th>Covers</th>
+              <th>Free-tier limit</th>
+              <th>Upgrade</th>
+              <th className="text-right">USD/mo</th>
+              <th>Why upgrade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {providers.map((entry) => (
+              <tr key={entry.key} className="border-t border-slate-800 align-top">
+                <td className="py-2 font-medium">{entry.label}</td>
+                <td>
+                  <span
+                    className={
+                      entry.configured
+                        ? "text-bergt-green"
+                        : "text-amber-300"
+                    }
+                  >
+                    {entry.configured ? "yes" : "no"}
+                  </span>
+                </td>
+                <td className="text-slate-300">
+                  {entry.covers.join(", ")}
+                </td>
+                <td className="text-slate-400">{entry.freeTierLimit}</td>
+                <td>{entry.upgradeTier ?? "—"}</td>
+                <td className="text-right font-mono">
+                  {entry.upgradeCostUsdMonthly > 0
+                    ? `$${entry.upgradeCostUsdMonthly}`
+                    : "—"}
+                </td>
+                <td className="text-slate-400">{entry.upgradeBenefit}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-500">
+        If every recommended upgrade were activated for currently-configured
+        providers, the additional monthly cost would be approximately
+        <span className="ml-1 font-mono text-slate-200">${monthlyTotal}</span>.
+      </p>
+    </section>
   );
 }
 

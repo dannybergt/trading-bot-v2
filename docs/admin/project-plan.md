@@ -155,6 +155,10 @@ Bereits umgesetzt (In-App-Hilfe + Doku, 2026-05-08):
 
 - `docs/inapp/<topic>.md` als Quelle. Endpoints `GET /api/docs/topics` und `GET /api/docs/{slug}` (no-auth, defensiv gegen Path-Escapes). Frontend `HelpDrawer` (?-Button im Layout, kontextueller Slide-Over fuer die aktuelle Page) plus `/docs` Route mit Side-Nav + Markdown-Rendering via lazy-loaded react-markdown + remark-gfm. 9 Markdown-Topics initial (getting-started, dashboard, watchlists, scanner, analysis, alerts, paper-trading, settings, admin). Default EN; DE-Uebersetzungen als spaetere Welle
 
+Bereits umgesetzt (Data-Source-Transparency, 2026-05-08, Phase-4-Vorbedingung):
+
+- `app/data_quality_service.py` mit per-Symbol `evaluate_symbol_data_quality` (FULL/PARTIAL/FALLBACK/MISSING pro Feld + Provider), `_overall_confidence` (high/medium/low) und statischem `_build_upgrade_hints` (FMP Starter $14/mo, Alpha Vantage Premium $50/mo, Polygon.io $29/mo, Reddit OAuth free). `PROVIDER_CATALOGUE` als statisches Dict mit covers/freeTierLimit/upgradeTier/upgradeCostUsdMonthly fuer alle Quellen. Endpoints `GET /api/research/{symbol}/data-quality` + Admin-only `GET /api/admin/data-sources`. Frontend `DataQualitySection` oben auf `/analysis/<symbol>` mit Per-Field-Grid + Upgrade-Hint-Block im amber-Theme. Recommendation-Card hat jetzt `Data: high|medium|low`-Badge unter der Direction. AdminPage `DataSourcesSection` rendert Coverage-Matrix mit Monthly-Cost-Footer. Help-Topic `data-quality.md`
+
 Bereits umgesetzt (Welle 9a — News-Hub, 2026-05-08):
 
 - Globaler Multi-Source-News-Feed unter `/news`. Aggregiert FMP `/stock_news` (ohne Symbol-Filter), Alpha-Vantage `NEWS_SENTIMENT` mit Topics, plus RSS-Feeds (boerse.de, ariva.de, Reuters via `feedparser`). Symbol-Extraction aus Item-Titeln, Deduplizierung by URL, Sortierung newest-first ueber geparste Datetimes, Filter nach Source/Sentiment/Time-Window/Symbol. Endpoint `GET /api/news/feed`. Frontend mit Filter-Bar und klickbaren Symbol-Chips zur AnalysisPage als Discovery-Pfad
