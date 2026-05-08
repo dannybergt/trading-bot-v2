@@ -36,6 +36,7 @@ from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.macro_service import get_macro_service
 from app.migrate_watchlists import migrate as migrate_watchlists
+from app.social_sentiment_service import get_social_sentiment_service
 from app.models import (
     AlertEvent as AlertEventRecord,
     AlertRule as AlertRuleRecord,
@@ -1741,6 +1742,10 @@ def get_symbol_research(
         crypto_metrics = get_coingecko_service().get_coin_metrics(asset_profile["symbol"])
     fear_greed = get_coingecko_service().get_fear_greed_index()
 
+    social_sentiment = get_social_sentiment_service().get_social_signal(
+        asset_profile["symbol"], asset_class=asset_profile.get("assetClass")
+    )
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1755,6 +1760,7 @@ def get_symbol_research(
         "macroContext": macro_context,
         "cryptoMetrics": crypto_metrics,
         "fearGreedIndex": fear_greed,
+        "socialSentiment": social_sentiment,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),

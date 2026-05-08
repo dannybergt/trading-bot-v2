@@ -257,7 +257,12 @@ for instr in ("vix", "yield10y", "dxy"):
 # itself must exist on every response; cryptoMetrics is None for stocks.
 assert "fearGreedIndex" in stock_research_payload
 assert stock_research_payload.get("cryptoMetrics") is None, "stocks must not get crypto metrics"
-print("research signals + macro context shape ok")
+social = stock_research_payload.get("socialSentiment")
+assert isinstance(social, dict)
+for block in ("stocktwits", "reddit", "combined"):
+    assert block in social, f"missing socialSentiment block {block}"
+assert isinstance(social["reddit"].get("subreddits"), list)
+print("research signals + macro context + social sentiment shape ok")
 
 crypto_research_full = requests.get(
     f"{base}/api/research/BTC/USD",

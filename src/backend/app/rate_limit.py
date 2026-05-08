@@ -98,6 +98,8 @@ class ProviderRateLimitRegistry:
         "yfinance": (2.0, 10),  # unofficial; 2/s burst of 10
         "coingecko": (0.5, 10),  # free tier ~30 req/min, conservative
         "fear_greed": (0.05, 1),  # alternative.me, daily-updated, called rarely
+        "stocktwits": (1.0, 5),  # public stream API; conservative w/o auth
+        "reddit": (0.5, 6),  # public search.json budget is ~60 req/10min
     }
 
     def __init__(self) -> None:

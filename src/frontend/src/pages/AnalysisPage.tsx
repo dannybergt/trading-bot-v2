@@ -169,6 +169,48 @@ type FearGreedIndex = {
   timestamp?: string | null;
 };
 
+type StockTwitsBlock = {
+  symbol?: string;
+  messageCount?: number | null;
+  bullishCount?: number | null;
+  bearishCount?: number | null;
+  neutralCount?: number | null;
+  avgVaderScore?: number | null;
+  topPosts?: Array<{
+    body?: string;
+    created?: string | null;
+    tag?: string | null;
+    vader?: number | null;
+    url?: string | null;
+  }>;
+};
+
+type RedditBlock = {
+  query?: string;
+  subreddits?: string[];
+  mentionCount24h?: number | null;
+  mentionCount7d?: number | null;
+  mentionTrendPct?: number | null;
+  avgSentiment?: number | null;
+  topPosts?: Array<{
+    title?: string;
+    score?: number | null;
+    comments?: number | null;
+    subreddit?: string | null;
+    permalink?: string | null;
+    vader?: number | null;
+  }>;
+};
+
+type SocialSentiment = {
+  stocktwits?: StockTwitsBlock;
+  reddit?: RedditBlock;
+  combined?: {
+    totalMessages?: number | null;
+    avgSentiment?: number | null;
+  };
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
@@ -211,6 +253,7 @@ type ResearchPayload = {
   macroContext?: MacroContext;
   cryptoMetrics?: CryptoMetrics | null;
   fearGreedIndex?: FearGreedIndex | null;
+  socialSentiment?: SocialSentiment | null;
   news?: {
     items?: Array<{
       title?: string;
@@ -421,6 +464,7 @@ export function AnalysisPage() {
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
       <CryptoMetricsSection metrics={research?.cryptoMetrics} />
+      <SocialSentimentSection social={research?.socialSentiment} />
       <MacroContextSection
         macro={research?.macroContext}
         fearGreed={research?.fearGreedIndex}
@@ -1280,6 +1324,142 @@ function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | und
           </dl>
         </div>
       </div>
+    </section>
+  );
+}
+
+function SocialSentimentSection({ social }: { social: SocialSentiment | null | undefined }) {
+  if (!social) return null;
+  const st = social.stocktwits ?? {};
+  const rd = social.reddit ?? {};
+  const combined = social.combined ?? {};
+
+  const stMessages = st.messageCount ?? 0;
+  const rdMentions = rd.mentionCount24h ?? 0;
+  const totalMessages = combined.totalMessages ?? stMessages + rdMentions;
+  if (totalMessages === 0) return null;
+
+  const fmtPct = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}%`;
+  };
+
+  const fmtScore = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}`;
+  };
+
+  const sentimentColor = (value: number | null | undefined): string => {
+    if (value == null) return "text-slate-400";
+    if (value > 0.05) return "text-bergt-green";
+    if (value < -0.05) return "text-red-300";
+    return "text-slate-400";
+  };
+
+  const bullishRatio =
+    (st.bullishCount ?? 0) + (st.bearishCount ?? 0) > 0
+      ? ((st.bullishCount ?? 0) /
+          ((st.bullishCount ?? 0) + (st.bearishCount ?? 0))) *
+        100
+      : null;
+
+  return (
+    <section className="card space-y-3" data-testid="social-sentiment-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Retail sentiment
+        </h2>
+        <p className="text-xs text-slate-500">
+          Combined StockTwits + Reddit chatter from the last 24 hours.
+        </p>
+      </header>
+
+      <dl className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Combined sentiment
+          </dt>
+          <dd className={`mt-1 font-mono text-base ${sentimentColor(combined.avgSentiment)}`}>
+            {fmtScore(combined.avgSentiment)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {totalMessages} messages weighted across sources
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            StockTwits stream
+          </dt>
+          <dd className="mt-1 font-mono text-base">{stMessages}</dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {bullishRatio != null
+              ? `${bullishRatio.toFixed(0)}% bullish · ${st.bearishCount ?? 0} bearish`
+              : `${st.bullishCount ?? 0} bullish / ${st.bearishCount ?? 0} bearish`}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Reddit mentions 24h
+          </dt>
+          <dd className="mt-1 font-mono text-base">{rdMentions}</dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            7d {rd.mentionCount7d ?? 0} · trend {fmtPct(rd.mentionTrendPct)}
+          </dd>
+        </div>
+      </dl>
+
+      {(rd.topPosts && rd.topPosts.length > 0) || (st.topPosts && st.topPosts.length > 0) ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {rd.topPosts && rd.topPosts.length > 0 ? (
+            <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+              <h3 className="text-xs uppercase tracking-wide text-slate-500">
+                Top Reddit posts
+              </h3>
+              <ul className="mt-2 space-y-1 text-xs">
+                {rd.topPosts.slice(0, 4).map((post, idx) => (
+                  <li key={idx} className="border-t border-slate-800 pt-1">
+                    {post.permalink ? (
+                      <a
+                        href={post.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:text-bergt-green"
+                      >
+                        {post.title}
+                      </a>
+                    ) : (
+                      <span>{post.title}</span>
+                    )}
+                    <div className="text-[10px] text-slate-500">
+                      r/{post.subreddit} · {post.score ?? 0}↑ · {post.comments ?? 0}💬 · {fmtScore(post.vader)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {st.topPosts && st.topPosts.length > 0 ? (
+            <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+              <h3 className="text-xs uppercase tracking-wide text-slate-500">
+                Top StockTwits posts
+              </h3>
+              <ul className="mt-2 space-y-1 text-xs">
+                {st.topPosts.slice(0, 4).map((post, idx) => (
+                  <li key={idx} className="border-t border-slate-800 pt-1">
+                    <span>{post.body}</span>
+                    <div className="text-[10px] text-slate-500">
+                      {post.tag ? `${post.tag.toUpperCase()} · ` : ""}
+                      VADER {fmtScore(post.vader)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

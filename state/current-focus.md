@@ -14,47 +14,52 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Datenbasis Welle 4 + Phase-3-Restverfeinerung
+## Naechster Einstieg 2026-05-09: Datenbasis Welle 5 + Phase-3-Restverfeinerung
 
-Sitzung 2026-05-08 hat in mehreren Schnitten ausgeliefert:
+Sitzung 2026-05-08 hat geliefert:
 
-(A) **Phase 3 vollstaendig (bis auf Restverfeinerungen)** — Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage (Stock 0.1%, ETF 0.05%, Crypto 0.3%).
+(A) **Phase 3** komplett bis auf Restverfeinerungen — Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage.
 
-(B) **Datenbasis-Welle 1** — FMP-Signale (Insider, Institutional, Earnings-Surprises, Upcoming-Earnings) + Macro-Kontext (VIX/10Y/DXY).
+(B) **Datenbasis-Welle 1** — FMP-Signale (Insider, Institutional, Earnings-Surprises, Upcoming) + Macro-Kontext (VIX/10Y/DXY).
 
-(C) **Datenbasis-Welle 2** — Sentiment-Upgrade von TextBlob auf VADER.
+(C) **Datenbasis-Welle 2** — Sentiment TextBlob → VADER.
 
-(D) **Datenbasis-Welle 3** — CoinGecko-Adapter (Marktkap, Volumen, ATH/ATL, Developer/Community-Scores) plus Crypto-Fear-and-Greed-Index. CryptoMetricsSection und Fear-Greed-Card auf `/analysis/<symbol>`.
+(D) **Datenbasis-Welle 3** — CoinGecko-Adapter + Crypto-Fear-and-Greed.
 
-Naechster sinnvoller Schnitt — in dieser Reihenfolge:
+(E) **Datenbasis-Welle 4** — Retail-Sentiment via StockTwits (`/streams/symbol/{SYMBOL}.json`) + Reddit (offentliche `search.json`, kein PRAW). Combined-Sentiment weighted-averaged. SocialSentimentSection auf `/analysis/<symbol>` zeigt KPIs + Top-Posts.
 
-**Datenbasis Welle 4: Reddit/StockTwits-Retail-Sentiment**
-
-1. Neuer `app/social_sentiment_service.py`. Reddit hat eine offizielle, kostenlose API (PRAW), die fuer Subreddits wie `r/wallstreetbets`, `r/stocks`, `r/CryptoCurrency` Mention-Counts und durchschnittlichen Sentiment liefert (VADER auf den Submissions/Comments). StockTwits hat eine offene Trending-Symbols-API ohne Auth.
-2. Pro Symbol pro Stunde gecacht; Output: `mentionCount24h`, `mentionTrendPct` (24h vs 7d-Average), `avgSentiment`, `topPosts` (links).
-3. Schwierigkeit: Reddit braucht Praw-Client-ID/Secret als Env-Var (kostenlos). Wenn nicht konfiguriert: skip mit warn-Log, nur StockTwits.
-4. Integration: neue Section auf `/analysis/<symbol>` "Retail Sentiment", auch fuer Stocks und Crypto.
+Naechster sinnvoller Schnitt:
 
 **Datenbasis Welle 5: Earnings-Call-Transcripts**
 
-5. FMP `/earning-call-transcript/{symbol}/{year}/{quarter}`. Transcript-Volltext durch VADER schicken, Summary plus Top-Positiv/Negativ-Sentences. Auf `/analysis/<symbol>` neue "Earnings call digest"-Section.
+1. Neue Methode `fmp_service.get_earnings_transcripts(symbol, *, limit=4)` zieht FMP `/earning-call-transcript/{symbol}/{year}/{quarter}` (oder `/earning_call_transcript?symbol=...&year=&quarter=` je nach FMP-Plan). Volltext durch `analyze_sentiment_basic` (VADER) schicken; Output pro Quartal: `{quarter, year, date, vaderScore, vaderLabel, snippetTopPositive, snippetTopNegative}`. Top-Snippets via einfacher Sentence-Tokenisierung (Regex auf `. ! ?`) und Sortierung nach VADER-Score.
+2. Bundled in `normalized_research_signals` oder neuer `normalized_earnings_calls`. `/api/research/{symbol}` reicht den Block durch.
+3. Frontend `EarningsCallsSection` auf `/analysis/<symbol>`: pro Quartal eine Card mit VADER-Score-Badge, einer positiven und einer negativen Snippet-Quote.
 
-**Phase 3 Restverfeinerungen** (parallel/wann immer):
+**Datenbasis Welle 6: Options-Flow**
 
-6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen
-7. Asset-spezifische Fee-Multipliers (Crypto typischerweise hoeher als Stock)
+4. yfinance `Ticker(symbol).option_chain(expiry)` — verfuegbar fuer US-Stocks. Aggregiere Put/Call-Ratio aus Open-Interest, Top-3-Strikes nach Volumen. Cache pro Symbol 60 min. Frontend OptionsSection mit P/C-Ratio-Pille (>1.0 bearish, <0.7 bullish, sonst neutral).
+
+**Datenbasis Welle 7: FinBERT-Aktivierung**
+
+5. Optionaler `SENTIMENT_PROVIDER=finbert`-Schalter. transformers + `ProsusAI/finbert` Modell-Loader, Container-Groesse +900 MB. Lazy-Initialisierung; bei nicht-gesetztem Schalter passive (kein Modell-Download). Trade-off-Entscheidung beim Start: Container-Size acceptable?
+
+**Phase 3 Restverfeinerungen** (wann immer):
+
+6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
+7. Asset-spezifische Fee-Multipliers.
 
 **Phase 4 Auto-Execution** beginnt erst NACH:
-- mindestens Welle 4-5 Datenbasis-Erweiterung
 - Risk-Modell (Limits/Budget/Audit-Logs)
 - Manuelle Freigabelogik + Not-Aus
+- Welle 5-6 Datenbasis (Earnings-Transcripts + Options-Flow als ergaenzende Signal-Quellen)
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Sektion "Produktvision" + "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 (Slippage, CoinGecko, Sentiment, Background-Fill)
-- `src/backend/app/coingecko_service.py` als Pattern fuer den naechsten Provider-Adapter (Modul-Singleton, Cache, Rate-Limit)
-- `src/backend/app/sentiment.py` als VADER-Helper, den Welle 4/5 wiederverwendet
+- `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen vier Datenbasis-Wellen
+- `src/backend/app/social_sentiment_service.py` als jüngstes Adapter-Pattern (Modul-Singleton, Cache, defensive Multi-Probe)
+- `src/backend/app/sentiment.py` als VADER-Helper fuer Welle 5
 
 ## Stand Beim Letzten Handover
 
