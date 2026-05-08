@@ -20,6 +20,7 @@ const NAV_LINKS: NavLinkSpec[] = [
   { to: "/news", labelKey: "nav.news" },
   { to: "/discover", labelKey: "nav.discover" },
   { to: "/paper-trading", labelKey: "nav.paperTrading" },
+  { to: "/auto-execution", labelKey: "nav.autoExecution" },
   { to: "/docs", labelKey: "nav.docs" },
   { to: "/settings", labelKey: "nav.settings" },
   { to: "/onboarding", labelKey: "nav.setup" },

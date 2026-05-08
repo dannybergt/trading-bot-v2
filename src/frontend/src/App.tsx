@@ -10,6 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { DiscoverPage } from "./pages/DiscoverPage";
 import { NewsHubPage } from "./pages/NewsHubPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { AutoExecutionPage } from "./pages/AutoExecutionPage";
 import { PaperTradingPage } from "./pages/PaperTradingPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
@@ -77,6 +78,7 @@ function App() {
         <Route path="/news" element={<NewsHubPage />} />
         <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/paper-trading" element={<PaperTradingPage />} />
+        <Route path="/auto-execution" element={<AutoExecutionPage />} />
         <Route
           path="/docs"
           element={

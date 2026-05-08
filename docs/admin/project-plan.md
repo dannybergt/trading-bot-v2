@@ -167,6 +167,14 @@ Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
 - `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
 
+Bereits umgesetzt (Phase 4 Auto-Execution-Infrastruktur, 2026-05-08):
+
+- **Phase 4a Risk-Modell + Limits + Audit-Tabellen**: Alembic-Migration `0006_add_auto_execution` (revision `b3c4d5e6f7a8`) mit `auto_execution_limits` (1:1 zu users, UNIQUE-Constraint, defaults `enabled=false`/max_position=$500/max_daily_loss=$200/max_open=5/max_beta=2.0) und `auto_execution_events` (Audit-Log indexed by user_id+status+created_at). Neuer `app/auto_execution.py` mit `evaluate_proposal`, `update_limits`, `halt_all_for_user`, `list_events`. Backup/Export/Import-Coverage
+- **Phase 4b Manuelle Freigabe + Halt-Trigger-Wiring**: 5 Risk-Gates (master/asset-class/position-size/daily-loss/open-positions) + 4 Halt-Trigger aus Welle 14 verdrahtet (`halt_recent_8k_material_event`/`halt_yield_curve_inverted`/`halt_fomc_within_24h`/`halt_symbol_beta_exceeds_limit`) + Net-Yield-Gate als externer Check
+- **Phase 4c Not-Aus**: `POST /api/auto-execution/halt` flippt Master-Switch off + audit-Event + audit_service-Log mit `openOrdersAtHalt`-Count (Phase 4e wird hier den echten Alpaca-Cancel ergaenzen)
+- **Phase 4d Frontend + i18n + Doku**: `/auto-execution`-Page mit Status-Card, Limits-Form, Master-Toggle mit Confirmation-Modal, prominentem Halt-Button, Event-Log-Tabelle. Layout-Nav-Eintrag, i18n DE+EN, Help-Topic `auto-execution.md`. Endpoints: `GET/PUT /api/auto-execution/limits`, `GET /api/auto-execution/events`, `POST /api/auto-execution/proposals/evaluate` (Dry-Run inkl. live-fetched FRED+FMP+Sektor+NetYield), `POST /api/auto-execution/halt`
+- 203 Unit-Tests OK (vorher 188 + 15 auto_execution). Defaults bleiben durchgaengig OFF — kein automatischer Trade-Loop ist gleichzeitig scharf geschaltet, das ist explizit Folgewelle (Phase 4e)
+
 Bereits umgesetzt (Welle 14 — Datenbasis-Tiefe, 2026-05-08):
 
 - (a) **SEC-Filings**: `fmp_service.normalized_sec_filings(symbol)` aggregiert FMP `/sec_filings/{symbol}`, klassifiziert EDGAR-Form-Types ueber statisches Mapping (annual=10-K/20-F, quarterly=10-Q, material=8-K/6-K, proxy=DEF 14A, offering=S-1/424B*, insider=4/SC 13G), liefert KPI-Snapshots `lastAnnual`/`lastQuarterly`/`lastMaterial` plus `recentMaterial` (Top 5 ohne insider/other) und Counts. `/api/research/{symbol}` ergaenzt um `secFilings`. Frontend `SecFilingsSection` mit drei KPI-Cards, kategorisierten Pills, EDGAR-Direktlinks
@@ -294,15 +302,12 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 ## Naechste Prioritaeten
 
-Stand 2026-05-08 nach Abschluss von Phase 3, allen acht Datenbasis-Wellen, ML-Persistenz/Backtest, Audit-Log, In-App-Hilfe:
+Stand 2026-05-08 nach Abschluss von Wellen 1-12 + Welle 14 Datenbasis-Tiefe + Phase 4 Auto-Execution-Infrastruktur (4a-d):
 
-1. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
-2. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+1. **Phase 4e — echter Auto-Trade-Loop + Reconciliation**: Background-Task der pro User (bei `enabled=true`) periodisch Watchlist-Symbole gegen `evaluate_proposal` durchschickt und allowed-Vorschlaege als echte Alpaca-Limit-Orders platziert; zweiter Reconciliation-Task gleicht Alpaca-Order-Status periodisch gegen lokale DB ab. SCHALTET ECHTES GELD SCHARF — braucht expliziten User-Go bevor begonnen wird.
+2. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
 3. Welle 11 Phase B (Capacitor + Biometric + App-Store) wenn echter Native-App-Bedarf entsteht
-6. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
-7. Welle 14 (Datenbasis-Tiefe): SEC-Filings, FRED-Calendar, Sektor-Relativstaerke, Korrelations-/Beta-Tabellen, Yield-Curve-Spread, Commodities
-
-Erfuellte Phase-4-Vorbedingungen (Phase 3 + ML-Persistenz + Backtest + Audit-Trail) muessen jetzt nicht mehr neu eroertert werden.
+4. Phase 5+: weitere UX-Verfeinerung, Multi-Account, Backtesting-UI
 
 ## Entscheidungsregel
 

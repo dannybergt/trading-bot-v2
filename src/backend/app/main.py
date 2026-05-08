@@ -31,7 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
-from app import audit_service, backtest_service, data_quality_service, docs_service
+from app import audit_service, auto_execution, backtest_service, data_quality_service, docs_service
 from app.coingecko_service import get_coingecko_service
 from app.discovery_service import get_discovery_service
 from app.news_hub_service import get_news_hub_service
@@ -46,6 +46,8 @@ from app.social_sentiment_service import get_social_sentiment_service
 from app.models import (
     AlertEvent as AlertEventRecord,
     AlertRule as AlertRuleRecord,
+    AutoExecutionEvent as AutoExecutionEventRecord,
+    AutoExecutionLimits as AutoExecutionLimitsRecord,
     PaperOrder as PaperOrderRecord,
     PaperTransaction as PaperTransactionRecord,
     User,
@@ -2303,6 +2305,149 @@ def get_user_alpaca_service(user: User):
             detail="Failed to connect to Alpaca with the provided keys."
         )
     return service
+
+@app.get("/api/auto-execution/limits")
+def get_auto_execution_limits(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Per-user automation limits + master switch state.
+
+    Defaults to a conservative all-off row when the user has no record yet.
+    """
+    row = auto_execution.get_limits(db, current_user)
+    return auto_execution.serialize_limits(row)
+
+
+@app.put("/api/auto-execution/limits")
+def update_auto_execution_limits(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upsert risk limits for the user.
+
+    Out-of-range values are clamped silently. The master switch only
+    flips to True when the payload explicitly sets `enabled=true`. Every
+    update is audited via `audit_service` so a flipped switch leaves a
+    persistent trail.
+    """
+    row = auto_execution.update_limits(db, current_user, payload or {})
+    audit_service.log_event(
+        db,
+        action="auto_execution.limits_updated",
+        user_id=current_user.id,
+        outcome="success",
+        details={"enabled": bool(row.enabled)},
+    )
+    return auto_execution.serialize_limits(row)
+
+
+@app.get("/api/auto-execution/events")
+def list_auto_execution_events(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Recent automation events for the user, newest-first."""
+    return {
+        "items": auto_execution.list_events(db, current_user, limit=limit, offset=offset),
+    }
+
+
+@app.post("/api/auto-execution/proposals/evaluate")
+def evaluate_auto_execution_proposal(
+    proposal: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Dry-run a proposal against every gate without placing an order.
+
+    Used by the UI's "preview" mode and by future auto-trade loops. The
+    decision is audited even though no broker call follows.
+    """
+    if not isinstance(proposal, dict):
+        raise HTTPException(status_code=400, detail="proposal must be an object")
+
+    symbol = str(proposal.get("symbol") or "")
+    asset_class = str(proposal.get("assetClass") or "")
+    fred_calendar = None
+    sec_filings = None
+    sector_context = None
+    net_yield_breakdown = None
+    if symbol:
+        try:
+            fred_calendar = get_fred_service().normalized_macro_calendar()
+        except Exception:
+            logger.exception("auto_execution_proposal_fred_lookup_failed")
+        try:
+            if asset_class.lower() != "crypto" and service.fmp.configured:
+                sec_filings = service.fmp.normalized_sec_filings(symbol.upper())
+        except Exception:
+            logger.exception("auto_execution_proposal_sec_lookup_failed symbol=%s", symbol)
+        try:
+            if asset_class.lower() != "crypto":
+                sector_context = get_sector_service().get_sector_context(
+                    symbol.upper(), sector=proposal.get("sector")
+                )
+        except Exception:
+            logger.exception("auto_execution_proposal_sector_lookup_failed symbol=%s", symbol)
+
+    target_price = proposal.get("targetPrice")
+    limit_price = proposal.get("limitPrice")
+    side = proposal.get("side") or "buy"
+    if target_price and limit_price:
+        try:
+            net_yield_breakdown = paper_trading.evaluate_net_yield_gate(
+                user=current_user,
+                side=str(side),
+                entry_price=float(limit_price),
+                target_price=float(target_price),
+                asset_class=asset_class or None,
+            )
+        except Exception:
+            logger.exception("auto_execution_proposal_net_yield_failed symbol=%s", symbol)
+
+    decision = auto_execution.evaluate_proposal(
+        db,
+        current_user,
+        proposal,
+        sec_filings=sec_filings,
+        fred_calendar=fred_calendar,
+        sector_context=sector_context,
+        net_yield_breakdown=net_yield_breakdown,
+    )
+    return {
+        "allowed": decision.allowed,
+        "reasons": decision.reasons,
+        "haltTriggers": decision.halt_triggers,
+        "breakdown": decision.breakdown,
+    }
+
+
+@app.post("/api/auto-execution/halt")
+def halt_auto_execution(
+    payload: dict | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Emergency halt: flip the master switch off + audit it.
+
+    Phase 4c will additionally cancel open Alpaca limit orders here. For
+    now we record the halt and rely on the user-side stop-trade flow.
+    """
+    reason = (payload or {}).get("reason") or "manual_user_halt"
+    open_at_halt = auto_execution.halt_all_for_user(db, current_user, reason=str(reason))
+    audit_service.log_event(
+        db,
+        action="auto_execution.halted",
+        user_id=current_user.id,
+        outcome="success",
+        details={"reason": str(reason), "openOrdersAtHalt": open_at_halt},
+    )
+    return {"halted": True, "openOrdersAtHalt": open_at_halt}
+
 
 @app.get("/api/alpaca/account")
 def get_alpaca_account(current_user: User = Depends(get_current_user)):

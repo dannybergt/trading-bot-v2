@@ -30,18 +30,18 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution
+## Naechster Einstieg 2026-05-09: Phase 4 — Auto-Trade-Loop + Reconciliation oder Re-Priorisierung
 
-Welle 14 (Datenbasis-Tiefe) ist abgeschlossen und in `main`. Wellen 1-12 + 14 sind damit ausgeliefert; alle Phase-4-Vorbedingungen sind erfuellt. Naechster grosser Block ist **Phase 4 Auto-Execution** in vier Schnitten:
+Phase 4 Auto-Execution-**Infrastruktur** (4a Risk-Modell+Limits+Audit, 4b Halt-Trigger-Wiring, 4c Not-Aus, 4d Frontend) ist ausgeliefert und in `main`. Defaults bleiben durchgaengig OFF. KEIN automatischer Trade-Loop ist scharf geschaltet — das ist bewusst eine Folgewelle.
 
-1. **Risk-Modell + Limits**: neue Tabellen `auto_execution_limits` (pro User: max_position_size_usd, max_daily_loss_usd, max_open_positions, max_portfolio_beta, allowed_asset_classes, per_strategy_budget_pct) und `auto_execution_events` (audit aller Auto-Trade-Versuche mit accepted/rejected/executed/failed + Begruendung). Alembic-Migration `0006_add_auto_execution`. Backup/Export/Import-Coverage.
-2. **Manuelle Freigabe-Logik**: Setting `auto_execution_enabled` pro User + pro Asset-Klasse + pro Strategie. Default off. UI-Schalter mit Bestaetigungs-Dialog ("Ich verstehe dass dieser Schalter echte Trades ausloest"). Net-Yield-Gate UND Risk-Modell muessen UND-verknuepft pass-en. Halt-Trigger aus Welle 14 verdrahtet: FOMC<24h via `fred_service.upcomingReleases`, 8-K-Window via `fmp_service.lastMaterial.daysAgo<7`, Yield-Curve invertiert via `fred_service.spreadInverted=true`, Sektor-Beta>Limit via `sector_service.correlation.beta`.
-3. **Not-Aus**: Endpoint `POST /api/auto-execution/halt` deaktiviert alle Auto-Strategien sofort + cancelt offene Limit-Orders bei Alpaca. UI-Button "Stop all automation" prominent im Layout-Header.
-4. **Broker-Fehlerpfade**: Reconciliation-Task gleicht Alpaca-Order-Status periodisch gegen lokale DB; bei Discrepancy korrigieren. Recovery bei Connection-Errors mit exponentiellem Backoff.
+Optionen beim naechsten Resume:
 
-Andere Optionen (nicht aktiv vorgeschlagen, nur bei expliziter User-Anforderung):
-- **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
-- **Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
+- **A) Phase 4e: Echter Auto-Trade-Loop + Reconciliation** — periodischer Background-Task, der pro User (bei `enabled=true`) Watchlist-Symbole gegen `evaluate_proposal` durchschickt, allowed=true Vorschlaege in Alpaca-Limit-Orders uebersetzt, und ein zweiter Reconciliation-Task der Alpaca-Order-Status gegen lokale DB abgleicht. Achtung: das schaltet echtes Geld scharf — ein expliziter User-Go ist Pflicht und muss separat dokumentiert sein.
+- **B) Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
+- **C) Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
+- **D) Phase 5+ (UX-Verfeinerung, weitere Datenbasis-Tiefe, Multi-Account, Backtesting-UI)** — bei expliziter Anforderung.
+
+Empfehlung: vor A explizit nachfragen, ob der User wirklich echte Auto-Trades will. Der Multi-Step-Confirmation-Flow auf der `/auto-execution`-Page macht klar dass der Master-Schalter alleine nicht genuegt — der Auto-Loop ist eine zweite, separate Phase.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 

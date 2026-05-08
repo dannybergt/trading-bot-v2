@@ -13,6 +13,8 @@ from app.models import (
     AlertEvent,
     AlertRule,
     AuditEvent,
+    AutoExecutionEvent,
+    AutoExecutionLimits,
     PaperOrder,
     PaperTransaction,
     PasswordResetToken,
@@ -51,6 +53,8 @@ class BackupService:
         paper_orders = db.query(PaperOrder).all()
         paper_transactions = db.query(PaperTransaction).all()
         audit_events = db.query(AuditEvent).all()
+        auto_execution_limits = db.query(AutoExecutionLimits).all()
+        auto_execution_events = db.query(AutoExecutionEvent).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -223,6 +227,35 @@ class BackupService:
                         "executed_at": tx.executed_at.isoformat() if tx.executed_at else None,
                     }
                     for tx in paper_transactions
+                ],
+                "auto_execution_limits": [
+                    {
+                        "id": row.id,
+                        "user_id": row.user_id,
+                        "enabled": bool(row.enabled),
+                        "max_position_size_usd": float(row.max_position_size_usd or 0),
+                        "max_daily_loss_usd": float(row.max_daily_loss_usd or 0),
+                        "max_open_positions": int(row.max_open_positions or 0),
+                        "max_portfolio_beta": float(row.max_portfolio_beta or 0),
+                        "allowed_asset_classes": row.allowed_asset_classes or "",
+                        "per_strategy_budget_pct": row.per_strategy_budget_pct or "{}",
+                        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                    }
+                    for row in auto_execution_limits
+                ],
+                "auto_execution_events": [
+                    {
+                        "id": event.id,
+                        "user_id": event.user_id,
+                        "proposal_id": event.proposal_id,
+                        "symbol": event.symbol,
+                        "side": event.side,
+                        "status": event.status,
+                        "reason": event.reason,
+                        "payload_json": event.payload_json,
+                        "created_at": event.created_at.isoformat() if event.created_at else None,
+                    }
+                    for event in auto_execution_events
                 ],
                 "push_subscriptions": [
                     {
@@ -514,6 +547,45 @@ class BackupService:
                     executed_at=(
                         datetime.fromisoformat(record["executed_at"])
                         if record.get("executed_at")
+                        else None
+                    ),
+                )
+            )
+
+        for record in payload.get("auto_execution_limits", []):
+            db.add(
+                AutoExecutionLimits(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    enabled=bool(record.get("enabled", False)),
+                    max_position_size_usd=float(record.get("max_position_size_usd") or 0),
+                    max_daily_loss_usd=float(record.get("max_daily_loss_usd") or 0),
+                    max_open_positions=int(record.get("max_open_positions") or 0),
+                    max_portfolio_beta=float(record.get("max_portfolio_beta") or 0),
+                    allowed_asset_classes=record.get("allowed_asset_classes") or "",
+                    per_strategy_budget_pct=record.get("per_strategy_budget_pct") or "{}",
+                    updated_at=(
+                        datetime.fromisoformat(record["updated_at"])
+                        if record.get("updated_at")
+                        else None
+                    ),
+                )
+            )
+
+        for record in payload.get("auto_execution_events", []):
+            db.add(
+                AutoExecutionEvent(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    proposal_id=record.get("proposal_id"),
+                    symbol=record.get("symbol"),
+                    side=record.get("side"),
+                    status=record.get("status") or "proposed",
+                    reason=record.get("reason"),
+                    payload_json=record.get("payload_json") or "{}",
+                    created_at=(
+                        datetime.fromisoformat(record["created_at"])
+                        if record.get("created_at")
                         else None
                     ),
                 )

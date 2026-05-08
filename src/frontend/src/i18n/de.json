@@ -20,6 +20,7 @@
     "news": "News",
     "discover": "Entdecken",
     "paperTrading": "Paper-Trading",
+    "autoExecution": "Auto-Execution",
     "docs": "Hilfe",
     "settings": "Einstellungen",
     "setup": "Einrichtung",
@@ -343,6 +344,48 @@
     "later": "Später",
     "offlineReady": "App ist offline einsatzbereit.",
     "ok": "OK"
+  },
+  "autoExecution": {
+    "title": "Auto-Execution",
+    "subtitle": "Phase 4 Risk-Modell und Auto-Execution-Killswitch. Jeder vorgeschlagene Auto-Trade muss saemtliche Risk-Gates UND die Halt-Trigger UND das Net-Yield-Gate passieren. Der Master-Schalter ist beim Ausliefern aus — erst aktivieren wenn die Limits darunter konfiguriert sind.",
+    "loading": "Laedt…",
+    "save": "Limits speichern",
+    "saving": "Speichern…",
+    "toggleLabel": "Master-Schalter",
+    "haltButton": "Alle Automation stoppen",
+    "statusEnabled": "Automation ist aktiviert",
+    "statusEnabledHelp": "Vorschlaege durchlaufen weiter alle Risk-Gates; Halt-Trigger (FOMC<24h, juengster 8-K, invertierte Yield-Curve, Beta>Limit) blockieren einzelne Orders.",
+    "statusDisabled": "Automation ist deaktiviert",
+    "statusDisabledHelp": "Kein Order wird automatisch platziert. Schalter umlegen, um zu opt-in.",
+    "feedback": {
+      "saved": "Gespeichert.",
+      "halted": "Halt bestaetigt. {{count}} offene Positionen protokolliert."
+    },
+    "limits": {
+      "title": "Risk-Limits",
+      "maxPositionSize": "Max Positionsgroesse (USD)",
+      "maxDailyLoss": "Max Tagesverlust (USD)",
+      "maxOpenPositions": "Max offene Positionen",
+      "maxPortfolioBeta": "Max Symbol-Beta vs SPY",
+      "allowedAssetClasses": "Zugelassene Asset-Klassen"
+    },
+    "events": {
+      "title": "Letzte Automation-Events",
+      "subtitle": "Jede Evaluation, jeder Halt und jede Ausfuehrung hinterlaesst hier eine Audit-Zeile.",
+      "empty": "Noch keine Automation-Events."
+    },
+    "confirmEnable": {
+      "title": "Automation aktivieren?",
+      "body": "Ich verstehe, dass dieser Schalter dem System erlaubt Vorschlaege zu evaluieren, anzunehmen und (in spaeteren Phasen) echte Broker-Orders innerhalb meiner konfigurierten Limits zu platzieren. Der Halt-Button stoppt alles sofort.",
+      "confirm": "Aktivieren",
+      "cancel": "Abbrechen"
+    },
+    "confirmHalt": {
+      "title": "Alle Automation stoppen?",
+      "body": "Das deaktiviert den Master-Schalter und protokolliert das Halt-Ereignis. Offene Alpaca-Limit-Orders werden in Phase 4d-Reconciliation gecancelt.",
+      "confirm": "Ja, alles stoppen",
+      "cancel": "Abbrechen"
+    }
   },
   "macroCalendar": {
     "title": "Makro-Kalender",

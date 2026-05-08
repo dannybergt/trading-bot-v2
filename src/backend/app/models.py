@@ -244,3 +244,46 @@ class PaperTransaction(Base):
 
     user = relationship("User", back_populates="paper_transactions")
     order = relationship("PaperOrder", back_populates="transactions")
+
+
+class AutoExecutionLimits(Base):
+    """Per-user automation risk limits.
+
+    The `enabled` column is the master kill-switch. Even when `enabled=True`,
+    the automation pipeline only places an order after `evaluate_proposal`
+    returns `allowed=True`. Every check (max-position-size, max-daily-loss,
+    max-open-positions, max-portfolio-beta, allowed-asset-classes,
+    halt-triggers, Net-Yield-Gate) must pass independently.
+    """
+
+    __tablename__ = "auto_execution_limits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    enabled = Column(Boolean, nullable=False, default=False)
+    max_position_size_usd = Column(Float, nullable=False, default=500.0)
+    max_daily_loss_usd = Column(Float, nullable=False, default=200.0)
+    max_open_positions = Column(Integer, nullable=False, default=5)
+    max_portfolio_beta = Column(Float, nullable=False, default=2.0)
+    # Comma-separated list of asset classes (e.g. "stock,etf").
+    allowed_asset_classes = Column(String, nullable=False, default="")
+    # JSON map: {"trend_following": 50, "mean_reversion": 50}.
+    per_strategy_budget_pct = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AutoExecutionEvent(Base):
+    """Audit row for every automation evaluation + outcome."""
+
+    __tablename__ = "auto_execution_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    proposal_id = Column(String, nullable=True)
+    symbol = Column(String, nullable=True)
+    side = Column(String, nullable=True)
+    # proposed | accepted | rejected | executed | failed | halted
+    status = Column(String, index=True, nullable=False)
+    reason = Column(Text, nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)

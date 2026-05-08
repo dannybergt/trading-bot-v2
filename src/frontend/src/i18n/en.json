@@ -20,6 +20,7 @@
     "news": "News",
     "discover": "Discover",
     "paperTrading": "Paper trading",
+    "autoExecution": "Auto-execution",
     "docs": "Help",
     "settings": "Settings",
     "setup": "Setup",
@@ -343,6 +344,48 @@
     "later": "Later",
     "offlineReady": "App ready to work offline.",
     "ok": "OK"
+  },
+  "autoExecution": {
+    "title": "Auto-execution",
+    "subtitle": "Phase 4 risk model + automation kill-switch. Every proposed automated trade has to clear all risk gates AND the halt-trigger checks AND the Net-Yield-Gate. The master switch ships disabled — turn it on only after configuring the limits below.",
+    "loading": "Loading…",
+    "save": "Save limits",
+    "saving": "Saving…",
+    "toggleLabel": "Master switch",
+    "haltButton": "Stop all automation",
+    "statusEnabled": "Automation is enabled",
+    "statusEnabledHelp": "Proposals still pass through every risk gate; halt triggers (FOMC<24h, recent 8-K, inverted yield curve, beta>limit) block individual orders.",
+    "statusDisabled": "Automation is disabled",
+    "statusDisabledHelp": "No order will be placed automatically. Turn the switch on to opt in.",
+    "feedback": {
+      "saved": "Saved.",
+      "halted": "Halt confirmed. {{count}} open positions logged."
+    },
+    "limits": {
+      "title": "Risk limits",
+      "maxPositionSize": "Max position size (USD)",
+      "maxDailyLoss": "Max daily loss (USD)",
+      "maxOpenPositions": "Max open positions",
+      "maxPortfolioBeta": "Max symbol beta vs SPY",
+      "allowedAssetClasses": "Allowed asset classes"
+    },
+    "events": {
+      "title": "Recent automation events",
+      "subtitle": "Every evaluation, halt, and execution leaves an audit row here.",
+      "empty": "No automation events yet."
+    },
+    "confirmEnable": {
+      "title": "Enable automation?",
+      "body": "I understand that turning this on permits the system to evaluate, accept, and (in future phases) place real broker orders within the limits I configured. The halt button stops everything immediately.",
+      "confirm": "Enable",
+      "cancel": "Cancel"
+    },
+    "confirmHalt": {
+      "title": "Stop all automation?",
+      "body": "This disables the master switch and audits the halt event. Any open Alpaca limit orders will be canceled in Phase 4d reconciliation.",
+      "confirm": "Yes, stop everything",
+      "cancel": "Cancel"
+    }
   },
   "macroCalendar": {
     "title": "Macro calendar",
