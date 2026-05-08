@@ -14,19 +14,19 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Welle 11 Android-PWA
+## Naechster Einstieg 2026-05-09: Welle 12 DE-Uebersetzungen
 
-Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert (in dieser Reihenfolge):
+Sitzung 2026-05-08 hat geliefert (in dieser Reihenfolge):
 
-- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters auf `/discover`, **Welle 10 Security-Welle** (Trivy-Image-Scan, CSP/HSTS, Upload-MIME-Validation, Per-Account-Login-Rate-Limit).
+- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub, **Data-Source-Transparency** (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters, **Welle 10 Security-Welle** (Trivy, CSP/HSTS, Upload-MIME, Per-Account-Rate-Limit), **Welle 11 Phase A Android via PWA** (Manifest + Service-Worker + Offline-Caching + Install-Prompt).
 
 Naechste sinnvolle Schnitte:
 
-**Welle 11 — Android via PWA**: Phase A = Manifest + Service-Worker fuer "installierbar auf Homescreen" mit offline-Fallback (nutzt den bestehenden VAPID-Push-Stack); Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth.
+**Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen (ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance, NewsHubPage, DiscoverPage, DataQualitySection, HelpDrawer, DocsPage, PwaUpdatePrompt) plus die 12 Markdown-Topics in `docs/inapp/`. i18n-Pattern existiert schon (PaperTradingPage komplett DE/EN), Vorlage ist bereit.
 
-**Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen (ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance, NewsHubPage, DiscoverPage, DataQualitySection) plus alle 11 Markdown-Topics.
+**Phase 4 Auto-Execution** beginnt erst NACH Welle 12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
 
-**Phase 4 Auto-Execution** beginnt erst NACH Welle 11-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
+**Welle 11 Phase B** (Capacitor + Biometric + App-Store) bleibt zurueckgestellt bis echter Native-App-Bedarf entsteht.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 

@@ -450,6 +450,21 @@ async function run() {
       console.log("ui_admin skipped_non_admin");
     }
 
+    // 11c. PWA manifest is served and reachable from the page head.
+    await waitForCondition(
+      client,
+      "manifest link in head",
+      "!!document.querySelector('link[rel=\"manifest\"]')",
+      10000,
+    );
+    const manifestUrl = await client.evaluate(
+      "document.querySelector('link[rel=\"manifest\"]').href",
+    );
+    if (typeof manifestUrl !== "string" || manifestUrl.length === 0) {
+      throw new Error("Manifest link href is empty");
+    }
+    console.log("ui_pwa_manifest ok");
+
     // 12. Token persisted across navigations
     const token = await client.evaluate("localStorage.getItem('access_token')");
     if (!token) {

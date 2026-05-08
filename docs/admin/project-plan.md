@@ -167,6 +167,10 @@ Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
 - `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
 
+Bereits umgesetzt (Welle 11 Phase A — Android via PWA, 2026-05-08):
+
+- `vite-plugin-pwa` integriert: Web-App-Manifest, Service-Worker via Workbox mit NetworkFirst fuer `/api/*` (5s timeout, 1h cache fallback fuer Offline-Reads) und CacheFirst fuer statische Assets (7d). SVG-Icon `public/icon.svg` mit Brand-Color-Logo, im Manifest mit purpose=any + maskable. `index.html` mit theme-color, apple-touch-icon, viewport viewport-fit=cover, apple-mobile-web-app-capable. Neuer `PwaUpdatePrompt`-Component zeigt In-App-Update-Notification bei neuem Build. Help-Topic `mobile.md`. UI-Regression-Schritt `ui_pwa_manifest ok`. Phase B (Capacitor + Biometric + App-Store) bleibt fuer spaeter
+
 Bereits umgesetzt (Welle 10 — Security-Welle, 2026-05-08):
 
 - Container-Image-Vulnerability-Scan via `aquasecurity/trivy-action` in `ci.yml` + `publish.yml`; severity HIGH+CRITICAL, ignore-unfixed, soft-fail (`exit-code: '0'`); neue `.trivyignore` mit dokumentiertem Format
@@ -281,9 +285,9 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 Stand 2026-05-08 nach Abschluss von Phase 3, allen acht Datenbasis-Wellen, ML-Persistenz/Backtest, Audit-Log, In-App-Hilfe:
 
-1. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
-2. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
-3. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 11-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+1. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
+2. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+3. Welle 11 Phase B (Capacitor + Biometric + App-Store) wenn echter Native-App-Bedarf entsteht
 6. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
 7. Welle 14 (Datenbasis-Tiefe): SEC-Filings, FRED-Calendar, Sektor-Relativstaerke, Korrelations-/Beta-Tabellen, Yield-Curve-Spread, Commodities
 
