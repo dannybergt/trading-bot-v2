@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { PaperTradingPage } from "./pages/PaperTradingPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ScannerPage } from "./pages/ScannerPage";
@@ -66,6 +67,7 @@ function App() {
           }
         />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/paper-trading" element={<PaperTradingPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/admin"

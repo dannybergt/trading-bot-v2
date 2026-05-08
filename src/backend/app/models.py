@@ -39,6 +39,8 @@ class User(Base):
     alert_deliveries = relationship("WatchlistAlertDelivery", back_populates="user", cascade="all, delete-orphan")
     alert_rules = relationship("AlertRule", back_populates="user", cascade="all, delete-orphan")
     alert_events = relationship("AlertEvent", back_populates="user", cascade="all, delete-orphan")
+    paper_orders = relationship("PaperOrder", back_populates="user", cascade="all, delete-orphan")
+    paper_transactions = relationship("PaperTransaction", back_populates="user", cascade="all, delete-orphan")
 
 
 class PasswordResetToken(Base):
@@ -183,3 +185,42 @@ class AlertEvent(Base):
     user = relationship("User", back_populates="alert_events")
     rule = relationship("AlertRule", back_populates="events")
     watchlist = relationship("Watchlist", back_populates="alert_events")
+
+
+class PaperOrder(Base):
+    __tablename__ = "paper_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    side = Column(String, nullable=False)
+    qty = Column(Float, nullable=False)
+    limit_price = Column(Float, nullable=True)
+    status = Column(String, index=True, nullable=False, default="pending")
+    source = Column(String, nullable=False, default="manual")
+    rejection_reason = Column(String, nullable=True)
+    placed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)
+    filled_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="paper_orders")
+    transactions = relationship("PaperTransaction", back_populates="order", cascade="all, delete-orphan")
+
+
+class PaperTransaction(Base):
+    __tablename__ = "paper_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    order_id = Column(Integer, ForeignKey("paper_orders.id"), index=True, nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    side = Column(String, nullable=False)
+    qty = Column(Float, nullable=False)
+    price = Column(Float, nullable=False)
+    fee_absolute = Column(Float, nullable=False, default=0.0)
+    fee_percent_amount = Column(Float, nullable=False, default=0.0)
+    tax_amount = Column(Float, nullable=False, default=0.0)
+    realized_pnl = Column(Float, nullable=False, default=0.0)
+    executed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)
+
+    user = relationship("User", back_populates="paper_transactions")
+    order = relationship("PaperOrder", back_populates="transactions")

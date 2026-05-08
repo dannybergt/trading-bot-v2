@@ -370,6 +370,25 @@ async function run() {
     );
     console.log("ui_settings ok");
 
+    // 10b. Paper-Trading page renders order form + tab navigation
+    await navigate(client, `${FRONTEND_URL}/paper-trading`);
+    await waitForCondition(
+      client,
+      "paper trading form + tabs",
+      "!!document.querySelector('[data-testid=\"paper-trading-page\"]') && !!document.querySelector('[data-testid=\"paper-tab-openOrders\"]') && !!document.querySelector('[data-testid=\"paper-tab-journal\"]') && !!document.querySelector('[data-testid=\"paper-tab-positions\"]') && !!document.querySelector('[data-testid=\"paper-tab-summary\"]')",
+      15000,
+    );
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"paper-tab-summary\"]').click()",
+    );
+    await waitForCondition(
+      client,
+      "paper trading summary content",
+      "!!document.querySelector('[data-testid=\"paper-tab-content-summary\"]')",
+      10000,
+    );
+    console.log("ui_paper_trading ok");
+
     // 11. Admin page if first user is admin (registration of a fresh stack
     // makes the first registered user admin per the backend's bootstrap).
     const isAdmin = await client.evaluate(`

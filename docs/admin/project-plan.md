@@ -98,14 +98,25 @@ Offen:
 
 ### Phase 3: Paper-Trading
 
-Status: noch nicht substanziell gestartet.
+Status: in Arbeit. Erster Schnitt vom 2026-05-08 liefert Schema, Backend-Endpunkte, Order-Lifecycle, Trade-Journal, Frontend-Page.
 
-Naechste Zielpunkte:
+Bereits umgesetzt:
 
-- Order- und Ausfuehrungsmodell fuer Paper-Trading
-- Transaktionsjournal
-- PnL, Kosten, Slippage und Mindest-Rendite-Filter (verwendet das bereits in Phase 2 verbaute Net-Yield-Gate)
-- Darstellung von Entries/Exits im Chart
+- Tabellen `paper_orders` und `paper_transactions` ueber Alembic-Migration `0004_add_paper_trading` (`c8e2a1b9d4f3`)
+- Endpunkte `POST/GET/DELETE /api/paper-trading/orders`, `GET /api/paper-trading/transactions|positions|summary`
+- Order-Lifecycle-Service `app/paper_trading.py`: simulierte Fills gegen letzten Close (0.1% adverse Slippage), Limit-Order-Logik, weighted-average Cost-Basis fuer realisierte PnL nach Brokergebuehren und Kapitalertragssteuer
+- Net-Yield-Gate auf Order-Annahme: bei gesetztem `target_price` rechnet die Service-Schicht denselben Fees+Tax-Pfad wie `PricePredictor._enrich_with_yield_model` und lehnt unterhalb von `min_target_yield` ab
+- `MarketDataService.get_latest_close` als Best-Effort-Preisquelle (Alpaca -> Alpha Vantage -> yfinance)
+- Backup/Export/Import deckt `paper_orders` und `paper_transactions` mit ab
+- Frontend `/paper-trading` Page (DE/EN) mit Place-Order-Form, Tab-Navigation Open Orders / Trade-Journal / Positions / Summary; Journal zeigt jeden Fill chronologisch mit nominaler PnL, prozentualer PnL, Gebuehren und Steuerlast plus Gesamtsummen
+- Unit-Tests `tests/test_paper_trading_service.py` (10 Tests), API-Regression um Settings, Gate-Reject, Place/List/Cancel und Backup-/Export-Coverage erweitert, UI-Regression-Schritt `ui_paper_trading ok`
+
+Offene Zielpunkte (Phase 3 weiter):
+
+- Darstellung von Entries/Exits im Chart auf `/analysis/<symbol>`
+- Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten (heute fuellt nur der Place-Time-Snapshot)
+- UI-Verlinkung zwischen Recommendation-Card auf `/analysis` und Paper-Trading-Order (Source `auto-recommendation`)
+- Broker-/Fee-Modelle pro Asset-Klasse verfeinern (aktuell uniformer Float-Anteil)
 
 ### Phase 4: Live-Trading mit Auto-Execution
 

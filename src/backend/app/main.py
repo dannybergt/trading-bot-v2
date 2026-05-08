@@ -37,6 +37,8 @@ from app.migrate_watchlists import migrate as migrate_watchlists
 from app.models import (
     AlertEvent as AlertEventRecord,
     AlertRule as AlertRuleRecord,
+    PaperOrder as PaperOrderRecord,
+    PaperTransaction as PaperTransactionRecord,
     User,
     Watchlist as WatchlistRecord,
     WatchlistAlertDelivery,
@@ -44,6 +46,7 @@ from app.models import (
     WatchlistItem as WatchlistItemRecord,
     WatchlistItemTag,
 )
+from app import paper_trading
 from app.push_service import PushService
 from app.services import MarketDataService
 from app.watchlist_alerts import (
@@ -839,6 +842,17 @@ class WatchlistAlertSettingsRequest(BaseModel):
     push_enabled: bool | None = Field(default=None, alias="pushEnabled")
     min_priority: str | None = Field(default=None, alias="minPriority")
     min_score: int | None = Field(default=None, ge=0, le=100, alias="minScore")
+
+
+class PaperOrderRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    symbol: str
+    side: str
+    qty: float = Field(gt=0)
+    limit_price: float | None = Field(default=None, alias="limitPrice")
+    target_price: float | None = Field(default=None, alias="targetPrice")
+    source: str = "manual"
 
 # Default Data
 DEFAULT_WATCHLISTS = [
@@ -1796,6 +1810,87 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
 @app.get("/api/news/{symbol:path}")
 def get_stock_news(symbol: str, current_user: User = Depends(get_current_user)):
     return service.get_market_news(symbol)
+
+
+# --- PAPER-TRADING ROUTES ---
+@app.post("/api/paper-trading/orders")
+def create_paper_order(
+    req: PaperOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        order = paper_trading.place_order(
+            db=db,
+            user=current_user,
+            symbol=req.symbol,
+            side=req.side,
+            qty=req.qty,
+            limit_price=req.limit_price,
+            target_price=req.target_price,
+            source=req.source,
+            latest_close_provider=service.get_latest_close,
+        )
+    except paper_trading.NetYieldGateRejection as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"reason": exc.reason, "breakdown": exc.breakdown},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return paper_trading.serialize_order(order)
+
+
+@app.get("/api/paper-trading/orders")
+def list_paper_orders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {"orders": paper_trading.list_orders(db, current_user)}
+
+
+@app.delete("/api/paper-trading/orders/{order_id}")
+def cancel_paper_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        order = paper_trading.cancel_order(db=db, user=current_user, order_id=order_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Order not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return paper_trading.serialize_order(order)
+
+
+@app.get("/api/paper-trading/transactions")
+def list_paper_transactions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {"transactions": paper_trading.list_transactions(db, current_user)}
+
+
+@app.get("/api/paper-trading/positions")
+def list_paper_positions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {
+        "positions": paper_trading.compute_positions(
+            db, current_user, service.get_latest_close
+        )
+    }
+
+
+@app.get("/api/paper-trading/summary")
+def get_paper_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return paper_trading.compute_summary(db, current_user, service.get_latest_close)
+
 
 # --- ALPACA ROUTES ---
 def get_user_alpaca_service(user: User):

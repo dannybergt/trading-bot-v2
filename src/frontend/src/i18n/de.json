@@ -17,6 +17,7 @@
     "watchlists": "Watchlists",
     "scanner": "Scanner",
     "alerts": "Alerts",
+    "paperTrading": "Paper-Trading",
     "settings": "Einstellungen",
     "setup": "Einrichtung",
     "admin": "Admin",
@@ -109,6 +110,90 @@
         "description": "Wird vom projizierten Gewinn abgezogen, damit Empfehlungen nur auslösen, wenn der NETTO-Ertrag dein Minimum erreicht.",
         "cta": "Steuersatz setzen"
       }
+    }
+  },
+  "paperTrading": {
+    "title": "Paper-Trading",
+    "subtitle": "Simulierte Orders gegen dein Watchlist-Universum. Das Net-Yield-Gate nutzt dieselben Gebühren-/Steuer-Regeln wie echte Empfehlungen.",
+    "tabs": {
+      "openOrders": "Offene Orders",
+      "journal": "Trade-Journal",
+      "positions": "Positionen",
+      "summary": "Zusammenfassung"
+    },
+    "form": {
+      "title": "Order platzieren",
+      "symbol": "Symbol",
+      "side": "Richtung",
+      "buy": "Kauf",
+      "sell": "Verkauf",
+      "qty": "Menge",
+      "limitPrice": "Limit-Preis (optional)",
+      "targetPrice": "Zielpreis (optional, aktiviert Net-Yield-Gate)",
+      "source": "Quelle",
+      "sourceManual": "Manuell",
+      "sourceAuto": "Auto-Empfehlung",
+      "submit": "Order platzieren",
+      "submitting": "Wird platziert…",
+      "rejected": "Order vom Net-Yield-Gate abgelehnt.",
+      "rejectionDetail": "Netto-Ziel {{net}}% unter Mindestwert {{minimum}}% (brutto {{gross}}%, Gebühren {{fees}}%, Steuer {{tax}}%).",
+      "errorGeneric": "Order konnte nicht platziert werden."
+    },
+    "openOrders": {
+      "empty": "Keine offenen Orders. Lege oben eine an.",
+      "headers": {
+        "placedAt": "Platziert",
+        "symbol": "Symbol",
+        "side": "Richtung",
+        "qty": "Menge",
+        "limit": "Limit",
+        "status": "Status",
+        "source": "Quelle",
+        "actions": "Aktionen"
+      },
+      "cancel": "Stornieren"
+    },
+    "journal": {
+      "empty": "Noch keine Transaktionen. Gefüllte Orders erscheinen hier chronologisch.",
+      "headers": {
+        "executedAt": "Ausgeführt",
+        "symbol": "Symbol",
+        "side": "Richtung",
+        "qty": "Menge",
+        "price": "Preis",
+        "fees": "Gebühren",
+        "tax": "Steuer",
+        "pnlNominal": "G/V (nominal)",
+        "pnlPct": "G/V (%)"
+      },
+      "totalsTitle": "Summen über alle Transaktionen",
+      "totalRealized": "Realisierte G/V (nach Gebühren + Steuer)",
+      "totalFees": "Gebühren gesamt",
+      "totalTax": "Kapitalertragssteuer gesamt",
+      "totalCount": "Transaktionen"
+    },
+    "positions": {
+      "empty": "Keine offenen Positionen.",
+      "headers": {
+        "symbol": "Symbol",
+        "qty": "Menge",
+        "avgEntry": "Durchschn. Einstieg",
+        "lastPrice": "Letzter Preis",
+        "unrealized": "Unrealisiert",
+        "unrealizedPct": "Unrealisiert %",
+        "realized": "Realisiert",
+        "feeTotal": "Gebühren",
+        "taxTotal": "Steuer"
+      }
+    },
+    "summary": {
+      "realizedPnl": "Realisierte G/V (netto)",
+      "unrealizedPnl": "Unrealisierte G/V",
+      "feeTotal": "Gebühren gesamt",
+      "taxTotal": "Kapitalertragssteuer gesamt",
+      "openExposure": "Offene Position (Wert)",
+      "openPositions": "Offene Positionen",
+      "transactionCount": "Transaktionen"
     }
   }
 }

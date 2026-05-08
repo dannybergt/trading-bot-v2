@@ -17,6 +17,7 @@
     "watchlists": "Watchlists",
     "scanner": "Scanner",
     "alerts": "Alerts",
+    "paperTrading": "Paper trading",
     "settings": "Settings",
     "setup": "Setup",
     "admin": "Admin",
@@ -109,6 +110,90 @@
         "description": "Subtracted from projected gains so recommendations only fire when the NET return clears your minimum.",
         "cta": "Set tax rate"
       }
+    }
+  },
+  "paperTrading": {
+    "title": "Paper trading",
+    "subtitle": "Place simulated orders against your watchlist universe. The Net-Yield-Gate applies the same fee + tax math as live recommendations.",
+    "tabs": {
+      "openOrders": "Open orders",
+      "journal": "Trade journal",
+      "positions": "Positions",
+      "summary": "Summary"
+    },
+    "form": {
+      "title": "Place order",
+      "symbol": "Symbol",
+      "side": "Side",
+      "buy": "Buy",
+      "sell": "Sell",
+      "qty": "Quantity",
+      "limitPrice": "Limit price (optional)",
+      "targetPrice": "Target price (optional, enables Net-Yield-Gate)",
+      "source": "Source",
+      "sourceManual": "Manual",
+      "sourceAuto": "Auto recommendation",
+      "submit": "Place order",
+      "submitting": "Placing…",
+      "rejected": "Order rejected by Net-Yield-Gate.",
+      "rejectionDetail": "Net target {{net}}% below required {{minimum}}% (gross {{gross}}%, fees {{fees}}%, tax {{tax}}%).",
+      "errorGeneric": "Order could not be placed."
+    },
+    "openOrders": {
+      "empty": "No open orders. Place one above.",
+      "headers": {
+        "placedAt": "Placed",
+        "symbol": "Symbol",
+        "side": "Side",
+        "qty": "Qty",
+        "limit": "Limit",
+        "status": "Status",
+        "source": "Source",
+        "actions": "Actions"
+      },
+      "cancel": "Cancel"
+    },
+    "journal": {
+      "empty": "No transactions yet. Filled orders appear here in chronological order.",
+      "headers": {
+        "executedAt": "Executed",
+        "symbol": "Symbol",
+        "side": "Side",
+        "qty": "Qty",
+        "price": "Price",
+        "fees": "Fees",
+        "tax": "Tax",
+        "pnlNominal": "P/L (nominal)",
+        "pnlPct": "P/L (%)"
+      },
+      "totalsTitle": "Totals across all transactions",
+      "totalRealized": "Realized P/L (after fees + tax)",
+      "totalFees": "Total fees",
+      "totalTax": "Total capital-gains tax",
+      "totalCount": "Transactions"
+    },
+    "positions": {
+      "empty": "No open positions.",
+      "headers": {
+        "symbol": "Symbol",
+        "qty": "Qty",
+        "avgEntry": "Avg entry",
+        "lastPrice": "Last price",
+        "unrealized": "Unrealized P/L",
+        "unrealizedPct": "Unrealized %",
+        "realized": "Realized P/L",
+        "feeTotal": "Fees",
+        "taxTotal": "Tax"
+      }
+    },
+    "summary": {
+      "realizedPnl": "Realized P/L (net)",
+      "unrealizedPnl": "Unrealized P/L",
+      "feeTotal": "Total broker fees",
+      "taxTotal": "Total capital-gains tax",
+      "openExposure": "Open exposure",
+      "openPositions": "Open positions",
+      "transactionCount": "Transactions"
     }
   }
 }

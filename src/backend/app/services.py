@@ -91,6 +91,45 @@ class MarketDataService:
             return pd.DataFrame()
         return self.alpha_vantage.get_history_df(profile["symbol"], asset_class, limit=limit)
 
+    def get_latest_close(self, symbol: str) -> float | None:
+        """Best-effort latest close used by the paper-trading fill simulator.
+
+        Tries Alpaca bars (stocks) and Alpha Vantage history (etf/crypto)
+        first; falls back to yfinance for stocks. Returns None when no
+        source produces a usable price so callers can leave the order
+        pending instead of fabricating a fill.
+        """
+        target_symbol = canonicalize_symbol(symbol)
+        asset_profile = self.get_asset_profile(symbol)
+
+        if self.alpaca and asset_profile.get("assetClass") == "stock":
+            try:
+                df = self.alpaca.get_bars_df(target_symbol, timeframe="1Day", limit=1)
+                if not df.empty and "Close" in df.columns:
+                    return float(df.iloc[-1]["Close"])
+            except Exception:
+                logger.exception("latest_close_alpaca_failed symbol=%s", symbol)
+
+        if asset_profile.get("assetClass") in {"etf", "crypto"}:
+            try:
+                df = self.alpha_vantage.get_history_df(
+                    asset_profile["symbol"], asset_profile["assetClass"], limit=1
+                )
+                if not df.empty and "Close" in df.columns:
+                    return float(df.iloc[-1]["Close"])
+            except Exception:
+                logger.exception("latest_close_alpha_vantage_failed symbol=%s", symbol)
+
+        if not asset_profile.get("isCrypto") and acquire_rate_limit("yfinance", timeout=2.0):
+            try:
+                hist = yf.Ticker(to_yfinance_symbol(symbol)).history(period="5d")
+                if not hist.empty and "Close" in hist.columns:
+                    return float(hist["Close"].iloc[-1])
+            except Exception:
+                logger.exception("latest_close_yfinance_failed symbol=%s", symbol)
+
+        return None
+
     def get_ticker_info(
         self,
         symbol: str,

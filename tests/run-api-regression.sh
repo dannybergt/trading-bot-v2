@@ -515,6 +515,105 @@ acknowledged_events.raise_for_status()
 assert any(item["id"] == alert_event_id for item in acknowledged_events.json()["items"])
 print("acknowledged alert event list ok")
 
+# --- Paper-Trading flow ---
+paper_settings = requests.put(
+    f"{base}/api/auth/me/portfolio-settings",
+    headers=headers,
+    json={
+        "trade_fee_absolute": 1,
+        "trade_fee_percent": 0,
+        "min_target_yield": 5,
+        "capital_gains_tax_bps": 2500,
+        "income_tax_bps": 0,
+    },
+    timeout=30,
+)
+paper_settings.raise_for_status()
+print("paper trading settings ok")
+
+# Gate must reject when the target is below the user's min_target_yield
+gate_reject = requests.post(
+    f"{base}/api/paper-trading/orders",
+    headers=headers,
+    json={
+        "symbol": "AAPL",
+        "side": "buy",
+        "qty": 1,
+        "limitPrice": 100.0,
+        "targetPrice": 101.0,
+        "source": "auto-recommendation",
+    },
+    timeout=30,
+)
+assert gate_reject.status_code == 400, gate_reject.text
+gate_detail = gate_reject.json().get("detail")
+assert isinstance(gate_detail, dict) and gate_detail.get("reason") == "net_target_below_minimum"
+print("paper trading net yield gate reject ok")
+
+# Place an order without a target so the gate is bypassed; the limit is set
+# absurdly high so the latest-close-based fill simulator accepts it whenever
+# any price source returns a value (otherwise the order rests as pending,
+# which the cancel step below still exercises end-to-end).
+paper_buy = requests.post(
+    f"{base}/api/paper-trading/orders",
+    headers=headers,
+    json={
+        "symbol": "AAPL",
+        "side": "buy",
+        "qty": 1,
+        "limitPrice": 99999.0,
+        "source": "manual",
+    },
+    timeout=30,
+)
+paper_buy.raise_for_status()
+paper_order = paper_buy.json()
+paper_order_id = paper_order["id"]
+assert paper_order["symbol"] == "AAPL"
+assert paper_order["status"] in {"filled", "pending"}
+print(f"paper trading order placed ok status={paper_order['status']}")
+
+paper_orders_list = requests.get(
+    f"{base}/api/paper-trading/orders", headers=headers, timeout=30
+)
+paper_orders_list.raise_for_status()
+assert any(o["id"] == paper_order_id for o in paper_orders_list.json()["orders"])
+print("paper trading orders list ok")
+
+paper_transactions = requests.get(
+    f"{base}/api/paper-trading/transactions", headers=headers, timeout=30
+)
+paper_transactions.raise_for_status()
+paper_txs = paper_transactions.json()["transactions"]
+assert isinstance(paper_txs, list)
+print(f"paper trading transactions list ok count={len(paper_txs)}")
+
+paper_positions = requests.get(
+    f"{base}/api/paper-trading/positions", headers=headers, timeout=30
+)
+paper_positions.raise_for_status()
+assert isinstance(paper_positions.json()["positions"], list)
+print("paper trading positions list ok")
+
+paper_summary = requests.get(
+    f"{base}/api/paper-trading/summary", headers=headers, timeout=30
+)
+paper_summary.raise_for_status()
+paper_summary_payload = paper_summary.json()
+for key in ("realizedPnl", "unrealizedPnl", "feeTotal", "taxTotal", "openExposure", "openPositions", "transactionCount"):
+    assert key in paper_summary_payload, f"missing summary key {key}"
+print("paper trading summary ok")
+
+if paper_order["status"] == "pending":
+    cancel_resp = requests.delete(
+        f"{base}/api/paper-trading/orders/{paper_order_id}",
+        headers=headers,
+        timeout=30,
+    )
+    cancel_resp.raise_for_status()
+    assert cancel_resp.json()["status"] == "cancelled"
+    print("paper trading cancel ok")
+
 watchlist_remove_etf_item = requests.delete(
     f"{base}/api/watchlists/{watchlist_id}/items/VOO",
     headers=headers,
@@ -595,6 +694,9 @@ assert any(
 assert isinstance(backup_payload["data"].get("watchlist_alert_deliveries"), list)
 assert any(rule["id"] == alert_rule_id for rule in backup_payload["data"].get("alert_rules", []))
 assert any(event["id"] == alert_event_id for event in backup_payload["data"].get("alert_events", []))
+assert isinstance(backup_payload["data"].get("paper_orders"), list)
+assert any(order["id"] == paper_order_id for order in backup_payload["data"]["paper_orders"])
+assert isinstance(backup_payload["data"].get("paper_transactions"), list)
 print("backup download ok")
 
 export_state = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
@@ -610,6 +712,9 @@ assert any(
 assert isinstance(export_payload["data"].get("watchlist_alert_deliveries"), list)
 assert any(rule["id"] == alert_rule_id for rule in export_payload["data"].get("alert_rules", []))
 assert any(event["id"] == alert_event_id for event in export_payload["data"].get("alert_events", []))
+assert isinstance(export_payload["data"].get("paper_orders"), list)
+assert any(order["id"] == paper_order_id for order in export_payload["data"]["paper_orders"])
+assert isinstance(export_payload["data"].get("paper_transactions"), list)
 print("export ok")
 
 platform_import = requests.post(

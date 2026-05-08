@@ -14,36 +14,24 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-08: Phase 3 Paper-Trading
+## Naechster Einstieg 2026-05-09: Phase 3 weiterziehen
 
-Letzte Sitzung hat Phase 0/1/2 vollstaendig geschlossen, Frontend auf React-Source geswapt, UX-Direktive verankert, i18n-DE/EN-Base eingebaut, Phase-2-Tiefe (Cashflow/Debt/Rating/Estimates) als optionalen Schritt hinzugefuegt. Naechster nummerierter Schritt aus der Roadmap-Reihenfolge ist **Punkt 4: Phase 3 Paper-Trading inklusive chronologisches Trade-Journal**.
+Letzte Sitzung 2026-05-08 hat den Phase-3-Erststand ausgeliefert: Schema (`paper_orders`/`paper_transactions` ueber Alembic-Migration `0004_add_paper_trading`/`c8e2a1b9d4f3`), Order-Lifecycle-Service `app/paper_trading.py` mit Net-Yield-Gate auf Order-Annahme, Endpunkte `/api/paper-trading/{orders,transactions,positions,summary}`, Backup/Export/Import-Anbindung, Frontend-Page `/paper-trading` mit Tab-Navigation und chronologischem Trade-Journal (DE/EN), Unit-Tests + API-Regression + UI-Regression-Schritt `ui_paper_trading ok`.
 
-Konkret an dieser Stelle weiter machen:
+Naechster sinnvoller Schnitt ist die Phase-3-Vertiefung (in dieser Reihenfolge):
 
-1. Schema fuer Paper-Trading anlegen (Alembic-Revision auf `a3c1d4f5e6b7` aufsetzen):
-   - `paper_orders`: id, user_id, symbol, side (buy/sell), qty, limit_price, status (pending/filled/cancelled), placed_at, filled_at, source ("manual" oder "auto-recommendation")
-   - `paper_transactions`: id, user_id, order_id, symbol, side, qty, price, fee_absolute, fee_percent_amount, tax_amount, executed_at
-   - `paper_positions` (optional Materialized View; alternativ on-the-fly aggregiert)
-2. Backend-Endpunkte:
-   - `POST /api/paper-trading/orders` (placeOrder, validiert gegen Net-Yield-Gate)
-   - `GET /api/paper-trading/orders` (Liste, sortiert)
-   - `GET /api/paper-trading/transactions` (Journal, chronologisch)
-   - `GET /api/paper-trading/positions` (offene Positionen mit unrealisiertem PnL)
-   - `GET /api/paper-trading/summary` (realised PnL, fee_total, tax_total, current_exposure)
-3. Order-Lifecycle-Service: simulierte Ausfuehrung gegen letzte Marktdaten + Slippage-Modell, Net-Yield-Gate-Check vor Annahme.
-4. Backup/Export/Import: alle drei neuen Tabellen mitfuehren.
-5. Frontend: neue Page `/paper-trading` mit Tab-/Dropdown-Navigation (Open Orders, Transactions, Positions, Summary) gem. UX-Direktive.
-6. Trade-Journal: chronologisch, lueckenlos, %-PnL UND nominal, summierte Steuerlast + Gebuehren je Position und in Summe (Nutzerdirektive 2026-05-07).
-7. Tests: Unit-Tests pro Service-Klasse, API-Regression um Paper-Trading-Pfade erweitern, UI-Regression neue `/paper-trading`-Page checken.
-8. Doku: `docs/admin/project-plan.md` Phase 3 Status auf "in Arbeit" setzen, Decision-Block fuer Order-Schema/Net-Yield-Gate-Anbindung anlegen.
-
-Vorbedingungen sind alle erfuellt: Net-Yield-Gate (Welle 2.6), Erklaerbarkeit (Welle 2.5), Auto-S/R (Welle 4) sind verbaut; FMP/Alpha-Vantage-Provider-Chain liefert Live-Daten; Alembic ist eingerichtet.
+1. Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten — heute fuellt nur der Place-Time-Snapshot. Hintergrund-Task analog zu `watchlist_alert_dispatch_task` (`main.py:995`); Re-Evaluation aller `status="pending"`-Orders mit `MarketDataService.get_latest_close`. Persistenzaenderung minimal (nur Status/`filled_at`/Transaction-Insert), kein Migrationsbedarf.
+2. Entry-/Exit-Marker im StockChart auf `/analysis/<symbol>` einfuegen (lightweight-charts `setMarkers`); fuer das Watchlist-Symbol die letzten Paper-Transaktionen ueber `/api/paper-trading/transactions` ziehen und zeitlich auf die Candles mappen.
+3. UI-Verlinkung Recommendation-Card -> Paper-Order: Button "Place paper order at this target" auf der Recommendation-Card in `AnalysisPage`, der `/paper-trading` mit vorbelegten Werten (symbol, target_price, source=auto-recommendation) ansteuert.
+4. Phase-3-Pflege: Asset-spezifische Slippage-/Fee-Modelle (heute uniform 0.1% Slippage, Float-Fee aus Portfolio-Settings).
+5. Erst danach Phase 4 Auto-Execution beginnen.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Sektion "Produktvision" + "Phase 3" + "UX-Direktive"
-- `state/decisions.md` letzte Decision-Bloecke zu Net-Yield + UX-Direktive
-- `src/backend/app/ml_models.py::_enrich_with_yield_model` als verbindliches Eingangsfilter-Beispiel
+- `state/decisions.md` Decision-Block 2026-05-08 zu Paper-Trading-Schema + Gate-Anbindung
+- `src/backend/app/paper_trading.py` als Service-Referenz
+- `src/backend/app/ml_models.py::_enrich_with_yield_model` als verbindliches Eingangsfilter-Beispiel (deren Logik spiegelt `paper_trading.evaluate_net_yield_gate`)
 
 ## Stand Beim Letzten Handover
 

@@ -16,6 +16,7 @@ const NAV_LINKS: NavLinkSpec[] = [
   { to: "/watchlists", labelKey: "nav.watchlists" },
   { to: "/scanner", labelKey: "nav.scanner" },
   { to: "/alerts", labelKey: "nav.alerts" },
+  { to: "/paper-trading", labelKey: "nav.paperTrading" },
   { to: "/settings", labelKey: "nav.settings" },
   { to: "/onboarding", labelKey: "nav.setup" },
   { to: "/admin", labelKey: "nav.admin", adminOnly: true },

@@ -12,6 +12,8 @@ from app.database import SessionLocal
 from app.models import (
     AlertEvent,
     AlertRule,
+    PaperOrder,
+    PaperTransaction,
     PasswordResetToken,
     PushSubscription,
     User,
@@ -45,6 +47,8 @@ class BackupService:
         watchlist_alert_deliveries = db.query(WatchlistAlertDelivery).all()
         alert_rules = db.query(AlertRule).all()
         alert_events = db.query(AlertEvent).all()
+        paper_orders = db.query(PaperOrder).all()
+        paper_transactions = db.query(PaperTransaction).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -168,6 +172,39 @@ class BackupService:
                     }
                     for event in alert_events
                 ],
+                "paper_orders": [
+                    {
+                        "id": order.id,
+                        "user_id": order.user_id,
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "qty": float(order.qty),
+                        "limit_price": float(order.limit_price) if order.limit_price is not None else None,
+                        "status": order.status,
+                        "source": order.source,
+                        "rejection_reason": order.rejection_reason,
+                        "placed_at": order.placed_at.isoformat() if order.placed_at else None,
+                        "filled_at": order.filled_at.isoformat() if order.filled_at else None,
+                    }
+                    for order in paper_orders
+                ],
+                "paper_transactions": [
+                    {
+                        "id": tx.id,
+                        "user_id": tx.user_id,
+                        "order_id": tx.order_id,
+                        "symbol": tx.symbol,
+                        "side": tx.side,
+                        "qty": float(tx.qty),
+                        "price": float(tx.price),
+                        "fee_absolute": float(tx.fee_absolute),
+                        "fee_percent_amount": float(tx.fee_percent_amount),
+                        "tax_amount": float(tx.tax_amount),
+                        "realized_pnl": float(tx.realized_pnl),
+                        "executed_at": tx.executed_at.isoformat() if tx.executed_at else None,
+                    }
+                    for tx in paper_transactions
+                ],
                 "push_subscriptions": [
                     {
                         "id": subscription.id,
@@ -232,6 +269,8 @@ class BackupService:
         if replace_existing:
             db.query(AlertEvent).delete()
             db.query(AlertRule).delete()
+            db.query(PaperTransaction).delete()
+            db.query(PaperOrder).delete()
             db.query(WatchlistItemTag).delete()
             db.query(WatchlistAlertDelivery).delete()
             db.query(WatchlistAlertSetting).delete()
@@ -384,6 +423,55 @@ class BackupService:
                     acknowledged_at=(
                         datetime.fromisoformat(record["acknowledged_at"])
                         if record.get("acknowledged_at")
+                        else None
+                    ),
+                )
+            )
+
+        for record in payload.get("paper_orders", []):
+            db.add(
+                PaperOrder(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    symbol=record["symbol"],
+                    side=record["side"],
+                    qty=record["qty"],
+                    limit_price=record.get("limit_price"),
+                    status=record.get("status", "pending"),
+                    source=record.get("source", "manual"),
+                    rejection_reason=record.get("rejection_reason"),
+                    placed_at=(
+                        datetime.fromisoformat(record["placed_at"])
+                        if record.get("placed_at")
+                        else None
+                    ),
+                    filled_at=(
+                        datetime.fromisoformat(record["filled_at"])
+                        if record.get("filled_at")
+                        else None
+                    ),
+                )
+            )
+
+        db.flush()
+
+        for record in payload.get("paper_transactions", []):
+            db.add(
+                PaperTransaction(
+                    id=record.get("id"),
+                    user_id=record["user_id"],
+                    order_id=record["order_id"],
+                    symbol=record["symbol"],
+                    side=record["side"],
+                    qty=record["qty"],
+                    price=record["price"],
+                    fee_absolute=record.get("fee_absolute", 0.0),
+                    fee_percent_amount=record.get("fee_percent_amount", 0.0),
+                    tax_amount=record.get("tax_amount", 0.0),
+                    realized_pnl=record.get("realized_pnl", 0.0),
+                    executed_at=(
+                        datetime.fromisoformat(record["executed_at"])
+                        if record.get("executed_at")
                         else None
                     ),
                 )
