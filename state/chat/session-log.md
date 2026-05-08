@@ -462,3 +462,10 @@
   (5) **Chart "Invalid Date" gefixt**: `toTime`-Helper im StockChart parste "YYYY-MM-DD" als "YYYY-MM-DD:00Z" — invalid ISO. Fix: Date-only-Werte werden jetzt zu "YYYY-MM-DDT00:00:00Z" expandiert. Daily/Weekly-Charts zeigen korrekte X-Achsen-Datums.
   Verifikation: 210 Unit-Tests OK. Build + Stack-Restart erfolgreich.
   Offen: Welle 15b (Dashboard-KPIs klickbar, Hilfe-Doku auf DE), 15c (Fundamentals-Vollausbau mit WKN/ISIN/KGV/EPS/Umsatz/Gewinn/Dividenden), 15d (Multi-Currency + Datumsfilter). Plus User-Frage zu KI-Modell-Alternativen (XGBoost vs Deep Learning vs Transformers) als eigenes Antwort-Paket.
+
+
+- Datum: 2026-05-08
+  Kontext: Welle 16a — ML-Ensemble. User-Frage: "gibt es unterscheidliche oder bessere ergebnisse, wenn wir ein andere ki-modell benutzen?". Antwort: ja — Ensemble aus XGBoost + LightGBM + RandomForest gibt typisch 2-4% Lift bei minimalem Aufwand.
+  Erledigt: requirements.txt um lightgbm + joblib ergaenzt. PricePredictor von XGBoost-only auf Ensemble umgestellt — XGBoost bleibt load-bearing (Source der SHAP-Erklaerung), LightGBM + RandomForest best-effort. _ensemble_proba mittelt Probabilities ueber alle Member. predict_next_movement nutzt Ensemble-Mittel statt XGBoost-only. Result-dict erweitert um memberAccuracies + ensembleSize. ml_persistence speichert/laedt zusaetzlich lgbm.pkl + rf.pkl via joblib (best-effort, degradiert auf XGBoost-only bei missing/corrupt File). Backwards-kompatibel mit alten XGBoost-only Persisten. State/decisions/session-log aktualisiert.
+  Verifikation: 210 Unit-Tests OK; API-Regression gruen; UI-Regression gruen mit BACKEND_PORT=18190/FRONTEND_PORT=18194 (Default-Ports von User-Stack belegt — Port-Disziplin geschuldet, fremde Stacks NICHT gekillt).
+  Offen: Welle 16b (N-BEATS via darts als time-series-spezifisches Vergleichsmodell). Welle 16c (UI-A/B-Switch zwischen Modellen + Backtest-Vergleichstabelle). Weiter offen aus User-Feedback: Welle 15b/c/d (KPIs klickbar, DE-Doku, Fundamentals-Vollausbau, Multi-Currency, Datumsfilter).

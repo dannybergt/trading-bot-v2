@@ -48,6 +48,20 @@ def _model_paths(symbol: str) -> tuple[Path, Path]:
     return MODEL_DIR / f"{safe}.json", MODEL_DIR / f"{safe}.meta.json"
 
 
+def _ensemble_paths(symbol: str) -> tuple[Path, Path, Path]:
+    """Per-symbol files for the LightGBM, RandomForest, and ensemble metadata.
+
+    Kept separate from `_model_paths` so legacy XGBoost-only artefacts on
+    disk continue to work as a fallback when only the JSON is present.
+    """
+    safe = _safe_symbol(symbol)
+    return (
+        MODEL_DIR / f"{safe}.lgbm.pkl",
+        MODEL_DIR / f"{safe}.rf.pkl",
+        MODEL_DIR / f"{safe}.meta.json",
+    )
+
+
 def save_predictor(
     symbol: str,
     predictor: Any,
@@ -78,6 +92,27 @@ def save_predictor(
         logger.exception("ml_persistence_save_model_failed symbol=%s", symbol)
         return None
 
+    # Ensemble members: pickle via joblib alongside the XGBoost JSON.
+    # Failures here are logged but don't fail the whole save — the
+    # XGBoost-only fallback is still valid.
+    lgbm_path, rf_path, _ = _ensemble_paths(symbol)
+    member_state: dict[str, bool] = {}
+    try:
+        import joblib
+
+        for attr_name, target_path in (("lgbm", lgbm_path), ("rf", rf_path)):
+            member = getattr(predictor, attr_name, None)
+            if member is None:
+                target_path.unlink(missing_ok=True)
+                member_state[attr_name] = False
+                continue
+            joblib.dump(member, target_path)
+            member_state[attr_name] = True
+    except Exception:
+        logger.exception(
+            "ml_persistence_save_ensemble_members_failed symbol=%s", symbol
+        )
+
     metadata = {
         "symbol": symbol.upper(),
         "trainedAt": datetime.now(timezone.utc).isoformat(),
@@ -85,6 +120,8 @@ def save_predictor(
         "featureCount": len(features or []),
         "features": list(features or []),
         "nSamples": int(n_samples or 0),
+        "memberAccuracies": dict(getattr(predictor, "member_accuracies", {}) or {}),
+        "ensembleMembersPersisted": member_state,
     }
     try:
         meta_path.write_text(json.dumps(metadata, indent=2))
@@ -125,6 +162,37 @@ def load_predictor(
     except Exception:
         logger.exception("ml_persistence_load_model_failed symbol=%s", symbol)
         return None
+
+    # Ensemble members are best-effort — a missing or corrupt pickle
+    # gracefully degrades to XGBoost-only ensemble (single-member).
+    lgbm_path, rf_path, _ = _ensemble_paths(symbol)
+    try:
+        import joblib
+
+        if lgbm_path.exists():
+            try:
+                predictor.lgbm = joblib.load(lgbm_path)
+            except Exception:
+                logger.exception(
+                    "ml_persistence_load_lgbm_failed symbol=%s", symbol
+                )
+                predictor.lgbm = None
+        if rf_path.exists():
+            try:
+                predictor.rf = joblib.load(rf_path)
+            except Exception:
+                logger.exception(
+                    "ml_persistence_load_rf_failed symbol=%s", symbol
+                )
+                predictor.rf = None
+    except Exception:
+        logger.exception("ml_persistence_load_ensemble_failed symbol=%s", symbol)
+
+    saved_member_acc = metadata.get("memberAccuracies")
+    if isinstance(saved_member_acc, dict):
+        predictor.member_accuracies = {
+            k: float(v) for k, v in saved_member_acc.items() if isinstance(v, (int, float))
+        }
     return predictor, metadata
 
 
