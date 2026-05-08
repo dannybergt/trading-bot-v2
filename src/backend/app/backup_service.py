@@ -12,6 +12,7 @@ from app.database import SessionLocal
 from app.models import (
     AlertEvent,
     AlertRule,
+    AuditEvent,
     PaperOrder,
     PaperTransaction,
     PasswordResetToken,
@@ -49,6 +50,7 @@ class BackupService:
         alert_events = db.query(AlertEvent).all()
         paper_orders = db.query(PaperOrder).all()
         paper_transactions = db.query(PaperTransaction).all()
+        audit_events = db.query(AuditEvent).all()
         push_subscriptions = db.query(PushSubscription).all()
         reset_tokens = db.query(PasswordResetToken).all()
 
@@ -188,6 +190,23 @@ class BackupService:
                     }
                     for order in paper_orders
                 ],
+                "audit_events": [
+                    {
+                        "id": event.id,
+                        "user_id": event.user_id,
+                        "actor_fingerprint": event.actor_fingerprint,
+                        "action": event.action,
+                        "resource_type": event.resource_type,
+                        "resource_id": event.resource_id,
+                        "outcome": event.outcome,
+                        "details_json": event.details_json,
+                        "ip_fingerprint": event.ip_fingerprint,
+                        "user_agent_fingerprint": event.user_agent_fingerprint,
+                        "request_id": event.request_id,
+                        "created_at": event.created_at.isoformat() if event.created_at else None,
+                    }
+                    for event in audit_events
+                ],
                 "paper_transactions": [
                     {
                         "id": tx.id,
@@ -267,6 +286,7 @@ class BackupService:
         payload = snapshot.get("data", snapshot)
 
         if replace_existing:
+            db.query(AuditEvent).delete()
             db.query(AlertEvent).delete()
             db.query(AlertRule).delete()
             db.query(PaperTransaction).delete()
@@ -454,6 +474,28 @@ class BackupService:
             )
 
         db.flush()
+
+        for record in payload.get("audit_events", []):
+            db.add(
+                AuditEvent(
+                    id=record.get("id"),
+                    user_id=record.get("user_id"),
+                    actor_fingerprint=record.get("actor_fingerprint"),
+                    action=record["action"],
+                    resource_type=record.get("resource_type"),
+                    resource_id=record.get("resource_id"),
+                    outcome=record.get("outcome", "success"),
+                    details_json=record.get("details_json") or "{}",
+                    ip_fingerprint=record.get("ip_fingerprint"),
+                    user_agent_fingerprint=record.get("user_agent_fingerprint"),
+                    request_id=record.get("request_id"),
+                    created_at=(
+                        datetime.fromisoformat(record["created_at"])
+                        if record.get("created_at")
+                        else None
+                    ),
+                )
+            )
 
         for record in payload.get("paper_transactions", []):
             db.add(

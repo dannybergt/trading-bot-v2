@@ -747,6 +747,10 @@ assert any(event["id"] == alert_event_id for event in backup_payload["data"].get
 assert isinstance(backup_payload["data"].get("paper_orders"), list)
 assert any(order["id"] == paper_order_id for order in backup_payload["data"]["paper_orders"])
 assert isinstance(backup_payload["data"].get("paper_transactions"), list)
+audit_events = backup_payload["data"].get("audit_events")
+assert isinstance(audit_events, list)
+assert any(e.get("action") == "auth.login" for e in audit_events), "expected auth.login audit row"
+assert any(e.get("action") == "paper_order.place" for e in audit_events), "expected paper_order.place audit row"
 print("backup download ok")
 
 export_state = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
@@ -766,6 +770,19 @@ assert isinstance(export_payload["data"].get("paper_orders"), list)
 assert any(order["id"] == paper_order_id for order in export_payload["data"]["paper_orders"])
 assert isinstance(export_payload["data"].get("paper_transactions"), list)
 print("export ok")
+
+audit_browser = requests.get(
+    f"{base}/api/admin/audit-events",
+    headers=headers,
+    params={"limit": 50},
+    timeout=30,
+)
+audit_browser.raise_for_status()
+audit_payload = audit_browser.json()
+assert "items" in audit_payload and isinstance(audit_payload["items"], list)
+assert audit_payload["total"] >= 1
+assert any(item.get("action") == "auth.login" for item in audit_payload["items"]), "expected auth.login row in admin browser"
+print("admin audit-events list ok")
 
 platform_import = requests.post(
     f"{base}/api/admin/import",

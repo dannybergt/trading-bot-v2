@@ -73,6 +73,7 @@ def init_db():
     from app.models import (  # noqa: F401
         AlertEvent,
         AlertRule,
+        AuditEvent,
         PaperOrder,
         PaperTransaction,
         PasswordResetToken,

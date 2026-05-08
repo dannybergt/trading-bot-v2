@@ -31,7 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
-from app import backtest_service
+from app import audit_service, backtest_service
 from app.coingecko_service import get_coingecko_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
@@ -72,6 +72,8 @@ WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_
 WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
 PAPER_ORDER_FILL_INTERVAL_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INTERVAL_SECONDS", "180"))
 PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS", "60"))
+ML_RETRAIN_INTERVAL_SECONDS = int(os.getenv("ML_RETRAIN_INTERVAL_SECONDS", "3600"))
+ML_RETRAIN_INITIAL_DELAY_SECONDS = int(os.getenv("ML_RETRAIN_INITIAL_DELAY_SECONDS", "300"))
 
 
 def get_allowed_origins() -> list[str]:
@@ -1043,6 +1045,78 @@ async def paper_order_fill_task():
         await asyncio.sleep(PAPER_ORDER_FILL_INTERVAL_SECONDS)
 
 
+async def ml_retrain_task():
+    """Periodically refresh stale per-symbol predictors in the background.
+
+    Walks the union of (a) symbols held across all watchlists and (b)
+    already-persisted models on disk, and re-trains each entry whose
+    on-disk metadata has aged past the configured TTL. Reduces the
+    first-`/api/stock/{symbol}` latency hit when the user opens an
+    analysis page after a long quiet period.
+    """
+    from app import ml_persistence
+    from app.models import WatchlistItem as WatchlistItemRecord
+
+    logger.info(
+        "ml_retrain_task_started interval_seconds=%s",
+        ML_RETRAIN_INTERVAL_SECONDS,
+    )
+    await asyncio.sleep(ML_RETRAIN_INITIAL_DELAY_SECONDS)
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                watchlist_symbols = {
+                    str(item.symbol).upper()
+                    for item in db.query(WatchlistItemRecord).all()
+                    if item.symbol
+                }
+                persisted_symbols = {row["symbol"] for row in ml_persistence.list_models()}
+                candidates = sorted(watchlist_symbols | persisted_symbols)
+                refreshed = 0
+                for symbol in candidates:
+                    try:
+                        loaded = ml_persistence.load_predictor(symbol, lambda: __import__("app.ml_models", fromlist=["PricePredictor"]).PricePredictor())
+                    except Exception:
+                        loaded = None
+                    metadata = loaded[1] if loaded else None
+                    if metadata is not None and not ml_persistence.is_stale(metadata):
+                        continue
+                    try:
+                        stock = service.get_stock_data(
+                            symbol,
+                            period="6mo",
+                            interval="1d",
+                            user=None,
+                            include_news=False,
+                            include_fundamentals=False,
+                        )
+                    except Exception:
+                        logger.exception("ml_retrain_fetch_failed symbol=%s", symbol)
+                        continue
+                    df = stock.get("data") if isinstance(stock, dict) else None
+                    if df is None or df.empty:
+                        continue
+                    # Re-running get_or_train_predictor inside a fresh-fetch
+                    # path persists the new model as a side effect because
+                    # the in-memory cache for that symbol is now stale.
+                    service._predictor_cache.pop(symbol, None)
+                    service._get_or_train_predictor(symbol, df)
+                    refreshed += 1
+                if refreshed:
+                    logger.info(
+                        "ml_retrain_task_cycle_completed",
+                        extra={"refreshed_symbols": refreshed, "total_candidates": len(candidates)},
+                    )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("ml_retrain_task_cycle_failed")
+
+        await asyncio.sleep(ML_RETRAIN_INTERVAL_SECONDS)
+
+
 async def watchlist_alert_dispatch_task():
     logger.info(
         "watchlist_alert_dispatcher_started interval_seconds=%s dedup_hours=%s",
@@ -1093,6 +1167,7 @@ async def on_startup():
     asyncio.create_task(auto_scanner_task())
     asyncio.create_task(watchlist_alert_dispatch_task())
     asyncio.create_task(paper_order_fill_task())
+    asyncio.create_task(ml_retrain_task())
     asyncio.create_task(backup_scheduler_task())
 
 @app.on_event("shutdown")
@@ -1961,12 +2036,38 @@ def create_paper_order(
             avg_daily_volume_provider=service.get_avg_daily_volume,
         )
     except paper_trading.NetYieldGateRejection as exc:
+        audit_service.log_event(
+            db,
+            user_id=current_user.id,
+            action=audit_service.ACTION_PAPER_ORDER_PLACE_REJECTED,
+            outcome="denied",
+            details={
+                "symbol": req.symbol,
+                "side": req.side,
+                "reason": exc.reason,
+                "breakdown": exc.breakdown,
+            },
+        )
         raise HTTPException(
             status_code=400,
             detail={"reason": exc.reason, "breakdown": exc.breakdown},
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_PAPER_ORDER_PLACE,
+        resource_type="paper_order",
+        resource_id=order.id,
+        details={
+            "symbol": order.symbol,
+            "side": order.side,
+            "qty": order.qty,
+            "status": order.status,
+            "source": order.source,
+        },
+    )
     return paper_trading.serialize_order(order)
 
 
@@ -1990,6 +2091,14 @@ def cancel_paper_order(
         raise HTTPException(status_code=404, detail="Order not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_PAPER_ORDER_CANCEL,
+        resource_type="paper_order",
+        resource_id=order.id,
+        details={"symbol": order.symbol, "side": order.side},
+    )
     return paper_trading.serialize_order(order)
 
 
@@ -2118,7 +2227,13 @@ def place_order(order: OrderRequest, current_user: User = Depends(get_current_us
 
 @app.get("/api/admin/export")
 def export_platform_state(admin: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
-    return BackupService.export_snapshot(db)
+    snapshot = BackupService.export_snapshot(db)
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_BACKUP_EXPORT,
+    )
+    return snapshot
 
 
 @app.post("/api/admin/import")
@@ -2133,7 +2248,45 @@ async def import_platform_state(
         raise HTTPException(status_code=400, detail="Invalid import file") from exc
 
     BackupService.import_snapshot(db, payload, replace_existing=True)
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_BACKUP_IMPORT,
+        details={"filename": file.filename},
+    )
     return {"status": "imported", "filename": file.filename}
+
+
+@app.get("/api/admin/audit-events")
+def list_audit_events(
+    user_id: int | None = None,
+    action: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Admin-only audit-event browser, filterable by user and action."""
+    from app.models import AuditEvent
+
+    query = db.query(AuditEvent)
+    if user_id is not None:
+        query = query.filter(AuditEvent.user_id == user_id)
+    if action:
+        query = query.filter(AuditEvent.action == action)
+    total = query.count()
+    rows = (
+        query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": [audit_service.serialize_event(row) for row in rows],
+    }
 
 
 @app.get("/api/admin/backups")
@@ -2144,6 +2297,14 @@ def list_backups(admin: User = Depends(get_current_admin_user)):
 @app.post("/api/admin/backups")
 def create_backup(label: Optional[str] = None, admin: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
     path = BackupService.create_backup(db, label=label)
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_BACKUP_CREATE,
+        resource_type="backup",
+        resource_id=path.name,
+        details={"label": label},
+    )
     return {"status": "created", "filename": path.name}
 
 
@@ -2171,4 +2332,10 @@ async def import_backup(
         raise HTTPException(status_code=400, detail="Invalid backup file") from exc
 
     BackupService.import_snapshot(db, payload, replace_existing=True)
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_BACKUP_RESTORE,
+        details={"filename": file.filename},
+    )
     return {"status": "restored", "filename": file.filename}

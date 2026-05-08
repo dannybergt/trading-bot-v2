@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
+from app import audit_service
 from app.database import get_db
 from app.logging_config import fingerprint_value
 from app.models import User, PasswordResetToken
@@ -202,6 +203,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             "is_admin": is_admin,
         },
     )
+    audit_service.log_event(
+        db,
+        user_id=user.id,
+        action=audit_service.ACTION_AUTH_REGISTER,
+        actor_email=req.email,
+        details={"is_admin": is_admin},
+    )
     return user
 
 
@@ -214,13 +222,35 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     _enforce_rate_limit("login", _request_identity(request, req.email))
     user = db.query(User).filter(User.email == req.email.lower()).first()
 
+    audit_ctx = {
+        "actor_email": req.email,
+        "ip_address": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent"),
+        "request_id": getattr(request.state, "request_id", None),
+    }
+
     if not user or not verify_password(req.password, user.hashed_password):
+        audit_service.log_event(
+            db,
+            action=audit_service.ACTION_AUTH_LOGIN_FAILED,
+            outcome="failure",
+            details={"reason": "invalid_credentials"},
+            **audit_ctx,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not user.is_active:
+        audit_service.log_event(
+            db,
+            user_id=user.id,
+            action=audit_service.ACTION_AUTH_LOGIN_FAILED,
+            outcome="denied",
+            details={"reason": "account_inactive"},
+            **audit_ctx,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated",
@@ -233,6 +263,14 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
             return {"mfa_required": True, "access_token": "", "refresh_token": "", "token_type": "bearer"}
 
         if not verify_mfa_code(user.mfa_secret, req.mfa_code):
+            audit_service.log_event(
+                db,
+                user_id=user.id,
+                action=audit_service.ACTION_AUTH_LOGIN_FAILED,
+                outcome="failure",
+                details={"reason": "invalid_mfa"},
+                **audit_ctx,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid MFA code",
@@ -240,6 +278,15 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
     access_token = create_access_token(user.id, user.email)
     refresh_token = create_refresh_token(user.id)
+
+    audit_service.log_event(
+        db,
+        user_id=user.id,
+        action=audit_service.ACTION_AUTH_LOGIN,
+        outcome="success",
+        details={"mfa_used": bool(user.mfa_enabled)},
+        **audit_ctx,
+    )
 
     return {
         "access_token": access_token,
@@ -294,14 +341,21 @@ def get_my_alpaca_config(current_user: User = Depends(get_current_user)):
 @router.put("/me/alpaca", response_model=AlpacaConfigResponse)
 def update_my_alpaca_config(req: AlpacaConfigRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Update the user's Alpaca API keys."""
+    secret_changed = bool(req.secret_key and not req.secret_key.startswith("*"))
     current_user.alpaca_api_key = req.api_key
-    
+
     # Only update secret if a new one is provided (not a masked string)
-    if req.secret_key and not req.secret_key.startswith("*"):
+    if secret_changed:
         current_user.alpaca_secret_key = encrypt_secret(req.secret_key)
-        
+
     current_user.alpaca_paper = req.is_paper
     db.commit()
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_SETTINGS_ALPACA,
+        details={"is_paper": req.is_paper, "secret_rotated": secret_changed},
+    )
     return get_my_alpaca_config(current_user)
 
 @router.get("/me/portfolio-settings", response_model=PortfolioSettingsResponse)
@@ -322,6 +376,18 @@ def update_my_portfolio_settings(req: PortfolioSettingsRequest, current_user: Us
     current_user.capital_gains_tax_bps = max(0, min(req.capital_gains_tax_bps, 10000))
     current_user.income_tax_bps = max(0, min(req.income_tax_bps, 10000))
     db.commit()
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_SETTINGS_PORTFOLIO,
+        details={
+            "trade_fee_absolute": req.trade_fee_absolute,
+            "trade_fee_percent": req.trade_fee_percent,
+            "min_target_yield": req.min_target_yield,
+            "capital_gains_tax_bps": current_user.capital_gains_tax_bps,
+            "income_tax_bps": current_user.income_tax_bps,
+        },
+    )
     return get_my_portfolio_settings(current_user)
 
 
@@ -408,6 +474,15 @@ def confirm_password_reset(req: PasswordResetConfirm, request: Request, db: Sess
     reset.used = True
     db.commit()
 
+    audit_service.log_event(
+        db,
+        user_id=user.id,
+        action=audit_service.ACTION_AUTH_PASSWORD_RESET_CONFIRM,
+        actor_email=user.email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        request_id=getattr(request.state, "request_id", None),
+    )
     return {"message": "Password has been reset successfully"}
 
 
@@ -449,6 +524,11 @@ def mfa_enable(req: MFACodeRequest, current_user: User = Depends(get_current_use
     current_user.mfa_enabled = True
     db.commit()
 
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_AUTH_MFA_ENABLE,
+    )
     return {"message": "MFA enabled successfully", "mfa_enabled": True}
 
 
@@ -471,6 +551,11 @@ def mfa_disable(req: MFACodeRequest, current_user: User = Depends(get_current_us
     current_user.mfa_secret = None
     db.commit()
 
+    audit_service.log_event(
+        db,
+        user_id=current_user.id,
+        action=audit_service.ACTION_AUTH_MFA_DISABLE,
+    )
     return {"message": "MFA disabled successfully", "mfa_enabled": False}
 
 
@@ -554,6 +639,14 @@ def create_user_admin(req: RegisterRequest, admin: User = Depends(get_current_ad
             "is_admin": user.is_admin,
         },
     )
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_ADMIN_USER_CREATE,
+        resource_type="user",
+        resource_id=user.id,
+        details={"target_email_fingerprint": fingerprint_value(user.email), "is_admin": user.is_admin},
+    )
     return user
 
 
@@ -575,6 +668,13 @@ def reset_user_mfa(user_id: int, admin: User = Depends(get_current_admin_user), 
             "user_id": user.id,
             "admin_user_id": admin.id,
         },
+    )
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_AUTH_MFA_RESET,
+        resource_type="user",
+        resource_id=user.id,
     )
     return user
 
@@ -612,6 +712,14 @@ def reset_user_password_admin(
             "reset_mfa": req.reset_mfa,
         },
     )
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_ADMIN_USER_PASSWORD_RESET,
+        resource_type="user",
+        resource_id=user.id,
+        details={"reset_mfa": req.reset_mfa},
+    )
     return user
 
 
@@ -621,7 +729,7 @@ def toggle_user_status(user_id: int, active: bool, admin: User = Depends(get_cur
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
 
@@ -635,5 +743,13 @@ def toggle_user_status(user_id: int, active: bool, admin: User = Depends(get_cur
             "admin_user_id": admin.id,
             "is_active": active,
         },
+    )
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_ADMIN_USER_TOGGLE_ACTIVE,
+        resource_type="user",
+        resource_id=user.id,
+        details={"is_active": active},
     )
     return user

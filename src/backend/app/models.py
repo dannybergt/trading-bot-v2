@@ -187,6 +187,26 @@ class AlertEvent(Base):
     watchlist = relationship("Watchlist", back_populates="alert_events")
 
 
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Nullable so failed-login attempts (where the user could not be
+    # identified) still produce a record. The actor_fingerprint covers
+    # those cases.
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    actor_fingerprint = Column(String, nullable=True)
+    action = Column(String, index=True, nullable=False)
+    resource_type = Column(String, index=True, nullable=True)
+    resource_id = Column(String, nullable=True)
+    outcome = Column(String, nullable=False, default="success")
+    details_json = Column(Text, nullable=False, default="{}")
+    ip_fingerprint = Column(String, nullable=True)
+    user_agent_fingerprint = Column(String, nullable=True)
+    request_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)
+
+
 class PaperOrder(Base):
     __tablename__ = "paper_orders"
 
