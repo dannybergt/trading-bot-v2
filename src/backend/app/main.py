@@ -1027,6 +1027,7 @@ async def paper_order_fill_task():
                     db,
                     service.get_latest_close,
                     asset_class_resolver=_asset_class_resolver,
+                    avg_daily_volume_provider=service.get_avg_daily_volume,
                 )
                 if filled:
                     logger.info(
@@ -1914,6 +1915,7 @@ def create_paper_order(
             source=req.source,
             latest_close_provider=service.get_latest_close,
             asset_class_resolver=_asset_class_resolver,
+            avg_daily_volume_provider=service.get_avg_daily_volume,
         )
     except paper_trading.NetYieldGateRejection as exc:
         raise HTTPException(

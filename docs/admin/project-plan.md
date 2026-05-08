@@ -148,7 +148,7 @@ Naechste Wellen (priorisiert):
 
 ### Phase 3: Paper-Trading
 
-Status: in Arbeit. Erster Schnitt vom 2026-05-08 liefert Schema, Backend-Endpunkte, Order-Lifecycle, Trade-Journal, Frontend-Page.
+Status: abgeschlossen am 2026-05-08. Vier Schnitte: Erststand (Schema, Lifecycle, Endpunkte, Frontend-Page), zweiter Schnitt (Background-Fill, Chart-Marker, Recommendation-Verlinkung), dritter Schnitt (asset-spezifische Slippage), vierter Schnitt (dynamische Slippage + asset-Fee-Multipliers). Bereit fuer Phase 4 nach Risk-Modell.
 
 Bereits umgesetzt:
 
@@ -171,10 +171,11 @@ Bereits umgesetzt (dritter Schnitt, 2026-05-08):
 
 - Asset-Klassen-spezifische Slippage im Fill-Simulator: Stocks 0.1%, ETFs 0.05%, Crypto 0.3% (`SLIPPAGE_PCT_BY_ASSET_CLASS`-Map). `_try_fill` nimmt einen `asset_class`-Parameter; `place_order` und `dispatch_pending_orders` einen optionalen `asset_class_resolver`. `main.py` haengt das per `service.get_asset_profile`-Wrapper an
 
-Offene Zielpunkte (Phase 3 weiter):
+Bereits umgesetzt (vierter Schnitt, 2026-05-08, Phase 3 abgeschlossen):
 
-- Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen (heute fix pro Asset-Klasse)
-- Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers; aktuell uniform aus User-Portfolio-Settings)
+- Dynamische Slippage skaliert mit Position-Size relativ zum 20-Tage-Volumen: `_resolve_slippage_pct(asset_class, qty, avg_daily_volume)` multipliziert die Base-Slippage mit `(1 + qty / avg_volume)` und cappt bei `MAX_SLIPPAGE_PCT=1.0`. `MarketDataService.get_avg_daily_volume(symbol)` als Provider (Alpaca → yfinance-Fallback)
+- Asset-spezifische Fee-Multipliers: `FEE_MULTIPLIER_BY_ASSET_CLASS` (Stock/ETF 1.0, Crypto 5.0) skaliert User-Fee-Settings, `evaluate_net_yield_gate` und `fee_breakdown` nutzen denselben Multiplier
+- Phase 3 damit komplett. Phase 4 Auto-Execution kann nach Risk-Modell + Limits angegangen werden
 
 ### Phase 4: Live-Trading mit Auto-Execution
 

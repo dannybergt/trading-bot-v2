@@ -99,6 +99,40 @@ class MarketDataService:
             return pd.DataFrame()
         return self.alpha_vantage.get_history_df(profile["symbol"], asset_class, limit=limit)
 
+    def get_avg_daily_volume(self, symbol: str, *, lookback_days: int = 20) -> float | None:
+        """Best-effort 20-day average daily volume for liquidity-aware sims.
+
+        Tries Alpaca bars first (covers stocks + crypto), then yfinance
+        history as a fallback. Returns None when no source produces a
+        usable series so callers can fall back to static slippage.
+        """
+        target_symbol = canonicalize_symbol(symbol)
+        asset_profile = self.get_asset_profile(symbol)
+
+        if self.alpaca and asset_profile.get("assetClass") in {"stock", "crypto"}:
+            try:
+                df = self.alpaca.get_bars_df(
+                    target_symbol, timeframe="1Day", limit=lookback_days
+                )
+                if not df.empty and "Volume" in df.columns:
+                    series = df["Volume"].dropna()
+                    if not series.empty:
+                        return float(series.mean())
+            except Exception:
+                logger.exception("avg_volume_alpaca_failed symbol=%s", symbol)
+
+        if not asset_profile.get("isCrypto") and acquire_rate_limit("yfinance", timeout=2.0):
+            try:
+                hist = yf.Ticker(to_yfinance_symbol(symbol)).history(period=f"{lookback_days * 2}d")
+                if hist is not None and not hist.empty and "Volume" in hist.columns:
+                    series = hist["Volume"].dropna().tail(lookback_days)
+                    if not series.empty:
+                        return float(series.mean())
+            except Exception:
+                logger.exception("avg_volume_yfinance_failed symbol=%s", symbol)
+
+        return None
+
     def get_latest_close(self, symbol: str) -> float | None:
         """Best-effort latest close used by the paper-trading fill simulator.
 

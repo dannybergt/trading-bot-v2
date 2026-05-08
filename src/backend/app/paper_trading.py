@@ -36,11 +36,57 @@ SLIPPAGE_PCT_BY_ASSET_CLASS: dict[str, float] = {
     "crypto": 0.3,
 }
 
+# Cap on slippage from position-size scaling. A real broker would refuse
+# or split a bigger order, but our paper sim should still produce a
+# fill with a recognisable but bounded penalty so the user sees the
+# liquidity cost without absurdly distorted P&L.
+MAX_SLIPPAGE_PCT = 1.0
+# How aggressively position-size scales slippage. At qty == avg_volume
+# the multiplier is (1 + 1.0) = 2x the base slippage.
+SLIPPAGE_VOLUME_FACTOR = 1.0
 
-def _resolve_slippage_pct(asset_class: str | None) -> float:
+# Broker-fee scaling per asset class. Stock/ETF brokers commonly run
+# 0% commission; crypto exchanges typically charge 0.5-1% per trade.
+# The multiplier is applied on top of the user-configured fees so a
+# user who sets 0.1% fee-per-leg pays 0.5% per crypto leg.
+DEFAULT_FEE_MULTIPLIER = 1.0
+FEE_MULTIPLIER_BY_ASSET_CLASS: dict[str, float] = {
+    "stock": 1.0,
+    "etf": 1.0,
+    "crypto": 5.0,
+}
+
+
+def _resolve_slippage_pct(
+    asset_class: str | None,
+    *,
+    qty: float | None = None,
+    avg_daily_volume: float | None = None,
+) -> float:
+    """Asset-class slippage with optional volume-aware up-scaling.
+
+    Without a volume hint the function returns the static base value.
+    When `qty` and `avg_daily_volume` are supplied, an extra penalty
+    proportional to `qty / avg_daily_volume` is added; the result is
+    capped at `MAX_SLIPPAGE_PCT` so a single oversized paper order
+    can't blow up its own P&L.
+    """
+    base = (
+        SLIPPAGE_PCT_BY_ASSET_CLASS.get(asset_class, DEFAULT_SLIPPAGE_PCT)
+        if asset_class is not None
+        else DEFAULT_SLIPPAGE_PCT
+    )
+    if qty is None or avg_daily_volume is None or avg_daily_volume <= 0 or qty <= 0:
+        return base
+    size_share = float(qty) / float(avg_daily_volume)
+    scaled = base * (1.0 + SLIPPAGE_VOLUME_FACTOR * size_share)
+    return min(scaled, MAX_SLIPPAGE_PCT)
+
+
+def _resolve_fee_multiplier(asset_class: str | None) -> float:
     if asset_class is None:
-        return DEFAULT_SLIPPAGE_PCT
-    return SLIPPAGE_PCT_BY_ASSET_CLASS.get(asset_class, DEFAULT_SLIPPAGE_PCT)
+        return DEFAULT_FEE_MULTIPLIER
+    return FEE_MULTIPLIER_BY_ASSET_CLASS.get(asset_class, DEFAULT_FEE_MULTIPLIER)
 
 
 class NetYieldGateRejection(Exception):
@@ -58,11 +104,15 @@ def evaluate_net_yield_gate(
     side: str,
     entry_price: float,
     target_price: float,
+    asset_class: str | None = None,
 ) -> dict[str, Any]:
     """Net target percent for a target-priced trade, fees + tax included.
 
     Mirrors `PricePredictor._enrich_with_yield_model` so paper-trading
-    accept/reject uses the same math the explainer presents.
+    accept/reject uses the same math the explainer presents. The
+    asset-class fee multiplier (crypto-brokers ~5x stock-brokers) is
+    applied here so the gate decision matches what the simulator
+    later charges on the actual fills.
     """
     if entry_price <= 0 or target_price <= 0:
         return {"meetsMinimum": True, "reason": "no_price"}
@@ -72,8 +122,9 @@ def evaluate_net_yield_gate(
     if direction == "DOWN":
         gross_pct = -gross_pct
 
-    fee_pct_per_leg = float(getattr(user, "trade_fee_percent", 0) or 0)
-    fee_absolute = float(getattr(user, "trade_fee_absolute", 0) or 0)
+    fee_multiplier = _resolve_fee_multiplier(asset_class)
+    fee_pct_per_leg = float(getattr(user, "trade_fee_percent", 0) or 0) * fee_multiplier
+    fee_absolute = float(getattr(user, "trade_fee_absolute", 0) or 0) * fee_multiplier
     fee_absolute_pct_per_leg = (fee_absolute / entry_price) * 100.0 if entry_price > 0 else 0.0
     cap_gains_rate_pct = float(getattr(user, "capital_gains_tax_bps", 0) or 0) / 100.0
     income_tax_rate_pct = float(getattr(user, "income_tax_bps", 0) or 0) / 100.0
@@ -101,10 +152,19 @@ def evaluate_net_yield_gate(
     return breakdown
 
 
-def fee_breakdown(user: User, qty: float, price: float) -> tuple[float, float]:
-    """(fee_absolute, fee_percent_amount) for one fill leg."""
-    fee_absolute = float(getattr(user, "trade_fee_absolute", 0) or 0)
-    fee_pct = float(getattr(user, "trade_fee_percent", 0) or 0)
+def fee_breakdown(
+    user: User, qty: float, price: float, *, asset_class: str | None = None
+) -> tuple[float, float]:
+    """(fee_absolute, fee_percent_amount) for one fill leg.
+
+    The asset-class fee multiplier scales both the flat per-leg amount
+    and the percent fee, so a Coinbase-style 0.5% per-trade charge
+    falls out of a 0.1% user setting on crypto without forcing the
+    user to retune their numbers per asset class.
+    """
+    multiplier = _resolve_fee_multiplier(asset_class)
+    fee_absolute = float(getattr(user, "trade_fee_absolute", 0) or 0) * multiplier
+    fee_pct = float(getattr(user, "trade_fee_percent", 0) or 0) * multiplier
     fee_percent_amount = (qty * price) * (fee_pct / 100.0)
     return fee_absolute, fee_percent_amount
 
@@ -158,6 +218,7 @@ def _try_fill(
     order: PaperOrder,
     latest_close: float | None,
     asset_class: str | None = None,
+    avg_daily_volume: float | None = None,
 ) -> bool:
     if latest_close is None or latest_close <= 0:
         return False
@@ -169,10 +230,16 @@ def _try_fill(
             return False
         fill_price = float(order.limit_price)
     else:
-        slip = _resolve_slippage_pct(asset_class) / 100.0
+        slip = _resolve_slippage_pct(
+            asset_class,
+            qty=float(order.qty),
+            avg_daily_volume=avg_daily_volume,
+        ) / 100.0
         fill_price = latest_close * (1 + slip if order.side == "buy" else 1 - slip)
 
-    fee_abs, fee_pct_amt = fee_breakdown(user, float(order.qty), fill_price)
+    fee_abs, fee_pct_amt = fee_breakdown(
+        user, float(order.qty), fill_price, asset_class=asset_class
+    )
 
     realized_pnl = 0.0
     tax = 0.0
@@ -206,6 +273,7 @@ def _try_fill(
 
 
 PriceProvider = Callable[[str], Optional[float]]
+VolumeProvider = Callable[[str], Optional[float]]
 AssetClassResolver = Callable[[str], Optional[str]]
 
 
@@ -221,6 +289,7 @@ def place_order(
     source: str,
     latest_close_provider: PriceProvider,
     asset_class_resolver: AssetClassResolver | None = None,
+    avg_daily_volume_provider: VolumeProvider | None = None,
 ) -> PaperOrder:
     """Place a paper-trading order.
 
@@ -241,10 +310,23 @@ def place_order(
 
     latest_close = latest_close_provider(canonical_symbol)
 
+    asset_class: str | None = None
+    if asset_class_resolver is not None:
+        try:
+            asset_class = asset_class_resolver(canonical_symbol)
+        except Exception:
+            logger.exception(
+                "paper_order_asset_class_lookup_failed symbol=%s", canonical_symbol
+            )
+
     if target_price is not None and side == "buy":
         entry = float(limit_price) if limit_price is not None else float(latest_close or 0.0)
         breakdown = evaluate_net_yield_gate(
-            user=user, side=side, entry_price=entry, target_price=float(target_price)
+            user=user,
+            side=side,
+            entry_price=entry,
+            target_price=float(target_price),
+            asset_class=asset_class,
         )
         if not breakdown.get("meetsMinimum", True):
             raise NetYieldGateRejection(
@@ -264,13 +346,13 @@ def place_order(
     db.add(order)
     db.flush()
 
-    asset_class: str | None = None
-    if asset_class_resolver is not None:
+    avg_volume: float | None = None
+    if avg_daily_volume_provider is not None:
         try:
-            asset_class = asset_class_resolver(canonical_symbol)
+            avg_volume = avg_daily_volume_provider(canonical_symbol)
         except Exception:
             logger.exception(
-                "paper_order_asset_class_lookup_failed symbol=%s", canonical_symbol
+                "paper_order_volume_lookup_failed symbol=%s", canonical_symbol
             )
 
     _try_fill(
@@ -279,6 +361,7 @@ def place_order(
         order=order,
         latest_close=latest_close,
         asset_class=asset_class,
+        avg_daily_volume=avg_volume,
     )
     db.commit()
     db.refresh(order)
@@ -289,12 +372,14 @@ def dispatch_pending_orders(
     db: Session,
     latest_close_provider: PriceProvider,
     asset_class_resolver: AssetClassResolver | None = None,
+    avg_daily_volume_provider: VolumeProvider | None = None,
 ) -> int:
     """Re-evaluate every pending limit order against the current close.
 
-    Returns the number of orders that filled in this cycle. The price and
-    asset-class lookups are cached per distinct symbol to avoid hammering
-    upstream providers when many users hold the same ticker.
+    Returns the number of orders that filled in this cycle. Price,
+    asset-class, and volume lookups are cached per distinct symbol so a
+    populated dispatcher cycle doesn't hammer the upstream providers
+    when many users hold the same ticker.
     """
     pending = (
         db.query(PaperOrder)
@@ -307,6 +392,7 @@ def dispatch_pending_orders(
 
     price_cache: dict[str, float | None] = {}
     asset_class_cache: dict[str, str | None] = {}
+    volume_cache: dict[str, float | None] = {}
 
     def _provider(symbol: str) -> float | None:
         if symbol not in price_cache:
@@ -332,6 +418,19 @@ def dispatch_pending_orders(
                 asset_class_cache[symbol] = None
         return asset_class_cache[symbol]
 
+    def _volume(symbol: str) -> float | None:
+        if avg_daily_volume_provider is None:
+            return None
+        if symbol not in volume_cache:
+            try:
+                volume_cache[symbol] = avg_daily_volume_provider(symbol)
+            except Exception:
+                logger.exception(
+                    "paper_order_dispatch_volume_lookup_failed symbol=%s", symbol
+                )
+                volume_cache[symbol] = None
+        return volume_cache[symbol]
+
     filled = 0
     for order in pending:
         user = db.query(User).filter(User.id == order.user_id).one_or_none()
@@ -349,6 +448,7 @@ def dispatch_pending_orders(
                 order=order,
                 latest_close=_provider(order.symbol),
                 asset_class=_asset_class(order.symbol),
+                avg_daily_volume=_volume(order.symbol),
             ):
                 filled += 1
         except Exception:

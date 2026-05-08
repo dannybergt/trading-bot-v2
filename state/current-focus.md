@@ -14,43 +14,45 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Phase-3-Restverfeinerung + Welle 10
+## Naechster Einstieg 2026-05-09: Phase 4 Auto-Execution + Welle 10
 
-Sitzung 2026-05-08 hat geliefert:
+Sitzung 2026-05-08 hat alle bisherigen Bauteile abgeschlossen:
 
-- Phase 3 Paper-Trading komplett (bis auf Restverfeinerungen)
-- Datenbasis-Wellen 1-8 ausgeliefert: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, **FinBERT-Premium-Schalter** (opt-in), **Twelve Data fuer Non-US-Maerkte** (yfinance → FMP → Twelve Data Chain)
+- Phase 3 Paper-Trading **komplett** (vier Schnitte: Erststand, Background-Fill+Chart-Marker+Recommendation-Verlinkung, asset-spezifische Slippage, dynamische Slippage + Fee-Multipliers)
+- Datenbasis-Wellen 1-8: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, FinBERT-Premium-Schalter (opt-in), Twelve Data fuer Non-US
 - Release-Tag `v2026.05.08-1` gesetzt + Upgrade-/Restore-Rehearsal bestanden
 
-Naechster sinnvoller Schnitt — der Datenbasis-Stack ist breit. Jetzt Phase-3-Restverfeinerung und gezielte Welle-10-Ergaenzungen:
+Phase 3 ist damit aus Daten-/Simulation-Sicht ehrlich genug fuer den Phase-4-Aufsatz. Naechster grosser Block:
 
-**Phase 3 Restverfeinerungen**
+**Phase 4 Auto-Execution** — wenn der Nutzer das jetzt freigeben will:
 
-1. **Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen**. Heute ist die Slippage fix pro Asset-Klasse. Realer Markt zeigt: eine 1000-Aktien-Order in einem 100k-Volume-Stock hat deutlich hoehere Slippage als 100 Aktien. Pragmatik: `_try_fill` bekommt Zugriff auf Last-Day-Volume (via `MarketDataService.get_latest_close`-Pendant), und `_resolve_slippage_pct(asset_class, qty, last_volume)` skaliert linear mit `qty / avg_daily_volume`. Default-Cap 1% Slippage.
-2. **Asset-spezifische Fee-Multipliers**. Crypto-Brokers (Coinbase, Binance) nehmen 0.5-1% Fee, Stock-Brokers oft 0%. Heute uniform aus User-Portfolio-Settings. Map `FEE_MULTIPLIER_BY_ASSET_CLASS` (stock 1.0, etf 1.0, crypto 5.0) skaliert die User-Settings nach oben fuer Crypto-Trades.
+1. **Risk-Modell**: neue Tabelle `auto_execution_limits` mit pro-User-Limits: max-Position-Size in USD, max-DailyLoss, max-OpenPositions, allowed-Asset-Classes. Per-Strategie-Budget (z.B. "Trend-Following 50% des Auto-Capitals"). Audit-Log-Tabelle `auto_execution_events` fuer jeden Auto-Trade-Versuch (accepted/rejected/executed/failed mit Begruendung).
+2. **Manuelle Freigabelogik**: Setting `auto_execution_enabled` pro User + pro Asset-Klasse oder Strategie. Default off. UI-Schalter mit Bestaetigungs-Dialog ("Ich verstehe dass dieser Schalter echte Trades ausloest"). Net-Yield-Gate UND Risk-Modell muessen UND-verknuepft pass-en.
+3. **Not-Aus**: Endpoint `POST /api/auto-execution/halt` der alle Auto-Strategies sofort deaktiviert + offene Limit-Orders bei Alpaca cancelt. UI-Button "Stop all automation" fuer Notfall.
+4. **Broker-Fehlerpfade**: Reconciliation-Task der Alpaca-Order-Status periodisch gegen lokale Datenbank abgleicht; bei Discrepancy (z.B. Alpaca filled, lokal pending) korrigieren. Recovery bei Connection-Errors mit exponentiellem Backoff.
 
-**Datenbasis Welle 9 (optional): FinBERT-Image-Variant**
+**Datenbasis Welle 9 (optional)**
 
-3. Zweite Build-Stage in `ops/docker/backend.Dockerfile` mit `RUN pip install -r requirements-finbert.txt` als final-image fuer ein separates Tag `dbergt/trading-bot-backend-finbert:<tag>`. GitHub-Actions-Publish baut beide Images parallel. Erst aufnehmen, wenn ein Nutzer FinBERT produktiv nutzen will.
+5. FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage im Dockerfile.
 
-**Datenbasis Welle 10 (offen)**
+**Datenbasis Welle 10**
 
-4. **SEC-Filings** (10-K/10-Q/8-K Annual/Quarterly/Material-Event Reports) ueber FMP `/sec_filings/{symbol}`. Pro Filing: Datum, Typ, Link, ggf. Inhalt-Excerpt mit VADER-Score. Auf `/analysis/<symbol>` neue SecFilingsSection.
-5. **Macro-Calendar** ueber FRED API (Fed Funds Rate, CPI, Non-Farm-Payrolls, Unemployment). Naechste Termine als Macro-Card-Erweiterung neben VIX/10Y/DXY.
-6. **Insider-Cluster-Detection**: 90-Tage-Window, mindestens 3 unabhaengige Insider mit gleichgerichteten Transaktionen → "Cluster Buy/Sell"-Highlight in der existierenden ResearchSignalsSection.
+6. SEC-Filings (10-K/Q/8-K) via FMP `/sec_filings/{symbol}`.
+7. Macro-Calendar via FRED API (Fed Funds, CPI, Non-Farm-Payrolls).
+8. Insider-Cluster-Detection in der existierenden ResearchSignalsSection.
 
-**Phase 4 Auto-Execution** beginnt erst NACH:
-- Phase-3-Restverfeinerungen (mindestens dynamische Slippage + Fee-Multipliers)
-- Risk-Modell (Limits, Position-Size-Caps, Budget pro Strategie, Audit-Log)
-- Manuelle Freigabelogik (Asset/Strategie-Korridor pro User explizit aktiviert)
-- Not-Aus + Broker-Fehlerpfade (Recovery, Reconcile)
+**Empfehlung beim naechsten Resume**: Phase 4 ist der grosse, gefaehrliche Block. Eine Wahl-Frage an den User stellen:
+
+- A) **Phase 4 jetzt anfangen** (Risk-Modell zuerst, Auto-Execution-Logik danach)
+- B) **Welle 10 zuerst** (mehr Datenbasis vor Auto-Execution; defensiver)
+- C) **Welle 9 (FinBERT-Image-Variant)** als Aufwaerm-Aufgabe
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Stand 2026-05-08 + Sektion "Phase 3" + "Phase 4" + "Datenbasis-Erweiterung"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen acht Datenbasis-Wellen + Phase-3-Slippage
-- `src/backend/app/paper_trading.py::_try_fill` und `_resolve_slippage_pct` als Stellen fuer dynamische Slippage
-- `src/backend/app/services.py::MarketDataService.get_latest_close` als Pattern fuer Last-Day-Volume-Fetch
+- `docs/admin/project-plan.md` Sektion "Phase 4" + "Sicherheitsachsen" + "Architekturachsen"
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu Phase-3-Abschluss + allen acht Datenbasis-Wellen
+- `src/backend/app/paper_trading.py` als Pattern-Referenz (Order-Lifecycle, Net-Yield-Gate) fuer den Phase-4-Auto-Execution-Service
+- `src/backend/app/alpaca_service.py::submit_order` als Broker-Pfad fuer echte Auto-Trades
 
 ## Stand Beim Letzten Handover
 

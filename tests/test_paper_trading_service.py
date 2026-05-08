@@ -306,6 +306,90 @@ class PaperTradingServiceTests(unittest.TestCase):
         # 50000 * (1 + 0.003) = 50150
         self.assertAlmostEqual(tx.price, 50_150.0, places=2)
 
+    def test_dynamic_slippage_scales_with_position_size(self):
+        # qty equal to 10% of avg daily volume → multiplier (1 + 0.1) = 1.1
+        # base stock slippage 0.1% → effective 0.11%
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="VOL",
+            side="buy",
+            qty=100,
+            limit_price=None,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(50.0),
+            asset_class_resolver=lambda _s: "stock",
+            avg_daily_volume_provider=lambda _s: 1000,
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # 50 * (1 + 0.0011) = 50.055
+        self.assertAlmostEqual(tx.price, 50.055, places=4)
+
+    def test_dynamic_slippage_caps_at_max_for_oversized_orders(self):
+        # qty 10x avg daily volume would push slippage way past the cap;
+        # we want it to clamp at 1.0% so a single big paper order can't
+        # destroy its own P&L.
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="HUGE",
+            side="buy",
+            qty=10_000,
+            limit_price=None,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(100.0),
+            asset_class_resolver=lambda _s: "stock",
+            avg_daily_volume_provider=lambda _s: 100,
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # capped at MAX_SLIPPAGE_PCT (1.0%) → 100 * 1.01 = 101
+        self.assertAlmostEqual(tx.price, 101.0, places=4)
+
+    def test_crypto_fee_multiplier_scales_user_fees(self):
+        # User pays 1.0% fee per leg; crypto multiplier is 5x → 5%
+        self.user.trade_fee_absolute = 0
+        self.user.trade_fee_percent = 1
+        self.db.commit()
+
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="BTC/USD",
+            side="buy",
+            qty=1,
+            limit_price=100.0,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(100.0),
+            asset_class_resolver=lambda _s: "crypto",
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # 1 * 100 * 5% = 5
+        self.assertAlmostEqual(tx.fee_percent_amount, 5.0, places=4)
+
+    def test_stock_fee_multiplier_unchanged(self):
+        self.user.trade_fee_absolute = 0
+        self.user.trade_fee_percent = 1
+        self.db.commit()
+
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="AAPL",
+            side="buy",
+            qty=1,
+            limit_price=100.0,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(100.0),
+            asset_class_resolver=lambda _s: "stock",
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # Stock multiplier is 1.0 → 1 * 100 * 1% = 1
+        self.assertAlmostEqual(tx.fee_percent_amount, 1.0, places=4)
+
     def test_market_buy_uses_etf_slippage_when_asset_class_resolved(self):
         # ETFs are tighter (0.05%) than the default
         order = paper_trading.place_order(
