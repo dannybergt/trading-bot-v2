@@ -33,6 +33,7 @@ from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plau
 from app.backup_service import BackupService, backup_scheduler_task
 from app import audit_service, backtest_service, data_quality_service, docs_service
 from app.coingecko_service import get_coingecko_service
+from app.discovery_service import get_discovery_service
 from app.news_hub_service import get_news_hub_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
@@ -2075,6 +2076,17 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
     except Exception:
         logger.exception("symbol_search_failed query=%s", query)
         return []
+
+@app.get("/api/discover")
+def get_discovery_dashboard(current_user: User = Depends(get_current_user)):
+    """Discovery dashboard: trending symbols, top movers, insider clusters.
+
+    Surfaces tickers the user does not yet track, so a watchlist can grow
+    based on what the market is doing right now rather than what the user
+    already knew about.
+    """
+    return get_discovery_service().get_dashboard()
+
 
 @app.get("/api/news/feed")
 def get_news_hub_feed(

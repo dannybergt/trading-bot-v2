@@ -14,30 +14,28 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Welle 9b Discovery-Engine
+## Naechster Einstieg 2026-05-09: Welle 10 Security oder Welle 11 Android-PWA
 
 Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert (in dieser Reihenfolge):
 
-- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung).
+- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters auf `/discover`.
 
-Naechster konkreter Schnitt = **Welle 9b Discovery-Engine** (aufbauend auf 9a):
+Naechste sinnvolle Schnitte (in der Reihenfolge):
 
-1. Backend: neuer `app/discovery_service.py` mit:
-   - `get_trending_symbols(window_hours=24)` zaehlt News-Mentions pro Symbol aus dem 9a-Feed, sortiert by count desc, optional gewichtet nach Sentiment-Burst (vs Baseline-Sentiment der letzten 7d)
-   - `get_top_movers(limit=20)` — top-gainers/losers aus dem Alpaca-Bars-Sweep ueber alle aktiven US-Equities (nicht nur Watchlist)
-   - `get_unusual_volume(threshold=3.0)` — Symbole deren Tagesvolumen >=3x das 20d-Average ist
-   - `get_insider_clusters(window_days=90, min_count=3)` — FMP `/insider-trading-rss-feed` global aggregiert, gleichgerichtete Cluster
-2. Endpoint `GET /api/discover` aggregiert alle vier Bloecke
-3. Frontend: entweder neue `/discover`-Page oder Section auf `/news`. Empfehlung: eigene `/discover`-Page weil das Volumen passt und die UX klarer ist
-4. Help-Topic `discover.md`
+**Welle 10 — Security-Welle**: Container-Image-Vulnerability-Scan (trivy/grype) als CI-Step, CSP/HSTS-Header auf Frontend, Upload-MIME-Validation + Size-Limits fuer Backup-Imports, Per-User-Login-Rate-Limit (heute global ueber `_enforce_rate_limit` mit IP-basierter Identitaet).
+
+**Welle 11 — Android via PWA**: Phase A = Manifest + Service-Worker fuer "installierbar auf Homescreen" mit offline-Fallback (nutzt den bestehenden VAPID-Push-Stack); Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth.
+
+**Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen (ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance, NewsHubPage, DiscoverPage, DataQualitySection) plus alle 11 Markdown-Topics.
+
+**Phase 4 Auto-Execution** beginnt erst NACH Welle 10-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` "Naechste Prioritaeten" Block
-- `state/decisions.md` letzte Decision-Bloecke (News-Hub-9a, In-App-Hilfe, Audit, ML-Persistenz)
-- `src/backend/app/news_hub_service.py` als Datenbasis fuer Trending
-- `src/backend/app/services.py::MarketDataService.get_avg_daily_volume` als Pattern fuer Unusual-Volume
-- `src/backend/app/fmp_service.py::get_insider_trades` als Pattern fuer Insider-Cluster (FMP v4 RSS)
+- `docs/admin/project-plan.md` Sektion "Naechste Prioritaeten" und "Phase 4"
+- `state/decisions.md` Decision-Bloecke 2026-05-08 (Welle 9b, Data-Source-Transparency, Welle 9a, In-App-Hilfe)
+- `.github/workflows/` als Stelle fuer trivy-Image-Scan-Integration
+- `src/frontend/src/i18n/de.json` und `en.json` als bestehende Uebersetzungs-Quelle
 
 
 

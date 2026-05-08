@@ -549,6 +549,47 @@ class FmpService:
             )
         return out
 
+    def get_market_movers(self) -> dict[str, list[dict[str, Any]]]:
+        """Today's top gainers, losers, and most-active US tickers.
+
+        Three v3 endpoints, returned together so the discovery page can
+        render the three columns in one fetch. Free-tier-safe.
+        """
+        out: dict[str, list[dict[str, Any]]] = {"gainers": [], "losers": [], "actives": []}
+        for key, path in (
+            ("gainers", "/stock_market/gainers"),
+            ("losers", "/stock_market/losers"),
+            ("actives", "/stock_market/actives"),
+        ):
+            payload = self._request(path)
+            if isinstance(payload, list):
+                out[key] = payload
+        return out
+
+    def get_insider_trading_feed(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Global recent insider transactions across the whole market.
+
+        `/insider-trading-rss-feed` is the v4 endpoint that returns the
+        latest reports without a symbol filter, which is what the
+        discovery engine needs to spot insider clusters across tickers
+        we don't currently track.
+        """
+        page_size = 100
+        pages_needed = max(1, (max(1, limit) + page_size - 1) // page_size)
+        out: list[dict[str, Any]] = []
+        for page in range(pages_needed):
+            payload = self._request(
+                "/insider-trading-rss-feed",
+                params={"page": page},
+                version="v4",
+            )
+            if not isinstance(payload, list):
+                break
+            out.extend(row for row in payload if isinstance(row, dict))
+            if len(payload) < page_size:
+                break
+        return out[:limit]
+
     def get_news(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         if not symbol:
             return []

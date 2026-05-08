@@ -163,9 +163,9 @@ Bereits umgesetzt (Welle 9a — News-Hub, 2026-05-08):
 
 - Globaler Multi-Source-News-Feed unter `/news`. Aggregiert FMP `/stock_news` (ohne Symbol-Filter), Alpha-Vantage `NEWS_SENTIMENT` mit Topics, plus RSS-Feeds (boerse.de, ariva.de, Reuters via `feedparser`). Symbol-Extraction aus Item-Titeln, Deduplizierung by URL, Sortierung newest-first ueber geparste Datetimes, Filter nach Source/Sentiment/Time-Window/Symbol. Endpoint `GET /api/news/feed`. Frontend mit Filter-Bar und klickbaren Symbol-Chips zur AnalysisPage als Discovery-Pfad
 
-Offene Subwellen:
+Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
-- **Welle 9b — Discovery-Engine**: aufbauend auf 9a-News-Aggregation: Trending-Symbols nach News-Volume + Sentiment-Burst der letzten 24h, Top-Gainers/Losers ueber Watchlist hinaus, Unusual-Volume-Detection, Insider-Cluster-Detection (3+ unabhaengige Insider in 90d gleichgerichtet), Reddit/StockTwits-Mention-Spikes ohne Symbol-Filter. Eigene `/discover`-Page oder Section auf der News-Hub-Seite
+- `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
 - **Welle 10 — Security-Welle**: Container-Image-Vulnerability-Scan (trivy/grype als CI-Step), CSP/HSTS-Header auf Frontend, Upload-MIME-Validation + Size-Limits fuer Backup-Imports, Per-User-Rate-Limit fuer Login (heute global). Echtes Anti-Malware (Binary-Scan) erst wenn Binary-Uploads kommen
 - **Welle 11 — Android (PWA-First-Strategie)**: Phase A = Manifest + Service-Worker fuer "Installierbar auf Homescreen", offline-Fallback (~1-2 Tage). Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth (~3-5 Tage). Phase C = React-Native nur wenn UX-Anforderungen das wirklich brauchen
 - **Welle 12 — DE-Uebersetzungen** der sechs neuen Sektionen + neuen Doku-Topics: ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance + alle 9 Markdown-Topics
@@ -273,11 +273,10 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 Stand 2026-05-08 nach Abschluss von Phase 3, allen acht Datenbasis-Wellen, ML-Persistenz/Backtest, Audit-Log, In-App-Hilfe:
 
-1. **Welle 9b — Discovery-Engine** (Trending nach News-Volume, Top-Mover, Unusual-Volume, Insider-Cluster) — direkt aufbauend auf 9a
-2. **Welle 10 — Security-Welle** (Container-Image-Scan in CI, CSP/HSTS-Header, Upload-MIME-Validation, Per-User-Login-Rate-Limit)
-3. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
-4. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
-5. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 9b-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+1. **Welle 10 — Security-Welle** (Container-Image-Scan in CI, CSP/HSTS-Header, Upload-MIME-Validation, Per-User-Login-Rate-Limit)
+2. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
+3. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
+4. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 10-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
 6. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
 7. Welle 14 (Datenbasis-Tiefe): SEC-Filings, FRED-Calendar, Sektor-Relativstaerke, Korrelations-/Beta-Tabellen, Yield-Curve-Spread, Commodities
 
