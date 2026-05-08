@@ -1,0 +1,10 @@
+# Trivy ignore list — vulnerabilities we have explicitly evaluated and
+# accept for now. Each entry must carry a brief justification so the
+# next reviewer doesn't have to re-derive the decision.
+#
+# Format:
+#   CVE-YYYY-NNNNN
+#
+# Empty by default. Add entries with comments above each one explaining
+# why the vulnerability is accepted (e.g. "not exploitable without auth"
+# or "fixed in upstream X but base image hasn't rebuilt yet").

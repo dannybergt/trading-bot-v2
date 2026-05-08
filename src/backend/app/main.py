@@ -2336,6 +2336,53 @@ def place_order(order: OrderRequest, current_user: User = Depends(get_current_us
     return user_alpaca.submit_order(order.symbol, order.qty, order.side, order.type)
 
 
+# --- Admin upload validation -------------------------------------------------
+
+ADMIN_UPLOAD_MAX_BYTES = int(os.getenv("ADMIN_UPLOAD_MAX_BYTES", str(50 * 1024 * 1024)))
+ADMIN_UPLOAD_ALLOWED_MIME = {"application/json", "application/octet-stream"}
+
+
+async def _read_admin_upload_json(file: UploadFile) -> dict:
+    """Validate + parse an admin-only JSON upload.
+
+    The browser File-API sometimes ships JSON as `application/octet-stream`
+    when the user picked a file without a recognised extension, so the
+    allowlist accepts both. Anything else is rejected before the bytes
+    are even read.
+
+    The size cap is enforced while the bytes stream in: we read the body
+    incrementally and abort once we cross `ADMIN_UPLOAD_MAX_BYTES`. That
+    way an attacker can't pin the worker to swap by sending a multi-GB
+    "JSON" payload.
+    """
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type and content_type not in ADMIN_UPLOAD_ALLOWED_MIME:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported content type: {content_type}",
+        )
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > ADMIN_UPLOAD_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds maximum allowed size of {ADMIN_UPLOAD_MAX_BYTES} bytes",
+            )
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON upload") from exc
+
+
 @app.get("/api/admin/export")
 def export_platform_state(admin: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
     snapshot = BackupService.export_snapshot(db)
@@ -2353,11 +2400,7 @@ async def import_platform_state(
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        payload = json.loads((await file.read()).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="Invalid import file") from exc
-
+    payload = await _read_admin_upload_json(file)
     BackupService.import_snapshot(db, payload, replace_existing=True)
     audit_service.log_event(
         db,
@@ -2437,11 +2480,7 @@ async def import_backup(
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        payload = json.loads((await file.read()).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="Invalid backup file") from exc
-
+    payload = await _read_admin_upload_json(file)
     BackupService.import_snapshot(db, payload, replace_existing=True)
     audit_service.log_event(
         db,

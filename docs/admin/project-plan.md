@@ -166,6 +166,14 @@ Bereits umgesetzt (Welle 9a — News-Hub, 2026-05-08):
 Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
 - `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
+
+Bereits umgesetzt (Welle 10 — Security-Welle, 2026-05-08):
+
+- Container-Image-Vulnerability-Scan via `aquasecurity/trivy-action` in `ci.yml` + `publish.yml`; severity HIGH+CRITICAL, ignore-unfixed, soft-fail (`exit-code: '0'`); neue `.trivyignore` mit dokumentiertem Format
+- Strict Security-Header in `ops/docker/frontend.nginx.conf`: HSTS, X-Content-Type-Options nosniff, X-Frame-Options DENY, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (geo/mic/cam/payment/usb disabled), CSP tuned fuer Vite/React + Alpaca-Stream
+- Upload-MIME-Allowlist + Size-Cap fuer beide Admin-Imports (`/api/admin/import`, `/api/admin/backups/import`) ueber neuen `_read_admin_upload_json`-Helper. Default 50 MB, env-overridable. HTTP 400 bei Type-Mismatch, 413 bei Oversize
+- Per-Account-Login-Rate-Limit als zweiter Bucket (`login_per_account` 10/15min) zusaetzlich zum bestehenden Per-IP-Bucket — schliesst die IP-Rotation-Luecke
+- 5 neue Unit-Tests fuer Upload-Validation, 172 Tests total (vorher 167)
 - **Welle 10 — Security-Welle**: Container-Image-Vulnerability-Scan (trivy/grype als CI-Step), CSP/HSTS-Header auf Frontend, Upload-MIME-Validation + Size-Limits fuer Backup-Imports, Per-User-Rate-Limit fuer Login (heute global). Echtes Anti-Malware (Binary-Scan) erst wenn Binary-Uploads kommen
 - **Welle 11 — Android (PWA-First-Strategie)**: Phase A = Manifest + Service-Worker fuer "Installierbar auf Homescreen", offline-Fallback (~1-2 Tage). Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth (~3-5 Tage). Phase C = React-Native nur wenn UX-Anforderungen das wirklich brauchen
 - **Welle 12 — DE-Uebersetzungen** der sechs neuen Sektionen + neuen Doku-Topics: ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance + alle 9 Markdown-Topics
@@ -273,10 +281,9 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 Stand 2026-05-08 nach Abschluss von Phase 3, allen acht Datenbasis-Wellen, ML-Persistenz/Backtest, Audit-Log, In-App-Hilfe:
 
-1. **Welle 10 — Security-Welle** (Container-Image-Scan in CI, CSP/HSTS-Header, Upload-MIME-Validation, Per-User-Login-Rate-Limit)
-2. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
-3. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
-4. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 10-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
+1. **Welle 11 — Android via PWA** (Manifest + Service-Worker, Phase A; Capacitor + Biometric optional in Phase B)
+2. **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen + Doku-Topics
+3. **Phase 4 Auto-Execution** — beginnt erst NACH Welle 11-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation
 6. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
 7. Welle 14 (Datenbasis-Tiefe): SEC-Filings, FRED-Calendar, Sektor-Relativstaerke, Korrelations-/Beta-Tabellen, Yield-Curve-Spread, Commodities
 

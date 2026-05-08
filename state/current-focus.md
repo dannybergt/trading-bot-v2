@@ -14,21 +14,19 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Welle 10 Security oder Welle 11 Android-PWA
+## Naechster Einstieg 2026-05-09: Welle 11 Android-PWA
 
 Sitzung 2026-05-08 hat zusaetzlich zur Phase-3-Komplettierung folgende Bloecke geliefert (in dieser Reihenfolge):
 
-- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters auf `/discover`.
+- ML-Persistenz + Backtest, Audit-Log + Daily-Re-Train, In-App-Hilfe + `/docs`, Welle 9a News-Hub mit globaler Multi-Source-Aggregation und Discovery-Pfad ueber Symbol-Chips, **Data-Source-Transparency** mit per-Symbol Confidence-Report + Upgrade-Hints + Admin-Coverage-Matrix (Phase-4-Vorbedingung), **Welle 9b Discovery-Engine** mit Trending/Top-Movers/Insider-Clusters auf `/discover`, **Welle 10 Security-Welle** (Trivy-Image-Scan, CSP/HSTS, Upload-MIME-Validation, Per-Account-Login-Rate-Limit).
 
-Naechste sinnvolle Schnitte (in der Reihenfolge):
-
-**Welle 10 — Security-Welle**: Container-Image-Vulnerability-Scan (trivy/grype) als CI-Step, CSP/HSTS-Header auf Frontend, Upload-MIME-Validation + Size-Limits fuer Backup-Imports, Per-User-Login-Rate-Limit (heute global ueber `_enforce_rate_limit` mit IP-basierter Identitaet).
+Naechste sinnvolle Schnitte:
 
 **Welle 11 — Android via PWA**: Phase A = Manifest + Service-Worker fuer "installierbar auf Homescreen" mit offline-Fallback (nutzt den bestehenden VAPID-Push-Stack); Phase B = Capacitor-Wrapper fuer App-Store-Distribution + Biometric-Auth.
 
 **Welle 12 — DE-Uebersetzungen** der seit Welle 1 hinzugekommenen Frontend-Sektionen (ResearchSignals, MacroContext, EarningsCalls, CryptoMetrics, SocialSentiment, OptionsFlow, ModelPerformance, NewsHubPage, DiscoverPage, DataQualitySection) plus alle 11 Markdown-Topics.
 
-**Phase 4 Auto-Execution** beginnt erst NACH Welle 10-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
+**Phase 4 Auto-Execution** beginnt erst NACH Welle 11-12 plus Risk-Modell + manuelle Freigabe-Logik + Not-Aus + Order-Reconciliation.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 

@@ -39,6 +39,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 _RATE_LIMITS = {
     "login": (5, 300),
+    # Per-account login limit: stricter than the per-IP one because an
+    # attacker that rotates source IPs would otherwise bypass the per-IP
+    # bucket entirely. 10 attempts per 15 minutes against a single email.
+    "login_per_account": (10, 900),
     "password_reset_request": (3, 900),
     "password_reset_confirm": (5, 900),
 }
@@ -220,6 +224,9 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     If MFA is enabled, requires mfa_code field.
     """
     _enforce_rate_limit("login", _request_identity(request, req.email))
+    # Second bucket keyed only on the email so an attacker that rotates
+    # source IPs still hits a per-account ceiling.
+    _enforce_rate_limit("login_per_account", req.email.lower())
     user = db.query(User).filter(User.email == req.email.lower()).first()
 
     audit_ctx = {
