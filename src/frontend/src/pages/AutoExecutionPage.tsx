@@ -6,6 +6,7 @@ import { ApiError, apiFetch } from "../api/client";
 
 type Limits = {
   enabled: boolean;
+  mode: "paper" | "live";
   maxPositionSizeUsd: number;
   maxDailyLossUsd: number;
   maxOpenPositions: number;
@@ -35,6 +36,7 @@ export function AutoExecutionPage() {
   const [draft, setDraft] = useState<Limits | null>(null);
   const [confirmEnable, setConfirmEnable] = useState(false);
   const [confirmHalt, setConfirmHalt] = useState(false);
+  const [confirmLiveMode, setConfirmLiveMode] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const limitsQuery = useQuery({
@@ -121,9 +123,24 @@ export function AutoExecutionPage() {
     setConfirmEnable(false);
   };
 
+  const handleModeChange = (next: "paper" | "live") => {
+    if (next === draft.mode) return;
+    if (next === "live") {
+      setConfirmLiveMode(true);
+      return;
+    }
+    setDraft({ ...draft, mode: next });
+  };
+
+  const confirmLiveModeNow = () => {
+    setDraft({ ...draft, mode: "live" });
+    setConfirmLiveMode(false);
+  };
+
   const save = () => {
     updateMutation.mutate({
       enabled: draft.enabled,
+      mode: draft.mode,
       maxPositionSizeUsd: draft.maxPositionSizeUsd,
       maxDailyLossUsd: draft.maxDailyLossUsd,
       maxOpenPositions: draft.maxOpenPositions,
@@ -141,17 +158,29 @@ export function AutoExecutionPage() {
         <p className="text-sm text-slate-400">{t("autoExecution.subtitle")}</p>
       </header>
 
-      <section className={`card ${draft.enabled ? "border-bergt-green/40" : "border-amber-500/40"}`}>
+      <section
+        className={`card ${
+          !draft.enabled
+            ? "border-amber-500/40"
+            : draft.mode === "live"
+            ? "border-red-700/50"
+            : "border-bergt-green/40"
+        }`}
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">
               {draft.enabled
-                ? t("autoExecution.statusEnabled")
+                ? draft.mode === "live"
+                  ? t("autoExecution.statusEnabledLive")
+                  : t("autoExecution.statusEnabledPaper")
                 : t("autoExecution.statusDisabled")}
             </h2>
             <p className="text-xs text-slate-500">
               {draft.enabled
-                ? t("autoExecution.statusEnabledHelp")
+                ? draft.mode === "live"
+                  ? t("autoExecution.statusEnabledLiveHelp")
+                  : t("autoExecution.statusEnabledPaperHelp")
                 : t("autoExecution.statusDisabledHelp")}
             </p>
           </div>
@@ -174,6 +203,38 @@ export function AutoExecutionPage() {
               {t("autoExecution.haltButton")}
             </button>
           </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3">
+          <span className="text-xs uppercase tracking-wide text-slate-400">
+            {t("autoExecution.modeLabel")}
+          </span>
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="radio"
+              name="auto-execution-mode"
+              value="paper"
+              checked={draft.mode === "paper"}
+              onChange={() => handleModeChange("paper")}
+              data-testid="auto-execution-mode-paper"
+            />
+            <span>{t("autoExecution.modePaper")}</span>
+          </label>
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="radio"
+              name="auto-execution-mode"
+              value="live"
+              checked={draft.mode === "live"}
+              onChange={() => handleModeChange("live")}
+              data-testid="auto-execution-mode-live"
+            />
+            <span>{t("autoExecution.modeLive")}</span>
+          </label>
+          <span className="text-[10px] text-slate-500">
+            {draft.mode === "paper"
+              ? t("autoExecution.modePaperHint")
+              : t("autoExecution.modeLiveHint")}
+          </span>
         </div>
       </section>
 
@@ -330,6 +391,17 @@ export function AutoExecutionPage() {
           danger
           onConfirm={() => haltMutation.mutate()}
           onCancel={() => setConfirmHalt(false)}
+        />
+      ) : null}
+      {confirmLiveMode ? (
+        <ConfirmModal
+          title={t("autoExecution.confirmLiveMode.title")}
+          body={t("autoExecution.confirmLiveMode.body")}
+          confirmLabel={t("autoExecution.confirmLiveMode.confirm")}
+          cancelLabel={t("autoExecution.confirmLiveMode.cancel")}
+          danger
+          onConfirm={confirmLiveModeNow}
+          onCancel={() => setConfirmLiveMode(false)}
         />
       ) : null}
     </div>

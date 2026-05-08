@@ -30,18 +30,20 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-09: Phase 4 — Auto-Trade-Loop + Reconciliation oder Re-Priorisierung
+## Naechster Einstieg 2026-05-09: User probiert Tool selbst + parallel weitere Wellen
 
-Phase 4 Auto-Execution-**Infrastruktur** (4a Risk-Modell+Limits+Audit, 4b Halt-Trigger-Wiring, 4c Not-Aus, 4d Frontend) ist ausgeliefert und in `main`. Defaults bleiben durchgaengig OFF. KEIN automatischer Trade-Loop ist scharf geschaltet — das ist bewusst eine Folgewelle.
+Phase 4e-paper (Auto-Paper-Trading-Loop) ist ausgeliefert und in `main`. Der User hat das Tool **noch nie selbst angeschaut** — naechster Sitzungsstart ist die UI-Probelauf-Anleitung, damit er endlich einen tiefen Blick auf alles werfen kann. Parallel koennen die folgenden Wellen weitergezogen werden.
 
-Optionen beim naechsten Resume:
+**Wichtige Klarstellung:** Alpaca ist NICHT der echte Broker des Operators. Alpaca diente bisher nur als Paper-/Quotes-Source. Der `mode=live`-Pfad ist deshalb aktuell **kein produktiver Pfad fuer echte Geld-Trades**, sondern nur Code-Path-Test gegen die Alpaca-Live-Tier. Phase 4f (echter Broker-Adapter) braucht zuerst eine User-Entscheidung welcher Broker (Trade Republic / Comdirect / Scalable / Interactive Brokers / ...).
 
-- **A) Phase 4e: Echter Auto-Trade-Loop + Reconciliation** — periodischer Background-Task, der pro User (bei `enabled=true`) Watchlist-Symbole gegen `evaluate_proposal` durchschickt, allowed=true Vorschlaege in Alpaca-Limit-Orders uebersetzt, und ein zweiter Reconciliation-Task der Alpaca-Order-Status gegen lokale DB abgleicht. Achtung: das schaltet echtes Geld scharf — ein expliziter User-Go ist Pflicht und muss separat dokumentiert sein.
-- **B) Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
-- **C) Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
-- **D) Phase 5+ (UX-Verfeinerung, weitere Datenbasis-Tiefe, Multi-Account, Backtesting-UI)** — bei expliziter Anforderung.
+Naechste Schritte:
 
-Empfehlung: vor A explizit nachfragen, ob der User wirklich echte Auto-Trades will. Der Multi-Step-Confirmation-Flow auf der `/auto-execution`-Page macht klar dass der Master-Schalter alleine nicht genuegt — der Auto-Loop ist eine zweite, separate Phase.
+1. **UI-Probelauf** mit User: Anleitung wie er den lokalen Stack startet (`bash ops/automation/start.sh`) und im Browser auf `http://localhost:18094` (Frontend) bzw. `http://localhost:18090` (Backend-API) zugreift. Login-Flow, Onboarding-Wizard, alle Pages durchgehen.
+2. **Phase 4f vorbereiten**: User-Frage nach echtem Broker beantworten, dann Broker-Adapter-Spec schreiben (REST/WebSocket-API, OAuth-Flow, Order-Lifecycle-Mapping). Erst implementieren wenn der User mit dem Paper-Loop zufrieden ist UND den Broker freigegeben hat.
+3. **Parallel-Wellen**:
+   - **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
+   - **Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
+   - **Phase 5+** — UX-Verfeinerung, Multi-Account, Backtesting-UI.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 

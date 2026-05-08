@@ -261,6 +261,11 @@ class AutoExecutionLimits(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     enabled = Column(Boolean, nullable=False, default=False)
+    # `paper` (default) routes evaluated proposals into the internal
+    # paper-trading book; `live` routes them through the Alpaca broker
+    # service. Phase 4e ships paper-mode wired up; live-mode requires an
+    # additional explicit user opt-in handled in a follow-up.
+    mode = Column(String, nullable=False, default="paper")
     max_position_size_usd = Column(Float, nullable=False, default=500.0)
     max_daily_loss_usd = Column(Float, nullable=False, default=200.0)
     max_open_positions = Column(Integer, nullable=False, default=5)

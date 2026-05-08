@@ -239,6 +239,74 @@ class AutoExecutionTests(unittest.TestCase):
         self.assertEqual(1, len(events))
         self.assertEqual("test_halt", events[0].reason)
 
+    def test_default_mode_is_paper(self):
+        row = auto_execution.get_limits(self.db, self.user)
+        self.assertEqual("paper", row.mode)
+
+    def test_update_mode_to_live_persists(self):
+        row = auto_execution.update_limits(self.db, self.user, {"mode": "live"})
+        self.assertEqual("live", row.mode)
+        # Unknown values silently fall back to paper.
+        row = auto_execution.update_limits(self.db, self.user, {"mode": "fantasy"})
+        self.assertEqual("paper", row.mode)
+
+    def test_evaluate_proposal_from_prediction_actionable_passes(self):
+        self._enable_with_defaults()
+        prediction = {
+            "direction": "UP",
+            "confidence": 0.75,
+            "zones": {"entry": 100.0, "target": 110.0},
+        }
+        decision, proposal = auto_execution.evaluate_proposal_from_prediction(
+            self.db,
+            self.user,
+            symbol="AAPL",
+            asset_class="stock",
+            sector="Technology",
+            prediction=prediction,
+            latest_close=100.0,
+        )
+        self.assertTrue(decision.allowed, decision.reasons)
+        self.assertIsNotNone(proposal)
+        self.assertEqual("AAPL", proposal["symbol"])
+        self.assertEqual("buy", proposal["side"])
+        # qty = floor(maxPositionSize=$1000 / $100) = 10
+        self.assertEqual(10.0, proposal["qty"])
+        self.assertEqual(100.0, proposal["limitPrice"])
+        self.assertEqual(110.0, proposal["targetPrice"])
+
+    def test_evaluate_proposal_from_prediction_blocks_on_low_confidence(self):
+        self._enable_with_defaults()
+        prediction = {"direction": "UP", "confidence": 0.4, "zones": {"entry": 100.0}}
+        decision, proposal = auto_execution.evaluate_proposal_from_prediction(
+            self.db,
+            self.user,
+            symbol="AAPL",
+            asset_class="stock",
+            sector=None,
+            prediction=prediction,
+            latest_close=100.0,
+        )
+        self.assertFalse(decision.allowed)
+        self.assertIn("prediction_confidence_below_threshold", decision.reasons)
+        self.assertIsNone(proposal)
+
+    def test_evaluate_proposal_from_prediction_blocks_on_hold(self):
+        self._enable_with_defaults()
+        prediction = {"direction": "HOLD", "confidence": 0.95}
+        decision, proposal = auto_execution.evaluate_proposal_from_prediction(
+            self.db,
+            self.user,
+            symbol="AAPL",
+            asset_class="stock",
+            sector=None,
+            prediction=prediction,
+            latest_close=100.0,
+        )
+        self.assertFalse(decision.allowed)
+        self.assertIn("prediction_not_actionable", decision.reasons)
+        self.assertIsNone(proposal)
+
     def test_list_events_returns_newest_first(self):
         self._enable_with_defaults()
         proposal_a = {"symbol": "AAPL", "side": "buy", "qty": 1, "limitPrice": 100, "assetClass": "stock", "proposalId": "p-a"}

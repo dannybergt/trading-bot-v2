@@ -353,10 +353,17 @@
     "saving": "Speichern…",
     "toggleLabel": "Master-Schalter",
     "haltButton": "Alle Automation stoppen",
-    "statusEnabled": "Automation ist aktiviert",
-    "statusEnabledHelp": "Vorschlaege durchlaufen weiter alle Risk-Gates; Halt-Trigger (FOMC<24h, juengster 8-K, invertierte Yield-Curve, Beta>Limit) blockieren einzelne Orders.",
+    "statusEnabledPaper": "Paper-Automation laeuft",
+    "statusEnabledPaperHelp": "Alle 15 Minuten laeuft die Schleife durch deine Watchlist, prueft jedes Symbol gegen alle Risk-Gates und Halt-Trigger und bucht passende Trades in das interne Paper-Book. KEIN Alpaca-Call — kein echtes Geld.",
+    "statusEnabledLive": "Live-Automation laeuft",
+    "statusEnabledLiveHelp": "ACHTUNG: passende Trades gehen an das konfigurierte Alpaca-Konto. Phase 4e liefert Paper-Mode validiert aus; Live-Mode liegt hinter einem separaten Gate, das du bewusst gesetzt hast.",
     "statusDisabled": "Automation ist deaktiviert",
     "statusDisabledHelp": "Kein Order wird automatisch platziert. Schalter umlegen, um zu opt-in.",
+    "modeLabel": "Modus",
+    "modePaper": "Paper (sicher)",
+    "modeLive": "Live (echtes Geld)",
+    "modePaperHint": "Akzeptierte Vorschlaege landen im internen Paper-Trading-Book. Kein Alpaca, kein echtes Geld.",
+    "modeLiveHint": "Akzeptierte Vorschlaege gehen an dein Alpaca-Konto. Echtes Geld bewegt sich.",
     "feedback": {
       "saved": "Gespeichert.",
       "halted": "Halt bestaetigt. {{count}} offene Positionen protokolliert."
@@ -385,6 +392,12 @@
       "body": "Das deaktiviert den Master-Schalter und protokolliert das Halt-Ereignis. Offene Alpaca-Limit-Orders werden in Phase 4d-Reconciliation gecancelt.",
       "confirm": "Ja, alles stoppen",
       "cancel": "Abbrechen"
+    },
+    "confirmLiveMode": {
+      "title": "Auf Live-Modus wechseln?",
+      "body": "Live-Modus leitet akzeptierte Vorschlaege an dein konfiguriertes Alpaca-Konto. Echtes Geld bewegt sich. Validiere den Paper-Loop zuerst end-to-end; setze diesen Schalter nur wenn du dem System vertraust.",
+      "confirm": "Ja, an Alpaca leiten",
+      "cancel": "Bei Paper bleiben"
     }
   },
   "macroCalendar": {

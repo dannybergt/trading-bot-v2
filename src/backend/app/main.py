@@ -80,6 +80,15 @@ PAPER_ORDER_FILL_INTERVAL_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INTERVAL_SEC
 PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS", "60"))
 ML_RETRAIN_INTERVAL_SECONDS = int(os.getenv("ML_RETRAIN_INTERVAL_SECONDS", "3600"))
 ML_RETRAIN_INITIAL_DELAY_SECONDS = int(os.getenv("ML_RETRAIN_INITIAL_DELAY_SECONDS", "300"))
+AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS = int(
+    os.getenv("AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS", "900")  # 15 min
+)
+AUTO_EXECUTION_PAPER_LOOP_INITIAL_DELAY_SECONDS = int(
+    os.getenv("AUTO_EXECUTION_PAPER_LOOP_INITIAL_DELAY_SECONDS", "180")
+)
+AUTO_EXECUTION_PAPER_MAX_TRADES_PER_LOOP = int(
+    os.getenv("AUTO_EXECUTION_PAPER_MAX_TRADES_PER_LOOP", "3")
+)
 
 
 def get_allowed_origins() -> list[str]:
@@ -1123,6 +1132,215 @@ async def ml_retrain_task():
         await asyncio.sleep(ML_RETRAIN_INTERVAL_SECONDS)
 
 
+async def auto_execution_paper_loop_task():
+    """Auto-paper-trading loop.
+
+    For every user with `auto_execution_limits.enabled=True AND mode='paper'`,
+    walk the union of their watchlist symbols, run each through the
+    existing prediction pipeline, and submit a paper-trading order when
+    `evaluate_proposal_from_prediction` returns `allowed=True`. The loop
+    NEVER calls Alpaca — paper-mode is wired to the in-process paper
+    book only. Live-mode lives behind a separate gate that this task
+    deliberately ignores.
+
+    Per-loop guardrails:
+    - Hard cap of `AUTO_EXECUTION_PAPER_MAX_TRADES_PER_LOOP` orders per
+      user, regardless of how many watchlist symbols would otherwise pass.
+    - Symbol-level try/except so one bad ticker can't take the whole loop
+      down for the user.
+    - No reentrant work for symbols the user already has an open paper
+      order on (paper_order_fill_task handles fills separately).
+    """
+    from app.models import WatchlistItem as WatchlistItemRecord
+
+    logger.info(
+        "auto_execution_paper_loop_started interval_seconds=%s",
+        AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS,
+    )
+    await asyncio.sleep(AUTO_EXECUTION_PAPER_LOOP_INITIAL_DELAY_SECONDS)
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                eligible_users = (
+                    db.query(User)
+                    .join(AutoExecutionLimitsRecord, AutoExecutionLimitsRecord.user_id == User.id)
+                    .filter(
+                        AutoExecutionLimitsRecord.enabled == True,  # noqa: E712
+                        AutoExecutionLimitsRecord.mode == "paper",
+                    )
+                    .all()
+                )
+                if not eligible_users:
+                    logger.debug("auto_execution_paper_loop_no_eligible_users")
+                else:
+                    fred_calendar: dict | None = None
+                    try:
+                        fred_calendar = get_fred_service().normalized_macro_calendar()
+                    except Exception:
+                        logger.exception("auto_execution_paper_loop_fred_lookup_failed")
+
+                    for user in eligible_users:
+                        try:
+                            await asyncio.to_thread(
+                                _run_auto_execution_paper_for_user,
+                                db,
+                                user,
+                                fred_calendar,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "auto_execution_paper_loop_user_failed user_id=%s", user.id
+                            )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("auto_execution_paper_loop_cycle_failed")
+
+        await asyncio.sleep(AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS)
+
+
+def _run_auto_execution_paper_for_user(
+    db: Session, user: User, fred_calendar: dict | None
+) -> None:
+    """Synchronous per-user worker for the auto-paper-trading loop."""
+    from app.models import WatchlistItem as WatchlistItemRecord
+
+    watchlist_ids = [
+        wl.id
+        for wl in db.query(WatchlistRecord).filter(WatchlistRecord.user_id == user.id).all()
+    ]
+    if not watchlist_ids:
+        return
+    symbols = sorted(
+        {
+            str(item.symbol).upper()
+            for item in db.query(WatchlistItemRecord)
+            .filter(WatchlistItemRecord.watchlist_id.in_(watchlist_ids))
+            .all()
+            if item.symbol
+        }
+    )
+    if not symbols:
+        return
+
+    trades_placed = 0
+    for symbol in symbols:
+        if trades_placed >= AUTO_EXECUTION_PAPER_MAX_TRADES_PER_LOOP:
+            break
+        try:
+            # Skip symbols where we already have an open paper position
+            # waiting to fill — no point stacking proposals on the same name.
+            already_open = (
+                db.query(PaperOrderRecord)
+                .filter(
+                    PaperOrderRecord.user_id == user.id,
+                    PaperOrderRecord.symbol == symbol,
+                    PaperOrderRecord.status.in_(["pending", "filled"]),
+                )
+                .count()
+            )
+            if already_open > 0:
+                continue
+
+            stock_payload = service.get_stock_data(symbol, period="6mo", interval="1d", user=user)
+            if not stock_payload:
+                continue
+            prediction = stock_payload.get("prediction") or {}
+            asset_profile = stock_payload.get("asset") or {}
+            asset_class = asset_profile.get("assetClass")
+            sector = (stock_payload.get("info") or {}).get("sector")
+
+            sec_filings = None
+            if (asset_class or "").lower() != "crypto" and service.fmp.configured:
+                try:
+                    sec_filings = service.fmp.normalized_sec_filings(symbol)
+                except Exception:
+                    logger.exception("auto_execution_paper_sec_lookup_failed symbol=%s", symbol)
+            sector_context = None
+            if (asset_class or "").lower() != "crypto":
+                try:
+                    sector_context = get_sector_service().get_sector_context(symbol, sector=sector)
+                except Exception:
+                    logger.exception(
+                        "auto_execution_paper_sector_lookup_failed symbol=%s", symbol
+                    )
+
+            latest_close = service.get_latest_close(symbol)
+
+            decision, proposal = auto_execution.evaluate_proposal_from_prediction(
+                db,
+                user,
+                symbol=symbol,
+                asset_class=asset_class,
+                sector=sector,
+                prediction=prediction,
+                latest_close=latest_close,
+                sec_filings=sec_filings,
+                fred_calendar=fred_calendar,
+                sector_context=sector_context,
+            )
+            if not (decision.allowed and proposal):
+                continue
+
+            try:
+                order = paper_trading.place_order(
+                    db=db,
+                    user=user,
+                    symbol=str(proposal["symbol"]),
+                    side=str(proposal["side"]),
+                    qty=float(proposal["qty"]),
+                    limit_price=float(proposal["limitPrice"]) if proposal.get("limitPrice") else None,
+                    target_price=float(proposal["targetPrice"]) if proposal.get("targetPrice") else None,
+                    source="auto-execution-paper",
+                    latest_close_provider=service.get_latest_close,
+                    asset_class_resolver=_asset_class_resolver,
+                    avg_daily_volume_provider=service.get_avg_daily_volume,
+                )
+            except Exception as exc:
+                auto_execution.record_event(
+                    db,
+                    user,
+                    status="failed",
+                    proposal_id=str(proposal.get("proposalId") or ""),
+                    symbol=symbol,
+                    side=str(proposal.get("side") or ""),
+                    reason=f"paper_order_place_failed: {exc!s}",
+                    payload={"proposal": proposal},
+                )
+                continue
+
+            auto_execution.record_event(
+                db,
+                user,
+                status="executed",
+                proposal_id=str(proposal.get("proposalId") or ""),
+                symbol=symbol,
+                side=str(proposal.get("side") or ""),
+                reason="auto-execution paper order placed",
+                payload={
+                    "proposal": proposal,
+                    "paperOrderId": order.id,
+                    "mode": "paper",
+                },
+            )
+            trades_placed += 1
+            logger.info(
+                "auto_execution_paper_order_placed user_id=%s symbol=%s side=%s qty=%s",
+                user.id,
+                symbol,
+                proposal["side"],
+                proposal["qty"],
+            )
+        except Exception:
+            logger.exception(
+                "auto_execution_paper_loop_symbol_failed user_id=%s symbol=%s",
+                user.id,
+                symbol,
+            )
+
+
 async def watchlist_alert_dispatch_task():
     logger.info(
         "watchlist_alert_dispatcher_started interval_seconds=%s dedup_hours=%s",
@@ -1174,6 +1392,7 @@ async def on_startup():
     asyncio.create_task(watchlist_alert_dispatch_task())
     asyncio.create_task(paper_order_fill_task())
     asyncio.create_task(ml_retrain_task())
+    asyncio.create_task(auto_execution_paper_loop_task())
     asyncio.create_task(backup_scheduler_task())
 
 @app.on_event("shutdown")
@@ -2332,14 +2551,27 @@ def update_auto_execution_limits(
     update is audited via `audit_service` so a flipped switch leaves a
     persistent trail.
     """
+    previous_mode = (auto_execution.get_limits(db, current_user).mode or "paper").lower()
     row = auto_execution.update_limits(db, current_user, payload or {})
+    new_mode = (row.mode or "paper").lower()
     audit_service.log_event(
         db,
         action="auto_execution.limits_updated",
         user_id=current_user.id,
         outcome="success",
-        details={"enabled": bool(row.enabled)},
+        details={"enabled": bool(row.enabled), "mode": new_mode},
     )
+    # Flipping into live-mode is a load-bearing event — log it separately
+    # so a security review of the audit trail can spot every transition
+    # from paper to live without scanning every limits update.
+    if previous_mode != "live" and new_mode == "live":
+        audit_service.log_event(
+            db,
+            action="auto_execution.live_mode_enabled",
+            user_id=current_user.id,
+            outcome="success",
+            details={"previousMode": previous_mode},
+        )
     return auto_execution.serialize_limits(row)
 
 

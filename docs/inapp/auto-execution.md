@@ -7,6 +7,26 @@ Phase 4 of the platform. Lets the system propose, evaluate, and (in future incre
 
 The master switch is **disabled by default**. No automation will run until you explicitly turn it on. Even with the switch on, no proposal becomes an order until it passes every gate listed below.
 
+### Two modes
+
+The page has a **Mode** selector with two values:
+
+- **Paper (safe)** — default. Accepted proposals are routed into the internal paper-trading book. There is NO Alpaca call. Use this to validate the loop end-to-end with zero real-money exposure.
+- **Live (Alpaca)** — accepted proposals go to your configured Alpaca account. **Important caveat: Alpaca is NOT a production broker for the operator of this instance** — Alpaca was wired up for paper-trading and live-quote streaming. The actual production broker (a separate adapter for the operator's real-money broker) is a follow-up phase. Until that adapter ships, treat Live-mode as "Alpaca-account routing only" — useful for testing the live-broker code path against a real broker API, NOT for routing your actual real-money trades. Switching into live mode requires an explicit confirmation step and is audited as a separate `auto_execution.live_mode_enabled` event.
+
+The recommended path is: turn the master switch on → leave the mode on Paper → watch a few loop cycles → review the events log → only then consider Live.
+
+## Paper auto-loop
+
+A background task runs every 15 minutes (configurable via `AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS`). For each user with `enabled=true AND mode=paper`:
+
+1. The loop walks the union of watchlist symbols.
+2. Each symbol is run through the existing prediction pipeline (`get_stock_data`).
+3. Predictions with `direction=UP|DOWN` and `confidence >= 0.6` become proposals — qty = floor(`maxPositionSizeUsd` / entry).
+4. Each proposal goes through `evaluate_proposal` (every risk gate + halt trigger + Net-Yield-Gate).
+5. Allowed proposals are placed via `paper_trading.place_order` — same code path that powers manual paper trading.
+6. Per-loop hard cap of 3 orders per user (configurable via `AUTO_EXECUTION_PAPER_MAX_TRADES_PER_LOOP`).
+
 ## Risk gates (per proposal)
 
 1. **Master switch** must be `enabled`.

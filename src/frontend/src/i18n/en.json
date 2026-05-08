@@ -353,10 +353,17 @@
     "saving": "Saving…",
     "toggleLabel": "Master switch",
     "haltButton": "Stop all automation",
-    "statusEnabled": "Automation is enabled",
-    "statusEnabledHelp": "Proposals still pass through every risk gate; halt triggers (FOMC<24h, recent 8-K, inverted yield curve, beta>limit) block individual orders.",
+    "statusEnabledPaper": "Paper automation is running",
+    "statusEnabledPaperHelp": "Every 15 minutes the loop walks your watchlist, evaluates each symbol against all risk gates and halt triggers, and books matching trades into the internal paper book. NO Alpaca calls — no real money moves.",
+    "statusEnabledLive": "Live automation is running",
+    "statusEnabledLiveHelp": "WARNING: matching trades go to the configured Alpaca account. Phase 4e ships paper-mode validated; live-mode lives behind a separate gate that you flipped on intentionally.",
     "statusDisabled": "Automation is disabled",
     "statusDisabledHelp": "No order will be placed automatically. Turn the switch on to opt in.",
+    "modeLabel": "Mode",
+    "modePaper": "Paper (safe)",
+    "modeLive": "Live (real money)",
+    "modePaperHint": "Routes accepted proposals into the internal paper-trading book. No Alpaca, no real money.",
+    "modeLiveHint": "Routes accepted proposals to your configured Alpaca account. Real money moves.",
     "feedback": {
       "saved": "Saved.",
       "halted": "Halt confirmed. {{count}} open positions logged."
@@ -385,6 +392,12 @@
       "body": "This disables the master switch and audits the halt event. Any open Alpaca limit orders will be canceled in Phase 4d reconciliation.",
       "confirm": "Yes, stop everything",
       "cancel": "Cancel"
+    },
+    "confirmLiveMode": {
+      "title": "Switch to live mode?",
+      "body": "Live mode routes accepted proposals to your configured Alpaca account. Real money will move. Validate the paper loop end-to-end first; flip this only when you trust the system.",
+      "confirm": "Yes, route to Alpaca",
+      "cancel": "Stay on paper"
     }
   },
   "macroCalendar": {

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 ORDER_SIDES = {"buy", "sell"}
 ORDER_STATUSES = {"pending", "filled", "cancelled"}
-ORDER_SOURCES = {"manual", "auto-recommendation"}
+ORDER_SOURCES = {"manual", "auto-recommendation", "auto-execution-paper"}
 
 # Adverse market-fill slippage in percent. Keyed by asset class so the
 # simulator widens the bid/ask gap for crypto (less liquid, larger

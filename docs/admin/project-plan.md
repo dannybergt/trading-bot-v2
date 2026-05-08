@@ -167,6 +167,15 @@ Bereits umgesetzt (Welle 9b — Discovery-Engine, 2026-05-08):
 
 - `/discover`-Page mit drei orthogonalen Views: Trending (News-Mention-Volume + Sentiment-Burst gegen 7d-Baseline), Top-Movers (FMP `/stock_market/{gainers|losers|actives}`), Insider-Clusters (FMP v4 `/insider-trading-rss-feed` global aggregiert, 3+ unique Insider in 90d). Nav-Eintrag "Discover". Endpoint `GET /api/discover`. Help-Topic `discover.md`. 167 Unit-Tests OK (vorher 161 + 6 discovery)
 
+Bereits umgesetzt (Phase 4e-paper Auto-Paper-Trading-Loop, 2026-05-08):
+
+- Alembic-Migration `0007_add_auto_execution_mode` (revision `c4d5e6f7a8b9`) fuegt `mode`-Spalte hinzu (paper/live, default paper)
+- `evaluate_proposal_from_prediction` baut aus ML-Prediction-Output ein Proposal (qty = floor(maxPositionSize / entry), confidence>=0.6)
+- Background-Task `auto_execution_paper_loop_task` (15min Interval default) iteriert ueber alle User mit `enabled=true AND mode=paper`, ruft pro Watchlist-Symbol `evaluate_proposal_from_prediction`, bei allowed `paper_trading.place_order` mit `source="auto-execution-paper"`. Hard-Cap 3 Trades/User/Loop. **KEIN Alpaca-Call** — pure Paper-Buchung im internen Paper-Trading-Modul
+- Frontend Mode-Radio-Buttons mit Live-Confirmation-Modal. API auditiert `auto_execution.live_mode_enabled` separat
+- **Wichtig:** Alpaca ist NICHT der echte Broker des Operators — der `mode=live`-Pfad ist aktuell nur Code-Path-Test gegen Alpaca-Live-Tier, kein produktiver Pfad fuer echte Geld-Trades. Phase 4f (echter Broker-Adapter) ist eigene Welle mit User-Entscheidung welcher Broker
+- 208 Unit-Tests OK (vorher 203 + 5 evaluate_from_prediction)
+
 Bereits umgesetzt (Phase 4 Auto-Execution-Infrastruktur, 2026-05-08):
 
 - **Phase 4a Risk-Modell + Limits + Audit-Tabellen**: Alembic-Migration `0006_add_auto_execution` (revision `b3c4d5e6f7a8`) mit `auto_execution_limits` (1:1 zu users, UNIQUE-Constraint, defaults `enabled=false`/max_position=$500/max_daily_loss=$200/max_open=5/max_beta=2.0) und `auto_execution_events` (Audit-Log indexed by user_id+status+created_at). Neuer `app/auto_execution.py` mit `evaluate_proposal`, `update_limits`, `halt_all_for_user`, `list_events`. Backup/Export/Import-Coverage
@@ -304,10 +313,11 @@ Diese Aufteilung ist Zielarchitektur, nicht Sofort-Refactor. Neue Arbeit soll ab
 
 Stand 2026-05-08 nach Abschluss von Wellen 1-12 + Welle 14 Datenbasis-Tiefe + Phase 4 Auto-Execution-Infrastruktur (4a-d):
 
-1. **Phase 4e — echter Auto-Trade-Loop + Reconciliation**: Background-Task der pro User (bei `enabled=true`) periodisch Watchlist-Symbole gegen `evaluate_proposal` durchschickt und allowed-Vorschlaege als echte Alpaca-Limit-Orders platziert; zweiter Reconciliation-Task gleicht Alpaca-Order-Status periodisch gegen lokale DB ab. SCHALTET ECHTES GELD SCHARF — braucht expliziten User-Go bevor begonnen wird.
-2. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
-3. Welle 11 Phase B (Capacitor + Biometric + App-Store) wenn echter Native-App-Bedarf entsteht
-4. Phase 5+: weitere UX-Verfeinerung, Multi-Account, Backtesting-UI
+1. **UI-Probelauf** mit dem User: er hat das Tool noch nie selbst angeschaut. Anleitung zum lokalen Start (`bash ops/automation/start.sh` → http://localhost:18094 Frontend, http://localhost:18090 Backend), Login/Onboarding/alle Pages durchgehen
+2. **Phase 4f — echter Broker-Adapter**: Alpaca ist NICHT der echte Broker des Operators. Vor jedem echten Geld-Trade braucht es einen Broker-Adapter fuer den real genutzten Broker. User-Entscheidung welcher Broker (Trade Republic / Comdirect / Scalable / Interactive Brokers / ...) steht aus. ECHTES GELD — braucht expliziten User-Go nach Validierung des Paper-Loops
+3. Welle 13 (optional, Premium-Sentiment): FinBERT-Image-Variant
+4. Welle 11 Phase B (Capacitor + Biometric + App-Store) wenn echter Native-App-Bedarf entsteht
+5. Phase 5+: weitere UX-Verfeinerung, Multi-Account, Backtesting-UI
 
 ## Entscheidungsregel
 

@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LIMITS: dict[str, Any] = {
     "enabled": False,
+    "mode": "paper",
     "max_position_size_usd": 500.0,
     "max_daily_loss_usd": 200.0,
     "max_open_positions": 5,
@@ -58,6 +59,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
 }
 
 VALID_ASSET_CLASSES = {"stock", "etf", "crypto"}
+VALID_MODES = {"paper", "live"}
 EARNINGS_HALT_DAYS = 7
 FOMC_HALT_HOURS = 24
 
@@ -108,8 +110,12 @@ def serialize_limits(row: AutoExecutionLimits) -> dict[str, Any]:
     classes = [
         c.strip().lower() for c in (row.allowed_asset_classes or "").split(",") if c.strip()
     ]
+    mode = (row.mode or "paper").lower()
+    if mode not in VALID_MODES:
+        mode = "paper"
     return {
         "enabled": bool(row.enabled),
+        "mode": mode,
         "maxPositionSizeUsd": float(row.max_position_size_usd or 0),
         "maxDailyLossUsd": float(row.max_daily_loss_usd or 0),
         "maxOpenPositions": int(row.max_open_positions or 0),
@@ -131,6 +137,12 @@ def update_limits(db: Session, user: User, payload: dict[str, Any]) -> AutoExecu
 
     if "enabled" in payload:
         row.enabled = bool(payload["enabled"])
+    if "mode" in payload:
+        candidate = str(payload["mode"] or "").lower()
+        # Unknown values silently drop to paper. The frontend has the
+        # confirmation flow that gates live-mode; the API layer additionally
+        # logs the live-mode flip via audit_service.
+        row.mode = candidate if candidate in VALID_MODES else "paper"
     if "maxPositionSizeUsd" in payload:
         row.max_position_size_usd = max(0.0, float(payload["maxPositionSizeUsd"] or 0))
     if "maxDailyLossUsd" in payload:
@@ -424,6 +436,95 @@ def record_event(
     except Exception:
         logger.exception("auto_execution_event_record_failed user_id=%s status=%s", user.id, status)
         db.rollback()
+
+
+def evaluate_proposal_from_prediction(
+    db: Session,
+    user: User,
+    *,
+    symbol: str,
+    asset_class: str | None,
+    sector: str | None,
+    prediction: dict[str, Any],
+    latest_close: float | None,
+    sec_filings: dict[str, Any] | None = None,
+    fred_calendar: dict[str, Any] | None = None,
+    sector_context: dict[str, Any] | None = None,
+) -> tuple[RiskDecision, dict[str, Any] | None]:
+    """Build a proposal from a per-symbol ML prediction and evaluate it.
+
+    Returns `(decision, proposal)`. Proposal is None when the prediction
+    is not actionable (no UP/DOWN direction, missing prices, qty would be
+    zero). When the prediction is actionable, the proposal carries the
+    qty + limit + target prices the auto-loop would actually submit; the
+    caller decides whether to act on `decision.allowed`.
+    """
+    direction = str(prediction.get("direction") or "").upper()
+    if direction not in {"UP", "DOWN"}:
+        return RiskDecision(allowed=False, reasons=["prediction_not_actionable"]), None
+    confidence = float(prediction.get("confidence") or 0)
+    if confidence < 0.6:
+        return RiskDecision(allowed=False, reasons=["prediction_confidence_below_threshold"]), None
+
+    side = "buy" if direction == "UP" else "sell"
+    zones = prediction.get("zones") or {}
+    entry_price = (
+        float(zones.get("entry") or 0)
+        or float(latest_close or 0)
+    )
+    target_price = float(zones.get("target") or 0) or None
+    if entry_price <= 0:
+        return RiskDecision(allowed=False, reasons=["entry_price_unavailable"]), None
+
+    limits = get_limits(db, user)
+    max_position_usd = float(limits.max_position_size_usd or 0)
+    if max_position_usd <= 0 or entry_price <= 0:
+        qty = 0.0
+    else:
+        qty = max(0.0, max_position_usd / entry_price)
+        # Stocks/ETFs trade in whole shares; crypto allows fractional.
+        if (asset_class or "").lower() != "crypto":
+            qty = float(int(qty))
+    if qty <= 0:
+        return RiskDecision(allowed=False, reasons=["qty_below_one_share"]), None
+
+    proposal = {
+        "symbol": symbol.upper(),
+        "side": side,
+        "qty": qty,
+        "limitPrice": entry_price,
+        "targetPrice": target_price,
+        "assetClass": asset_class,
+        "sector": sector,
+        "proposalId": f"auto-{symbol.upper()}-{int(datetime.now(timezone.utc).timestamp())}",
+        "predictionConfidence": confidence,
+    }
+
+    net_yield_breakdown: dict[str, Any] | None = None
+    if target_price and entry_price:
+        try:
+            from app import paper_trading  # local import to avoid cycle
+
+            net_yield_breakdown = paper_trading.evaluate_net_yield_gate(
+                user=user,
+                side=side,
+                entry_price=entry_price,
+                target_price=target_price,
+                asset_class=asset_class,
+            )
+        except Exception:
+            logger.exception("auto_execution_net_yield_failed symbol=%s", symbol)
+
+    decision = evaluate_proposal(
+        db,
+        user,
+        proposal,
+        sec_filings=sec_filings,
+        fred_calendar=fred_calendar,
+        sector_context=sector_context,
+        net_yield_breakdown=net_yield_breakdown,
+    )
+    return decision, proposal
 
 
 def halt_all_for_user(db: Session, user: User, *, reason: str) -> int:
