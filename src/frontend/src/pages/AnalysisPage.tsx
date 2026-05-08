@@ -8,6 +8,7 @@ import {
   type ChartCandle,
   type ChartLevel,
   type ChartPattern,
+  type ChartTradeMarker,
   type ChartZones,
 } from "../components/StockChart";
 import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumeProfile";
@@ -253,6 +254,16 @@ export function AnalysisPage() {
     staleTime: 5 * 60_000,
   });
 
+  const transactionsQuery = useQuery({
+    queryKey: ["paper-transactions", "for-analysis"],
+    queryFn: () =>
+      apiFetch<{ transactions: Array<{ symbol: string; side: "buy" | "sell"; qty: number; price: number; executedAt: string | null }> }>(
+        "/api/paper-trading/transactions",
+      ),
+    enabled: !!decoded,
+    refetchInterval: 60_000,
+  });
+
   if (!decoded) {
     return (
       <p className="text-sm text-slate-400">
@@ -277,6 +288,16 @@ export function AnalysisPage() {
   const research = researchQuery.data;
   const candles = stock?.chart_data ?? [];
   const patterns = stock?.patterns ?? [];
+  const tradeMarkersForSymbol: ChartTradeMarker[] = (
+    transactionsQuery.data?.transactions ?? []
+  )
+    .filter((tx) => tx.symbol === decoded.toUpperCase() && tx.executedAt)
+    .map((tx) => ({
+      time: tx.executedAt!,
+      side: tx.side,
+      qty: tx.qty,
+      price: tx.price,
+    }));
   const lastClose = candles.at(-1)?.close ?? null;
   const firstClose = candles[0]?.close ?? null;
   const periodChangePct =
@@ -340,7 +361,7 @@ export function AnalysisPage() {
         </div>
       </header>
 
-      <PredictionCard prediction={stock?.prediction} />
+      <PredictionCard prediction={stock?.prediction} symbol={decoded} />
       <PatternsCard patterns={patterns} />
 
       {stockQuery.isLoading ? (
@@ -354,6 +375,7 @@ export function AnalysisPage() {
             patterns={patterns}
             zones={stock?.prediction?.zones ?? null}
             levels={stock?.support_resistance ?? null}
+            trades={tradeMarkersForSymbol}
           />
           <VolumeProfile profile={stock?.volume_profile ?? null} />
         </div>
@@ -370,7 +392,13 @@ export function AnalysisPage() {
   );
 }
 
-function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
+function PredictionCard({
+  prediction,
+  symbol,
+}: {
+  prediction?: Prediction | null;
+  symbol?: string;
+}) {
   if (!prediction || !prediction.direction) return null;
   const dir = prediction.direction;
   const confidence = prediction.confidence ?? 0;
@@ -416,6 +444,14 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
             <ZoneCell label="ATR" value={prediction.zones.atr.toFixed(3)} />
           </div>
           <YieldBreakdown zones={prediction.zones} />
+          {symbol ? (
+            <PlacePaperOrderLink
+              symbol={symbol}
+              direction={dir}
+              targetPrice={prediction.zones.target}
+              entryHint={prediction.zones.entryLow}
+            />
+          ) : null}
         </>
       ) : null}
 
@@ -479,6 +515,35 @@ function PredictionCard({ prediction }: { prediction?: Prediction | null }) {
         <p className="mt-2 text-xs opacity-80">{prediction.reason}</p>
       ) : null}
     </section>
+  );
+}
+
+function PlacePaperOrderLink({
+  symbol,
+  direction,
+  targetPrice,
+  entryHint,
+}: {
+  symbol: string;
+  direction: "UP" | "DOWN" | "HOLD";
+  targetPrice: number;
+  entryHint: number;
+}) {
+  if (direction === "HOLD") return null;
+  const side = direction === "UP" ? "buy" : "sell";
+  const params = new URLSearchParams({
+    symbol,
+    side,
+    targetPrice: targetPrice.toFixed(2),
+    limitPrice: entryHint.toFixed(2),
+    source: "auto-recommendation",
+  });
+  return (
+    <div className="mt-3">
+      <Link to={`/paper-trading?${params.toString()}`} className="btn">
+        Place paper order at this target
+      </Link>
+    </div>
   );
 }
 

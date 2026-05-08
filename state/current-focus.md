@@ -14,38 +14,36 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Phase 3 weiterziehen + Datenbasis Welle 2
+## Naechster Einstieg 2026-05-09: Phase 3 abschliessen + Datenbasis Welle 3
 
-Letzte Sitzung 2026-05-08 hat zwei Liefer-Bloecke ausgeliefert:
+Letzte Sitzung 2026-05-08 hat geliefert:
 
-(A) **Phase 3 Paper-Trading-Erststand** — Schema (`paper_orders`/`paper_transactions` ueber Alembic 0004), Order-Lifecycle-Service mit Net-Yield-Gate auf Annahme, Endpunkte `/api/paper-trading/{orders,transactions,positions,summary}`, Backup/Export/Import, Frontend-Page `/paper-trading` mit Tab-Navigation und chronologischem Trade-Journal (DE/EN).
+(A) **Phase 3 Paper-Trading komplett bis auf Asset-spezifische Slippage** — Schema, Lifecycle, Endpunkte, Frontend-Page, dazu Background-Fill-Task `paper_order_fill_task`, Chart-Marker fuer Paper-Trades, Recommendation→Paper-Order-Verlinkung mit Query-Param-Prefill.
 
-(B) **Datenbasis-Welle 1: FMP-Signale + Macro-Kontext** — `fmp_service.py` um Insider-Trading (FMP v4), Institutional-Holder, Earnings-Surprises, Upcoming-Earnings erweitert; neuer `macro_service.py` mit VIX/10Y/DXY (yfinance, gecacht); `/api/research/{symbol}` liefert `researchSignals` + `macroContext`; AnalysisPage rendert beides.
+(B) **Datenbasis-Welle 1** — FMP-Signale (Insider/Institutional/Earnings-Surprises/Upcoming-Earnings) + Macro-Kontext (VIX/10Y/DXY). Sektionen rendern auf `/analysis/<symbol>`.
 
-Naechster sinnvoller Schnitt — beide Straenge parallel weiter (in dieser Reihenfolge):
+(C) **Datenbasis-Welle 2** — Sentiment-Upgrade von TextBlob auf VADER. FinBERT-Schalter dokumentiert, Aktivierung bewusst zurueckgestellt.
 
-**Phase 3 weiter:**
+Naechster sinnvoller Schnitt:
 
-1. Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten — heute fuellt nur der Place-Time-Snapshot. Hintergrund-Task analog zu `watchlist_alert_dispatch_task` (`main.py`); Re-Evaluation aller `status="pending"`-Orders mit `MarketDataService.get_latest_close`. Persistenzaenderung minimal (nur Status/`filled_at`/Transaction-Insert), kein Migrationsbedarf.
-2. Entry-/Exit-Marker im StockChart auf `/analysis/<symbol>` einfuegen (lightweight-charts `setMarkers`); fuer das Watchlist-Symbol die letzten Paper-Transaktionen ueber `/api/paper-trading/transactions` ziehen und zeitlich auf die Candles mappen.
-3. UI-Verlinkung Recommendation-Card -> Paper-Order: Button "Place paper order at this target" auf der Recommendation-Card in `AnalysisPage`, der `/paper-trading` mit vorbelegten Werten (symbol, target_price, source=auto-recommendation) ansteuert.
+**Phase 3 letzter Punkt:**
 
-**Datenbasis-Welle 2: Sentiment-Upgrade**
+1. Asset-spezifische Slippage-/Fee-Modelle. Heute uniform 0.1% Slippage auf Market-Fills und User-Float-Fee. Krypto braucht hoehere Slippage (z.B. 0.3% wegen Spread bei kleineren Coins), Maker-/Taker-Differenzierung waere fair. Stocks unter dem Tagesvolumen-Threshold sollten variable Slippage abhaengig von Position-Size bekommen. Implementierung: Konfigurations-Tabelle `slippage_pct_by_asset_class` plus Liquidity-Adjustment, in `paper_trading._try_fill` einsetzen.
 
-4. TextBlob in `app/sentiment.py` durch finanzspezifischen Sentiment-Stack ersetzen. Zwei Optionen mit klarer Abwaegung:
-   - **VADER** (`vaderSentiment`): klein, sofort, bewusst auf Social-Media-/News-Sprache trainiert, finanziell ok aber nicht spezialisiert. Container waechst nur um wenige MB.
-   - **FinBERT** (`transformers` + `yiyanghkust/finbert-tone` oder `ProsusAI/finbert`): finanzspezifisch trainiert auf Reuters-/SEC-/News-Korpora, spuerbar bessere Trefferquote bei "guidance cut", "miss expectations", "approval"; aber bringt PyTorch (~500 MB) + 400 MB Modell ins Backend-Image. Container-Groesse waechst von ~1.6 GB auf ~2.5 GB.
-   
-   Empfehlung beim Start: VADER zuerst, FinBERT optional als Premium-Schalter ueber `SENTIMENT_PROVIDER=finbert`. Alpha-Vantage-NEWS_SENTIMENT-Score und FMP-Score werden weiter primaer genutzt; lokales Sentiment ist Fallback fuer Provider-leere News.
+**Datenbasis Welle 3: CoinGecko-Adapter**
 
-**Datenbasis-Welle 3+** (siehe `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung"): CoinGecko-Adapter, Reddit/StockTwits, Earnings-Call-Transcripts, Options-Flow.
+2. Neuer `app/coingecko_service.py` (free tier, kein Auth-Pfad): zieht pro Crypto-Symbol Marktkap, Volumen-Cross-Exchange, Developer-Score, Community-Score, Public-Sentiment, plus Fear-and-Greed-Index ueber `alternative.me`. Bindet sich an `/api/research/{symbol}` fuer Crypto-Asset-Klassen analog zum FMP-Pfad fuer Stocks.
+
+**Welle 4+:** Reddit/StockTwits-Mentions, Earnings-Call-Transcripts, Options-Flow, FinBERT-Aktivierung — siehe `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" Welle 3-7.
+
+**Phase 4 Auto-Execution** beginnt erst NACH Slippage-Verfeinerung + Risk-Modell.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Sektion "Produktvision" + "Datenbasis-Erweiterung" + "Phase 3"
-- `state/decisions.md` letzte Decision-Bloecke 2026-05-08 (Paper-Trading + Datenbasis-Welle 1)
-- `src/backend/app/fmp_service.py` als Provider-Referenz fuer naechste Endpoints
-- `src/backend/app/macro_service.py` als Pattern fuer kleine cached Adapter
+- `state/decisions.md` letzte vier Decision-Bloecke 2026-05-08 (Paper-Trading-Schema, Welle 1 Datenbasis, Background-Fill + Chart-Marker + Verlinkung, Sentiment-Upgrade)
+- `src/backend/app/paper_trading.py::_try_fill` als Stelle fuer Slippage-/Fee-Verfeinerung
+- `src/backend/app/macro_service.py` als Pattern fuer den naechsten Adapter (CoinGecko)
 
 ## Stand Beim Letzten Handover
 

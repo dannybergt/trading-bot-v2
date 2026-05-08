@@ -252,6 +252,64 @@ def place_order(
     return order
 
 
+def dispatch_pending_orders(
+    db: Session, latest_close_provider: PriceProvider
+) -> int:
+    """Re-evaluate every pending limit order against the current close.
+
+    Returns the number of orders that filled in this cycle. The price
+    provider is called once per distinct symbol to avoid hammering the
+    upstream when many users hold the same ticker.
+    """
+    pending = (
+        db.query(PaperOrder)
+        .filter(PaperOrder.status == "pending")
+        .order_by(PaperOrder.placed_at.asc(), PaperOrder.id.asc())
+        .all()
+    )
+    if not pending:
+        return 0
+
+    price_cache: dict[str, float | None] = {}
+
+    def _provider(symbol: str) -> float | None:
+        if symbol not in price_cache:
+            try:
+                price_cache[symbol] = latest_close_provider(symbol)
+            except Exception:
+                logger.exception(
+                    "paper_order_dispatch_price_lookup_failed symbol=%s", symbol
+                )
+                price_cache[symbol] = None
+        return price_cache[symbol]
+
+    filled = 0
+    for order in pending:
+        user = db.query(User).filter(User.id == order.user_id).one_or_none()
+        if user is None:
+            logger.warning(
+                "paper_order_dispatch_user_missing order_id=%s user_id=%s",
+                order.id,
+                order.user_id,
+            )
+            continue
+        try:
+            if _try_fill(
+                db=db, user=user, order=order, latest_close=_provider(order.symbol)
+            ):
+                filled += 1
+        except Exception:
+            logger.exception(
+                "paper_order_dispatch_fill_failed order_id=%s symbol=%s",
+                order.id,
+                order.symbol,
+            )
+
+    if filled:
+        db.commit()
+    return filled
+
+
 def cancel_order(*, db: Session, user: User, order_id: int) -> PaperOrder:
     order = (
         db.query(PaperOrder)

@@ -74,6 +74,13 @@ export type ChartLevel = {
   isFlipZone?: boolean;
 };
 
+export type ChartTradeMarker = {
+  time: string;
+  side: "buy" | "sell";
+  qty: number;
+  price: number;
+};
+
 type OverlayKey =
   | "sma_20"
   | "sma_50"
@@ -157,16 +164,43 @@ function patternMarkers(patterns: ChartPattern[]): SeriesMarker<Time>[] {
   });
 }
 
+function tradeMarkers(trades: ChartTradeMarker[]): SeriesMarker<Time>[] {
+  // Paper-trade markers are visually distinct from pattern markers (square
+  // bracketed shape, brighter colors, qty in label) so the user can tell at
+  // a glance which arrows came from technical patterns vs their own trades.
+  return trades.map((t) => {
+    const time = toTime(t.time);
+    if (t.side === "buy") {
+      return {
+        time,
+        position: "belowBar",
+        color: "#10b981",
+        shape: "arrowUp",
+        text: `BUY ${t.qty}@${t.price.toFixed(2)}`,
+      };
+    }
+    return {
+      time,
+      position: "aboveBar",
+      color: "#dc2626",
+      shape: "arrowDown",
+      text: `SELL ${t.qty}@${t.price.toFixed(2)}`,
+    };
+  });
+}
+
 export function StockChart({
   candles,
   patterns,
   zones,
   levels,
+  trades,
 }: {
   candles: ChartCandle[];
   patterns: ChartPattern[];
   zones?: ChartZones | null;
   levels?: ChartLevel[] | null;
+  trades?: ChartTradeMarker[] | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -285,16 +319,18 @@ export function StockChart({
     candleRef.current.setData(candleData);
     volumeRef.current.setData(volumeData);
 
+    const combinedMarkers = [
+      ...patternMarkers(patterns),
+      ...tradeMarkers(trades ?? []),
+    ].sort((a, b) => Number(a.time) - Number(b.time));
+
     if (markerPluginRef.current) {
-      markerPluginRef.current.setMarkers(patternMarkers(patterns));
+      markerPluginRef.current.setMarkers(combinedMarkers);
     } else if (candleRef.current) {
-      markerPluginRef.current = createSeriesMarkers(
-        candleRef.current,
-        patternMarkers(patterns),
-      );
+      markerPluginRef.current = createSeriesMarkers(candleRef.current, combinedMarkers);
     }
     chartRef.current?.timeScale().fitContent();
-  }, [candles, patterns]);
+  }, [candles, patterns, trades]);
 
   // Manage overlay series (SMA / EMA / VWAP / Bollinger).
   useEffect(() => {

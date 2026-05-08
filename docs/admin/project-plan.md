@@ -108,14 +108,18 @@ Bereits umgesetzt (Welle 1):
 - Frontend AnalysisPage rendert zwei neue Sektionen: ResearchSignalsSection (Insider-Tabelle, Top-Institutional-Holders, Earnings-Beat-Historie, naechstes Earnings-Datum) und MacroContextSection
 - 7 neue Unit-Tests (3 FMP, 4 Macro), API-Regression prueft Felder, UI-Regression best-effort fuer Macro
 
+Bereits umgesetzt (Welle 2, 2026-05-08):
+
+- Sentiment-Upgrade: `app/sentiment.py` nutzt jetzt VADER (`vaderSentiment.SentimentIntensityAnalyzer`) statt TextBlob als Default; `analyze_sentiment_basic` liefert Compound in [-1, 1], `analyze_news` haelt die alte Schnittstelle und Threshold-Defaults (±0.1) tunbar via `SENTIMENT_BULLISH_THRESHOLD`/`SENTIMENT_BEARISH_THRESHOLD`. `SENTIMENT_PROVIDER=finbert`-Schalter dokumentiert; aktuell Fallback auf VADER mit Warn-Log (FinBERT braucht transformers + ~400 MB Modell, das ist Phase-3-spaeter)
+
 Naechste Wellen (priorisiert):
 
-- Welle 2: Sentiment-Upgrade — TextBlob durch finanzspezifischen Stack ersetzen (VADER quick-win oder FinBERT fuer Premium-Qualitaet, dann Container-Groesse als Trade-off)
 - Welle 3: CoinGecko-Adapter fuer Crypto-Marktkap, Volumen-Cross-Exchange, Developer-/Community-Score, Fear-and-Greed-Index
 - Welle 4: Reddit/StockTwits-Mentions als Retail-Sentiment-Proxy (volatil, primaerer Hebel bei Meme-Stocks/Squeezes)
-- Welle 5: Earnings-Call-Transcripts (FMP `/earning-call-transcript`) als Volltext-Signal mit Sentiment
+- Welle 5: Earnings-Call-Transcripts (FMP `/earning-call-transcript`) als Volltext-Signal mit VADER-Sentiment
 - Welle 6: Options-Flow (Put/Call-Ratio, Open Interest) ueber yfinance options chain
-- Welle 7: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren (zurueckgestellt — erst wenn US-Fokus geschlossen ist)
+- Welle 7: FinBERT-Aktivierung als optionaler Premium-Schalter (transformers-Dependency + Container-Groesse-Akzeptanz)
+- Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren (zurueckgestellt — erst wenn US-Fokus geschlossen ist)
 
 ### Phase 3: Paper-Trading
 
@@ -132,11 +136,14 @@ Bereits umgesetzt:
 - Frontend `/paper-trading` Page (DE/EN) mit Place-Order-Form, Tab-Navigation Open Orders / Trade-Journal / Positions / Summary; Journal zeigt jeden Fill chronologisch mit nominaler PnL, prozentualer PnL, Gebuehren und Steuerlast plus Gesamtsummen
 - Unit-Tests `tests/test_paper_trading_service.py` (10 Tests), API-Regression um Settings, Gate-Reject, Place/List/Cancel und Backup-/Export-Coverage erweitert, UI-Regression-Schritt `ui_paper_trading ok`
 
+Bereits umgesetzt (zweiter Schnitt, 2026-05-08):
+
+- Pending Limit-Orders fuellen sich ueber Background-Task `paper_order_fill_task` periodisch gegen `MarketDataService.get_latest_close` (Default 180s Intervall, 60s Initial-Delay; per-Symbol-Cache pro Zyklus)
+- Paper-Trades als Marker im StockChart auf `/analysis/<symbol>` (Buy/Sell-Pfeile mit Qty + Preis als Label)
+- Recommendation-Card bekommt "Place paper order at this target"-Link, der `/paper-trading` mit symbol/side/limitPrice/targetPrice/source-Parametern vorbelegt; PaperTradingPage liest die Params via `useSearchParams` und befuellt das Form
+
 Offene Zielpunkte (Phase 3 weiter):
 
-- Darstellung von Entries/Exits im Chart auf `/analysis/<symbol>`
-- Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten (heute fuellt nur der Place-Time-Snapshot)
-- UI-Verlinkung zwischen Recommendation-Card auf `/analysis` und Paper-Trading-Order (Source `auto-recommendation`)
 - Broker-/Fee-Modelle pro Asset-Klasse verfeinern (aktuell uniformer Float-Anteil)
 
 ### Phase 4: Live-Trading mit Auto-Execution

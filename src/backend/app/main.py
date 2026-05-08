@@ -66,6 +66,8 @@ ALERT_RULE_TYPES = {"provider_move", "news_sentiment", "signal_direction", "tag_
 WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS", "300"))
 WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS", "90"))
 WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
+PAPER_ORDER_FILL_INTERVAL_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INTERVAL_SECONDS", "180"))
+PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS", "60"))
 
 
 def get_allowed_origins() -> list[str]:
@@ -1007,6 +1009,33 @@ async def auto_scanner_task():
         await asyncio.sleep(60 * 15)
 
 
+async def paper_order_fill_task():
+    logger.info(
+        "paper_order_fill_task_started interval_seconds=%s",
+        PAPER_ORDER_FILL_INTERVAL_SECONDS,
+    )
+    await asyncio.sleep(PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS)
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                filled = paper_trading.dispatch_pending_orders(
+                    db, service.get_latest_close
+                )
+                if filled:
+                    logger.info(
+                        "paper_order_fill_task_cycle_completed",
+                        extra={"filled_orders": filled},
+                    )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("paper_order_fill_task_cycle_failed")
+
+        await asyncio.sleep(PAPER_ORDER_FILL_INTERVAL_SECONDS)
+
+
 async def watchlist_alert_dispatch_task():
     logger.info(
         "watchlist_alert_dispatcher_started interval_seconds=%s dedup_hours=%s",
@@ -1056,6 +1085,7 @@ async def on_startup():
     # Start the auto-scanner
     asyncio.create_task(auto_scanner_task())
     asyncio.create_task(watchlist_alert_dispatch_task())
+    asyncio.create_task(paper_order_fill_task())
     asyncio.create_task(backup_scheduler_task())
 
 @app.on_event("shutdown")

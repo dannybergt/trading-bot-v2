@@ -1,5 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
@@ -123,6 +124,7 @@ export function PaperTradingPage() {
     [orders],
   );
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [symbol, setSymbol] = useState("");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [qty, setQty] = useState("");
@@ -130,6 +132,27 @@ export function PaperTradingPage() {
   const [targetPrice, setTargetPrice] = useState("");
   const [source, setSource] = useState<"manual" | "auto-recommendation">("manual");
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Prefill from query params (e.g. when arriving via the "Place paper order"
+  // link on the AnalysisPage recommendation card). Strip the params after
+  // applying them so a refresh doesn't keep re-overwriting user edits.
+  useEffect(() => {
+    const querySymbol = searchParams.get("symbol");
+    if (!querySymbol) return;
+    setSymbol(querySymbol.toUpperCase());
+    const querySide = searchParams.get("side");
+    if (querySide === "buy" || querySide === "sell") setSide(querySide);
+    const queryLimit = searchParams.get("limitPrice");
+    if (queryLimit) setLimitPrice(queryLimit);
+    const queryTarget = searchParams.get("targetPrice");
+    if (queryTarget) setTargetPrice(queryTarget);
+    const querySource = searchParams.get("source");
+    if (querySource === "manual" || querySource === "auto-recommendation") {
+      setSource(querySource);
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const placeMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>

@@ -266,6 +266,45 @@ class PaperTradingServiceTests(unittest.TestCase):
         )
         self.assertEqual(cancelled.status, "cancelled")
 
+    def test_dispatch_pending_orders_fills_when_market_crosses_limit(self):
+        # Place a buy at 90 while market is 100 -> stays pending
+        paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="DISPATCH",
+            side="buy",
+            qty=2,
+            limit_price=90.0,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(100.0),
+        )
+        # Now market drops to 85 -> dispatch should fill at the resting limit
+        filled = paper_trading.dispatch_pending_orders(self.db, self._provider(85.0))
+        self.assertEqual(filled, 1)
+        order = self.db.query(PaperOrder).filter_by(symbol="DISPATCH").one()
+        self.assertEqual(order.status, "filled")
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # Limit fills cannot be better than the resting limit price
+        self.assertEqual(tx.price, 90.0)
+
+    def test_dispatch_pending_orders_skips_when_no_price(self):
+        paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="NOPRICE",
+            side="buy",
+            qty=1,
+            limit_price=50.0,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(None),
+        )
+        filled = paper_trading.dispatch_pending_orders(self.db, self._provider(None))
+        self.assertEqual(filled, 0)
+        order = self.db.query(PaperOrder).filter_by(symbol="NOPRICE").one()
+        self.assertEqual(order.status, "pending")
+
     def test_cancel_filled_order_rejected(self):
         order = paper_trading.place_order(
             db=self.db,
