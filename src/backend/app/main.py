@@ -1735,6 +1735,12 @@ def get_symbol_research(
         }
     )
 
+    earnings_calls: list[dict] = (
+        service.fmp.normalized_earnings_calls(asset_profile["symbol"])
+        if service.fmp.configured and not asset_profile.get("isCrypto")
+        else []
+    )
+
     macro_context = get_macro_service().get_context()
 
     crypto_metrics = None
@@ -1757,6 +1763,7 @@ def get_symbol_research(
         "fundamentals": fundamentals,
         "researchDepth": research_depth,
         "researchSignals": research_signals,
+        "earningsCalls": earnings_calls,
         "macroContext": macro_context,
         "cryptoMetrics": crypto_metrics,
         "fearGreedIndex": fear_greed,

@@ -14,52 +14,59 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Datenbasis Welle 5 + Phase-3-Restverfeinerung
+## Naechster Einstieg 2026-05-09: Datenbasis Welle 6 + Phase-3-Restverfeinerung
 
 Sitzung 2026-05-08 hat geliefert:
 
-(A) **Phase 3** komplett bis auf Restverfeinerungen — Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage.
+(A) **Phase 3** komplett bis auf Restverfeinerungen.
 
-(B) **Datenbasis-Welle 1** — FMP-Signale (Insider, Institutional, Earnings-Surprises, Upcoming) + Macro-Kontext (VIX/10Y/DXY).
+(B) **Datenbasis-Welle 1** — FMP-Signale + Macro-Kontext.
 
 (C) **Datenbasis-Welle 2** — Sentiment TextBlob → VADER.
 
-(D) **Datenbasis-Welle 3** — CoinGecko-Adapter + Crypto-Fear-and-Greed.
+(D) **Datenbasis-Welle 3** — CoinGecko + Fear-and-Greed.
 
-(E) **Datenbasis-Welle 4** — Retail-Sentiment via StockTwits (`/streams/symbol/{SYMBOL}.json`) + Reddit (offentliche `search.json`, kein PRAW). Combined-Sentiment weighted-averaged. SocialSentimentSection auf `/analysis/<symbol>` zeigt KPIs + Top-Posts.
+(E) **Datenbasis-Welle 4** — StockTwits + Reddit Retail-Sentiment.
+
+(F) **Datenbasis-Welle 5** — Earnings-Call-Transcripts ueber FMP v4-Batch mit VADER-Digest pro Quartal (Score + Top-Positive/Negative-Quote). EarningsCallsSection auf `/analysis/<symbol>`.
 
 Naechster sinnvoller Schnitt:
 
-**Datenbasis Welle 5: Earnings-Call-Transcripts**
-
-1. Neue Methode `fmp_service.get_earnings_transcripts(symbol, *, limit=4)` zieht FMP `/earning-call-transcript/{symbol}/{year}/{quarter}` (oder `/earning_call_transcript?symbol=...&year=&quarter=` je nach FMP-Plan). Volltext durch `analyze_sentiment_basic` (VADER) schicken; Output pro Quartal: `{quarter, year, date, vaderScore, vaderLabel, snippetTopPositive, snippetTopNegative}`. Top-Snippets via einfacher Sentence-Tokenisierung (Regex auf `. ! ?`) und Sortierung nach VADER-Score.
-2. Bundled in `normalized_research_signals` oder neuer `normalized_earnings_calls`. `/api/research/{symbol}` reicht den Block durch.
-3. Frontend `EarningsCallsSection` auf `/analysis/<symbol>`: pro Quartal eine Card mit VADER-Score-Badge, einer positiven und einer negativen Snippet-Quote.
-
 **Datenbasis Welle 6: Options-Flow**
 
-4. yfinance `Ticker(symbol).option_chain(expiry)` — verfuegbar fuer US-Stocks. Aggregiere Put/Call-Ratio aus Open-Interest, Top-3-Strikes nach Volumen. Cache pro Symbol 60 min. Frontend OptionsSection mit P/C-Ratio-Pille (>1.0 bearish, <0.7 bullish, sonst neutral).
+1. Neuer `app/options_flow_service.py`. yfinance `Ticker(symbol).option_chain(expiry)` ist die offizielle yfinance-API; gibt `(calls, puts)`-DataFrames mit `strike`, `volume`, `openInterest`, `impliedVolatility` zurueck. Pro Symbol pro 60 Minuten gecacht.
+2. Aggregationen pro naechster Expiry (Default: nearest >= 7 Tage):
+   - `putCallVolumeRatio` aus Tagesvolumen
+   - `putCallOpenInterestRatio` aus aktuellen Open-Interest-Bestaenden
+   - Top-3-Strikes Calls + Puts nach Volumen
+   - Average-Implied-Volatility ATM (Strike ±5%)
+3. Defensiv: leeres Payload bei Crypto/ETF ohne Optionen, fail-soft bei yfinance-Errors.
+4. `/api/research/{symbol}` ergaenzt um `optionsFlow`. Frontend `OptionsFlowSection` mit P/C-Volume-Pille und P/C-OI-Pille (>1.2 bearish red, <0.7 bullish green, sonst neutral), Average-IV, Top-Strikes.
 
 **Datenbasis Welle 7: FinBERT-Aktivierung**
 
-5. Optionaler `SENTIMENT_PROVIDER=finbert`-Schalter. transformers + `ProsusAI/finbert` Modell-Loader, Container-Groesse +900 MB. Lazy-Initialisierung; bei nicht-gesetztem Schalter passive (kein Modell-Download). Trade-off-Entscheidung beim Start: Container-Size acceptable?
+5. Optionaler `SENTIMENT_PROVIDER=finbert`-Schalter; Lazy-Initialisierung von `transformers` + `ProsusAI/finbert`. Trade-off Container-Size +900 MB. Sollte als separater optionaler `requirements-finbert.txt` getrennt werden, damit der Default-Container schmal bleibt.
 
 **Phase 3 Restverfeinerungen** (wann immer):
 
 6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
 7. Asset-spezifische Fee-Multipliers.
 
+**Release-Tag** (nach Welle 6 + 7 oder fruehe Slippage-Verfeinerung):
+
+- `v2026.05.08-1` setzen + Upgrade-Rehearsal (`tests/run-upgrade-rehearsal.sh`) bevor wir Phase 4 anfassen. Heutige Wellen sind alle pure-Read, kein Migrationsbedarf, sollte sauber durchlaufen.
+
 **Phase 4 Auto-Execution** beginnt erst NACH:
+- Release-Tag mit Rehearsal
 - Risk-Modell (Limits/Budget/Audit-Logs)
 - Manuelle Freigabelogik + Not-Aus
-- Welle 5-6 Datenbasis (Earnings-Transcripts + Options-Flow als ergaenzende Signal-Quellen)
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen vier Datenbasis-Wellen
-- `src/backend/app/social_sentiment_service.py` als jüngstes Adapter-Pattern (Modul-Singleton, Cache, defensive Multi-Probe)
-- `src/backend/app/sentiment.py` als VADER-Helper fuer Welle 5
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen fuenf Datenbasis-Wellen
+- `src/backend/app/social_sentiment_service.py` als juengstes Adapter-Pattern fuer Welle 6 (Modul-Singleton, Cache, defensive Failure-Pfade)
+- `src/backend/app/macro_service.py` als yfinance-Adapter-Pattern fuer Welle 6
 
 ## Stand Beim Letzten Handover
 

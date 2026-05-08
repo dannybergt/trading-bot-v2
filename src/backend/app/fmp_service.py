@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
 
 from app.rate_limit import acquire as acquire_rate_limit
+from app.sentiment import analyze_sentiment_basic
 
 logger = logging.getLogger(__name__)
 
@@ -463,6 +465,90 @@ class FmpService:
             "daysUntilEarnings": days_until,
         }
 
+    def get_earnings_transcripts(
+        self, symbol: str, *, years_back: int = 2
+    ) -> list[dict[str, Any]]:
+        """Earnings-call transcripts for the most recent quarters.
+
+        Pulls one batch call per year (`/api/v4/batch_earning_call_transcript/{SYMBOL}?year=YYYY`
+        returns up to four quarters at once). `years_back=2` covers the
+        current year plus the previous one — eight quarters of headroom.
+        FMP free-tier coverage outside the largest tickers is patchy;
+        an empty list is the normal "no transcript available" signal.
+        """
+        if not symbol:
+            return []
+        current_year = datetime.now(timezone.utc).year
+        out: list[dict[str, Any]] = []
+        for year in range(current_year, current_year - max(1, years_back), -1):
+            payload = self._request(
+                f"/batch_earning_call_transcript/{symbol.upper()}",
+                params={"year": year},
+                version="v4",
+            )
+            if isinstance(payload, list):
+                out.extend(row for row in payload if isinstance(row, dict))
+
+        def _date_key(row: dict[str, Any]) -> str:
+            return str(row.get("date") or "")
+
+        out.sort(key=_date_key, reverse=True)
+        return out
+
+    def normalized_earnings_calls(
+        self, symbol: str, *, limit: int = 4
+    ) -> list[dict[str, Any]]:
+        """VADER-scored summary of the most recent earnings call transcripts.
+
+        Returns up to `limit` quarters, each with the overall VADER
+        compound score, a `bullish`/`bearish`/`neutral` label, and the
+        single highest- and lowest-scoring sentence as concrete quotes
+        the UI can show.
+        """
+        raw = self.get_earnings_transcripts(symbol)
+        out: list[dict[str, Any]] = []
+        for entry in raw[: max(1, limit)]:
+            content = str(entry.get("content") or "")
+            if not content:
+                continue
+            overall = analyze_sentiment_basic(content)
+            label = (
+                "bullish" if overall > 0.1 else "bearish" if overall < -0.1 else "neutral"
+            )
+            sentences = _SENTENCE_BOUNDARY.split(content)
+            scored: list[tuple[float, str]] = []
+            for sentence in sentences:
+                trimmed = sentence.strip()
+                if len(trimmed) < 30:
+                    continue
+                score = analyze_sentiment_basic(trimmed)
+                scored.append((score, trimmed[:280]))
+            top_pos: tuple[float, str] | None = max(scored, default=None, key=lambda t: t[0])
+            top_neg: tuple[float, str] | None = min(scored, default=None, key=lambda t: t[0])
+            out.append(
+                {
+                    "symbol": entry.get("symbol"),
+                    "year": entry.get("year"),
+                    "quarter": entry.get("quarter"),
+                    "date": entry.get("date"),
+                    "vaderScore": round(overall, 4),
+                    "vaderLabel": label,
+                    "snippetTopPositive": (
+                        top_pos[1] if top_pos and top_pos[0] > 0 else None
+                    ),
+                    "snippetTopPositiveScore": (
+                        round(top_pos[0], 4) if top_pos and top_pos[0] > 0 else None
+                    ),
+                    "snippetTopNegative": (
+                        top_neg[1] if top_neg and top_neg[0] < 0 else None
+                    ),
+                    "snippetTopNegativeScore": (
+                        round(top_neg[0], 4) if top_neg and top_neg[0] < 0 else None
+                    ),
+                }
+            )
+        return out
+
     def get_news(self, symbol: str, *, limit: int = 5) -> list[dict[str, Any]]:
         if not symbol:
             return []
@@ -579,6 +665,9 @@ class FmpService:
                 }
             )
         return normalized
+
+
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
 
 
 def _safe_float(value: Any) -> float | None:

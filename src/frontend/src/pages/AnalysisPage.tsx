@@ -107,6 +107,19 @@ type UpcomingEarnings = {
   fiscalDateEnding?: string | null;
 };
 
+type EarningsCall = {
+  symbol?: string | null;
+  year?: number | null;
+  quarter?: number | null;
+  date?: string | null;
+  vaderScore?: number | null;
+  vaderLabel?: "bullish" | "bearish" | "neutral" | string | null;
+  snippetTopPositive?: string | null;
+  snippetTopPositiveScore?: number | null;
+  snippetTopNegative?: string | null;
+  snippetTopNegativeScore?: number | null;
+};
+
 type ResearchSignals = {
   insiderTrades?: InsiderTrade[];
   insiderSummary?: {
@@ -250,6 +263,7 @@ type ResearchPayload = {
     }>;
   };
   researchSignals?: ResearchSignals;
+  earningsCalls?: EarningsCall[];
   macroContext?: MacroContext;
   cryptoMetrics?: CryptoMetrics | null;
   fearGreedIndex?: FearGreedIndex | null;
@@ -463,6 +477,7 @@ export function AnalysisPage() {
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
+      <EarningsCallsSection calls={research?.earningsCalls} />
       <CryptoMetricsSection metrics={research?.cryptoMetrics} />
       <SocialSentimentSection social={research?.socialSentiment} />
       <MacroContextSection
@@ -1224,6 +1239,84 @@ function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefi
           </table>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function EarningsCallsSection({ calls }: { calls: EarningsCall[] | undefined }) {
+  if (!calls || calls.length === 0) return null;
+
+  const labelClass = (label?: string | null): string => {
+    if (label === "bullish") return "border-bergt-green/40 bg-bergt-green/10 text-bergt-green";
+    if (label === "bearish") return "border-red-700/50 bg-red-900/40 text-red-300";
+    return "border-slate-700 bg-slate-900 text-slate-300";
+  };
+
+  const fmtScore = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}`;
+  };
+
+  return (
+    <section className="card space-y-3" data-testid="earnings-calls-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Earnings call digest
+        </h2>
+        <p className="text-xs text-slate-500">
+          VADER-scored summary of the most recent transcripts (FMP). Each card
+          shows the highest- and lowest-scoring sentence as concrete quotes.
+        </p>
+      </header>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {calls.map((call, idx) => (
+          <article
+            key={idx}
+            className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs"
+          >
+            <header className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">
+                Q{call.quarter ?? "?"} {call.year ?? ""}{" "}
+                <span className="text-slate-500">{call.date ?? ""}</span>
+              </h3>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${labelClass(
+                  call.vaderLabel,
+                )}`}
+              >
+                {call.vaderLabel ?? "—"} {fmtScore(call.vaderScore)}
+              </span>
+            </header>
+
+            {call.snippetTopPositive ? (
+              <blockquote className="mt-2 border-l-2 border-bergt-green/50 pl-2 text-slate-300">
+                <p className="italic">“{call.snippetTopPositive}”</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-bergt-green">
+                  Most positive · VADER {fmtScore(call.snippetTopPositiveScore)}
+                </p>
+              </blockquote>
+            ) : null}
+
+            {call.snippetTopNegative ? (
+              <blockquote className="mt-2 border-l-2 border-red-700/50 pl-2 text-slate-300">
+                <p className="italic">“{call.snippetTopNegative}”</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-red-300">
+                  Most negative · VADER {fmtScore(call.snippetTopNegativeScore)}
+                </p>
+              </blockquote>
+            ) : null}
+
+            {!call.snippetTopPositive && !call.snippetTopNegative ? (
+              <p className="mt-2 text-slate-500">
+                Transcript scored {fmtScore(call.vaderScore)} but no eligible
+                sentences passed the snippet filter.
+              </p>
+            ) : null}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

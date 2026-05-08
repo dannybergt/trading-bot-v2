@@ -249,6 +249,8 @@ research_signals = stock_research_payload.get("researchSignals")
 assert isinstance(research_signals, dict)
 for key in ("insiderTrades", "insiderSummary", "institutionalHoldings", "earningsSurprises", "earningsBeatRate", "upcomingEarnings", "daysUntilEarnings"):
     assert key in research_signals, f"missing researchSignals key {key}"
+# earningsCalls is a list (possibly empty for FMP-free-tier symbols)
+assert isinstance(stock_research_payload.get("earningsCalls"), list)
 macro_context = stock_research_payload.get("macroContext")
 assert isinstance(macro_context, dict)
 for instr in ("vix", "yield10y", "dxy"):

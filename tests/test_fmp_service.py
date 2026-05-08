@@ -7,6 +7,7 @@ synchronously.
 
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -307,6 +308,79 @@ class FmpServiceTests(unittest.TestCase):
         self.assertIsNotNone(signals["upcomingEarnings"])
         self.assertEqual(upcoming_date, signals["upcomingEarnings"]["date"])
         self.assertEqual(14, signals["daysUntilEarnings"])
+
+    def test_get_earnings_transcripts_uses_v4_batch_url(self):
+        service = FmpService(api_key="k")
+        responses = iter([_response([{"date": "2025-02-01", "content": "x"}]), _response([])])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get",
+            side_effect=lambda *a, **kw: next(responses),
+        ) as get_mock:
+            transcripts = service.get_earnings_transcripts("AAPL", years_back=2)
+        # Two calls, one per year
+        self.assertEqual(2, get_mock.call_count)
+        first_url = get_mock.call_args_list[0].args[0]
+        self.assertIn("/api/v4/", first_url)
+        self.assertIn("/batch_earning_call_transcript/AAPL", first_url)
+        # Sorted by date desc — only the non-empty year contributed
+        self.assertEqual(1, len(transcripts))
+        self.assertEqual("2025-02-01", transcripts[0]["date"])
+
+    def test_normalized_earnings_calls_picks_best_and_worst_sentence(self):
+        service = FmpService(api_key="k")
+        # Three transcripts; only two have content
+        positive_call = (
+            "We had an excellent quarter with great results. "
+            "The team executed brilliantly across every region. "
+            "However, terrible foreign-exchange headwinds hurt margins severely."
+        )
+        recent_year = datetime.now(timezone.utc).year
+        previous_year = recent_year - 1
+        batch_current = [
+            {
+                "symbol": "AAPL",
+                "year": recent_year,
+                "quarter": 1,
+                "date": f"{recent_year}-02-01",
+                "content": positive_call,
+            }
+        ]
+        batch_previous = [
+            {
+                "symbol": "AAPL",
+                "year": previous_year,
+                "quarter": 4,
+                "date": f"{previous_year}-11-01",
+                "content": "",
+            },
+            {
+                "symbol": "AAPL",
+                "year": previous_year,
+                "quarter": 3,
+                "date": f"{previous_year}-08-01",
+                "content": "Stock crashes amid fraud allegations. Bleak outlook ahead. Investors panic.",
+            },
+        ]
+        responses = iter([_response(batch_current), _response(batch_previous)])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get",
+            side_effect=lambda *a, **kw: next(responses),
+        ):
+            calls = service.normalized_earnings_calls("AAPL", limit=4)
+
+        # The empty-content row is skipped.
+        self.assertEqual(2, len(calls))
+        # Sorted by date desc → most recent first.
+        self.assertEqual(recent_year, calls[0]["year"])
+        # The recent call carries both a positive and a negative snippet.
+        self.assertIsNotNone(calls[0]["snippetTopPositive"])
+        self.assertIn("excellent", calls[0]["snippetTopPositive"].lower())
+        self.assertIsNotNone(calls[0]["snippetTopNegative"])
+        self.assertIn("terrible", calls[0]["snippetTopNegative"].lower())
+        self.assertEqual("bullish", calls[0]["vaderLabel"])
+        # The older bearish call has no positive snippet.
+        self.assertIsNone(calls[1]["snippetTopPositive"])
+        self.assertEqual("bearish", calls[1]["vaderLabel"])
 
     def test_normalized_research_signals_handles_empty_inputs(self):
         service = FmpService(api_key="k")

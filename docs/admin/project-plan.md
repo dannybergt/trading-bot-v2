@@ -123,9 +123,12 @@ Bereits umgesetzt (Welle 4, 2026-05-08):
 
 - Retail-Sentiment-Adapter `app/social_sentiment_service.py` zieht StockTwits (`/streams/symbol/{SYMBOL}.json`, kein Auth) und Reddit (offentliche `search.json`, kein PRAW). Bullish/Bearish-Counts plus VADER-Average pro Quelle, Combined-Sentiment weighted nach Message-Count. Reddit prueft Stock-Subreddits (wallstreetbets/stocks/investing) oder Crypto-Subreddits (CryptoCurrency/Bitcoin/ethereum) und liefert 24h/7d-Mention-Counts plus Mention-Trend-Pct relativ zur 6-Tage-Baseline. Modul-Cache 30 min, Rate-Limit-Provider-Defaults `stocktwits` 1 req/s und `reddit` 0.5 req/s. `/api/research/{symbol}` ergaenzt um `socialSentiment` mit `stocktwits`/`reddit`/`combined`-Bloecken. Frontend `SocialSentimentSection` rendert KPI-Cards plus Top-Reddit-Posts (klickbar) und Top-StockTwits-Posts
 
+Bereits umgesetzt (Welle 5, 2026-05-08):
+
+- Earnings-Call-Transcripts via FMP v4-Batch-Endpoint (`/batch_earning_call_transcript/{SYMBOL}?year=YYYY`); pro Quartal Volltext + VADER-Aggregation; Sentence-Tokenisierung extrahiert die hoechst-positive und hoechst-negative Quote; `/api/research/{symbol}` reicht `earningsCalls`-Liste durch. Frontend `EarningsCallsSection` rendert pro Quartal eine Card mit VADER-Pille und beiden Quotes als farbige Blockquotes
+
 Naechste Wellen (priorisiert):
 
-- Welle 5: Earnings-Call-Transcripts (FMP `/earning-call-transcript`) als Volltext-Signal mit VADER-Sentiment
 - Welle 6: Options-Flow (Put/Call-Ratio, Open Interest) ueber yfinance options chain
 - Welle 7: FinBERT-Aktivierung als optionaler Premium-Schalter (transformers-Dependency + Container-Groesse-Akzeptanz)
 - Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren
