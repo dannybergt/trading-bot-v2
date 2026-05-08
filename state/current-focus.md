@@ -14,61 +14,45 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Release-Tag oder Welle 7
+## Naechster Einstieg 2026-05-09: Datenbasis-Welle 7 + Phase-3-Restverfeinerung
 
 Sitzung 2026-05-08 hat geliefert:
 
-(A) **Phase 3** komplett bis auf Restverfeinerungen.
+- Phase 3 komplett (bis auf Restverfeinerungen): Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage
+- Datenbasis-Wellen 1-6: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Transcripts, Options-Flow
+- **Release-Tag `v2026.05.08-1` gesetzt + Upgrade-/Restore-Rehearsal bestanden**. Docker-Hub-Tags `dbergt/trading-bot-{backend,frontend}:2026.05.08-1` synced. Deployment-Record `state/runtime/deployments/deployment-20260508T101330Z.env`.
 
-(B) **Datenbasis-Welle 1** — FMP-Signale + Macro-Kontext.
+Naechster sinnvoller Schnitt:
 
-(C) **Datenbasis-Welle 2** — Sentiment TextBlob → VADER.
+**Datenbasis Welle 7: FinBERT-Premium-Schalter**
 
-(D) **Datenbasis-Welle 3** — CoinGecko + Fear-and-Greed.
+1. Separater `requirements-finbert.txt` mit `transformers`, `torch`. Default-Container bleibt schmal; FinBERT ist Opt-in fuer wer die ~900 MB extra akzeptiert.
+2. `app/sentiment.py` erweitern: bei `SENTIMENT_PROVIDER=finbert` Lazy-Loader fuer `ProsusAI/finbert`, Output `positive/negative/neutral` mit Confidence — Mapping auf [-1, 1] Compound-aequivalent. Bei nicht-installiertem `transformers` Warn-Log, Fallback VADER.
+3. Optional separates Image-Variant `dbergt/trading-bot-backend-finbert` ueber zweite Build-Stage. Damit bleibt der Standard-Image schmal, FinBERT-Nutzer ziehen explizit das fette Image.
+4. Tests: Mock fuer `transformers.pipeline`-Aufruf; Integration mit `analyze_news` ueberprufen.
 
-(E) **Datenbasis-Welle 4** — StockTwits + Reddit Retail-Sentiment.
+**Datenbasis Welle 8: Twelve Data**
 
-(F) **Datenbasis-Welle 5** — Earnings-Call-Transcripts mit VADER-Digest.
+5. Free Tier ~8 req/min, ueberragende EU-Coverage (Frankfurt, Paris, London, Tokio).
+6. Adapter `app/twelve_data_service.py` analog zu FMP. Bindet sich in `MarketDataService.get_ticker_info` als zweiter Fallback hinter yfinance fuer Non-US-Symbols.
 
-(G) **Datenbasis-Welle 6** — Options-Flow (P/C-Ratio, OI, ATM-IV, Top-Strikes) ueber yfinance.
+**Phase 3 Restverfeinerungen** (wann immer):
 
-Naechster sinnvoller Schnitt — Wahl zwischen:
-
-**Option A: Release-Tag jetzt**
-
-1. `git tag -a v2026.05.08-1 -m "Datenbasis-Welle 1-6 + Phase 3 + Slippage"`, `git push --tags`
-2. `IMAGE_TAG=2026.05.08-1 bash tests/run-upgrade-rehearsal.sh` — pruefen, ob Alembic-Migration 0004 (paper_orders/paper_transactions) sauber ueber den 2026.05.07-1-Bestand upgraded und der Stack hinterher exportable + restorable bleibt
-3. Beim Erfolg ist der naechste Phase-4-Beginn ein klar deploybarer Punkt zum aufsetzen
-
-**Option B: Welle 7 FinBERT-Premium-Schalter**
-
-1. `requirements-finbert.txt` mit `transformers`, `torch`, separate Optional-Dependency. Default-Container bleibt schmal.
-2. `app/sentiment.py` ergaenzt: bei `SENTIMENT_PROVIDER=finbert` Lazy-Loader fuer `ProsusAI/finbert`, Output-Mapping auf [-1, 1]. Bei nicht-installiertem `transformers` Warn-Log und Fallback auf VADER.
-3. Container-Trade-off: ~900 MB. Separates Image-Variant `dbergt/trading-bot-backend-finbert` denkbar.
-
-**Option C: Welle 8 Twelve Data**
-
-1. Twelve Data API hat ueberragende Coverage fuer EU-Maerkte (DE, FR, UK, JP). Free-Tier ~8 req/min.
-2. Adapter ergaenzt `MarketDataService` als zweiten Provider hinter yfinance fuer Stocks/ETFs ausserhalb US.
-
-**Phase 3 Restverfeinerungen** (parallel/wann immer):
-
-- Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen
-- Asset-spezifische Fee-Multipliers
+7. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
+8. Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers).
 
 **Phase 4 Auto-Execution** beginnt erst NACH:
-- Release-Tag mit Rehearsal (Option A)
-- Risk-Modell (Limits/Budget/Audit-Logs)
-- Manuelle Freigabelogik + Not-Aus
-
-Empfehlung: **Option A jetzt** — wir haben sechs neue Datenbloecke ohne Schema-Aenderung gepusht (Phase 3 hat genau eine Migration 0004 dabei), und ein Release-Tag mit Rehearsal ist die naechste Disziplin-Stelle aus dem Workflow. Welle 7 + 8 koennen danach.
+- Risk-Modell (Limits, Position-Size-Caps, Budget pro Strategie, Audit-Log)
+- Manuelle Freigabelogik (Asset/Strategie-Korridor pro User explizit aktiviert)
+- Not-Aus + Broker-Fehlerpfade (Recovery, Reconcile)
+- Phase-3-Restverfeinerungen (mindestens dynamische Slippage)
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
+- `docs/admin/project-plan.md` Stand 2026-05-08 + Sektion "Phase 3" + "Phase 4" + "Datenbasis-Erweiterung"
 - `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen sechs Datenbasis-Wellen
-- `tests/run-upgrade-rehearsal.sh` als Pflicht-Gate fuer den Release-Tag
-- `src/backend/app/options_flow_service.py` als juengstes Adapter-Pattern
+- `src/backend/app/sentiment.py` als Stelle fuer FinBERT-Erweiterung (lazy + lockguarded Singleton-Pattern)
+- `src/backend/app/options_flow_service.py` als juengstes Adapter-Pattern fuer Welle 8
 
 ## Stand Beim Letzten Handover
 

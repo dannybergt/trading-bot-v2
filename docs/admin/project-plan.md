@@ -1,16 +1,18 @@
 # Projektplan
 
-## Stand 2026-05-07
+## Stand 2026-05-08
 
 Aktuell validierter Produkt-Release:
 
-- Git-Tag: `v2026.05.07-1`
-- Produkt-Commit: `878fcff` (`Record VAPID hardening publish status`)
+- Git-Tag: `v2026.05.08-1`
+- Produkt-Commit: `ae77ad1` (`Data wave 6: options flow snapshot from yfinance`)
 - Dokumentationsstand: auf `main` nachgezogen
-- Backend-Image: `dbergt/trading-bot-backend:2026.05.07-1`
-- Frontend-Image: `dbergt/trading-bot-frontend:2026.05.07-1`
-- Upgrade-/Restore-Rehearsal: bestanden
-- Deployment-Record: `state/runtime/deployments/deployment-20260507T120020Z.env`
+- Backend-Image: `dbergt/trading-bot-backend:2026.05.08-1` (sha256:bbbe4628833921abb880c4ad336ab892445a0254a27bdd066689cd16e4997d13)
+- Frontend-Image: `dbergt/trading-bot-frontend:2026.05.08-1` (sha256:e4c09ffa32194500a1c59d3b44bf1bf3ae4d33296d5531a0f9cff1d88aef9b88)
+- Upgrade-/Restore-Rehearsal: bestanden (initialer Deploy, Datenanlage, Upgrade ueber bestehenden Datenbestand, Pre-Upgrade-PostgreSQL-Dump, App-Snapshot, Restore in frischen Stack)
+- Deployment-Record: `state/runtime/deployments/deployment-20260508T101330Z.env`
+
+Vorheriger Release: `v2026.05.07-1` (Commit `878fcff`).
 
 Der aktuelle Stand ist nicht nur gebaut, sondern auch ueber GitHub Actions veroeffentlicht und mit einem isolierten Docker-Hub-Deploy, Upgrade ueber bestehende Daten, PostgreSQL-Dump, App-Snapshot und Restore in einen frischen Stack geprueft.
 
