@@ -33,6 +33,7 @@ from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plau
 from app.backup_service import BackupService, backup_scheduler_task
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
+from app.macro_service import get_macro_service
 from app.migrate_watchlists import migrate as migrate_watchlists
 from app.models import (
     AlertEvent as AlertEventRecord,
@@ -1686,6 +1687,22 @@ def get_symbol_research(
         else {"cashflow": [], "debt": [], "rating": None, "estimates": []}
     )
 
+    research_signals = (
+        service.fmp.normalized_research_signals(asset_profile["symbol"])
+        if service.fmp.configured and not asset_profile.get("isCrypto")
+        else {
+            "insiderTrades": [],
+            "insiderSummary": {"buys90dShares": 0, "sells90dShares": 0, "netValue90d": 0},
+            "institutionalHoldings": [],
+            "earningsSurprises": [],
+            "earningsBeatRate": None,
+            "upcomingEarnings": None,
+            "daysUntilEarnings": None,
+        }
+    )
+
+    macro_context = get_macro_service().get_context()
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1696,6 +1713,8 @@ def get_symbol_research(
         "research": provider_research,
         "fundamentals": fundamentals,
         "researchDepth": research_depth,
+        "researchSignals": research_signals,
+        "macroContext": macro_context,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),

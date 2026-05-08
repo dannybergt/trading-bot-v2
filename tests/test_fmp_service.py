@@ -219,6 +219,108 @@ class FmpServiceTests(unittest.TestCase):
         self.assertEqual(1, len(events["earnings"]))
         self.assertEqual(2.18, events["earnings"][0]["epsActual"])
 
+    def test_insider_trades_uses_v4_base_url(self):
+        service = FmpService(api_key="k")
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get",
+            return_value=_response([{"symbol": "AAPL", "transactionType": "P-Purchase"}]),
+        ) as get_mock:
+            service.get_insider_trades("AAPL")
+        called_url = get_mock.call_args.args[0]
+        self.assertIn("/api/v4/", called_url)
+        self.assertIn("/insider-trading", called_url)
+        self.assertEqual("AAPL", get_mock.call_args.kwargs["params"]["symbol"])
+
+    def test_normalized_research_signals_aggregates_all_sources(self):
+        from datetime import datetime, timedelta, timezone
+
+        service = FmpService(api_key="k")
+        recent = (datetime.now(timezone.utc).date() - timedelta(days=10)).isoformat()
+        old = (datetime.now(timezone.utc).date() - timedelta(days=120)).isoformat()
+        upcoming_date = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
+
+        insider_payload = [
+            {
+                "transactionDate": recent,
+                "transactionType": "P-Purchase",
+                "reportingName": "CEO Smith",
+                "typeOfOwner": "officer: CEO",
+                "securitiesTransacted": 1000,
+                "price": 200.0,
+            },
+            {
+                "transactionDate": recent,
+                "transactionType": "S-Sale",
+                "reportingName": "CFO Doe",
+                "securitiesTransacted": 500,
+                "price": 195.0,
+            },
+            {
+                "transactionDate": old,  # outside 90d window
+                "transactionType": "P-Purchase",
+                "securitiesTransacted": 100000,
+                "price": 100.0,
+            },
+        ]
+        institutional_payload = [
+            {"holder": "Vanguard", "shares": 5_000_000, "weightPercent": 8.5, "change": 100000, "dateReported": "2026-04-30"},
+            {"holder": "BlackRock", "shares": 4_500_000, "weightPercent": 7.6, "change": -50000, "dateReported": "2026-04-30"},
+        ]
+        surprises_payload = [
+            {"date": "2026-02-01", "actualEarningResult": 2.10, "estimatedEarning": 2.00},
+            {"date": "2025-11-01", "actualEarningResult": 1.80, "estimatedEarning": 1.85},
+            {"date": "2025-08-01", "actualEarningResult": 1.90, "estimatedEarning": 1.85},
+        ]
+        upcoming_payload = [
+            {"date": upcoming_date, "symbol": "AAPL", "epsEstimated": 2.20, "revenueEstimated": 1.25e11, "time": "amc"},
+            {"date": upcoming_date, "symbol": "MSFT", "epsEstimated": 3.00},  # filtered out
+        ]
+        responses = iter([
+            _response(insider_payload),
+            _response(institutional_payload),
+            _response(surprises_payload),
+            _response(upcoming_payload),
+        ])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(responses)
+        ):
+            signals = service.normalized_research_signals("AAPL")
+
+        # Insider summary: only the 90d-window rows count
+        self.assertEqual(1000, signals["insiderSummary"]["buys90dShares"])
+        self.assertEqual(500, signals["insiderSummary"]["sells90dShares"])
+        # Net value = 1000 * 200 - 500 * 195 = 200000 - 97500 = 102500
+        self.assertAlmostEqual(102_500.0, signals["insiderSummary"]["netValue90d"])
+        self.assertEqual(3, len(signals["insiderTrades"]))
+        self.assertTrue(signals["insiderTrades"][0]["isBuy"])
+        self.assertFalse(signals["insiderTrades"][1]["isBuy"])
+
+        # Institutional sorted by shares desc, top entries
+        self.assertEqual("Vanguard", signals["institutionalHoldings"][0]["holder"])
+        self.assertEqual(2, len(signals["institutionalHoldings"]))
+
+        # Beat rate: 2 of 3 quarters beat
+        self.assertEqual(3, len(signals["earningsSurprises"]))
+        self.assertAlmostEqual(2 / 3, signals["earningsBeatRate"], places=2)
+
+        # Upcoming earnings filtered to AAPL
+        self.assertIsNotNone(signals["upcomingEarnings"])
+        self.assertEqual(upcoming_date, signals["upcomingEarnings"]["date"])
+        self.assertEqual(14, signals["daysUntilEarnings"])
+
+    def test_normalized_research_signals_handles_empty_inputs(self):
+        service = FmpService(api_key="k")
+        responses = iter([_response([]), _response([]), _response([]), _response([])])
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(responses)
+        ):
+            signals = service.normalized_research_signals("UNKNOWN")
+        self.assertEqual([], signals["insiderTrades"])
+        self.assertEqual(0, signals["insiderSummary"]["buys90dShares"])
+        self.assertIsNone(signals["earningsBeatRate"])
+        self.assertIsNone(signals["upcomingEarnings"])
+        self.assertIsNone(signals["daysUntilEarnings"])
+
     def test_http_error_returns_empty_without_raising(self):
         service = FmpService(api_key="k")
         bad_response = MagicMock()

@@ -14,24 +14,38 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Phase 3 weiterziehen
+## Naechster Einstieg 2026-05-09: Phase 3 weiterziehen + Datenbasis Welle 2
 
-Letzte Sitzung 2026-05-08 hat den Phase-3-Erststand ausgeliefert: Schema (`paper_orders`/`paper_transactions` ueber Alembic-Migration `0004_add_paper_trading`/`c8e2a1b9d4f3`), Order-Lifecycle-Service `app/paper_trading.py` mit Net-Yield-Gate auf Order-Annahme, Endpunkte `/api/paper-trading/{orders,transactions,positions,summary}`, Backup/Export/Import-Anbindung, Frontend-Page `/paper-trading` mit Tab-Navigation und chronologischem Trade-Journal (DE/EN), Unit-Tests + API-Regression + UI-Regression-Schritt `ui_paper_trading ok`.
+Letzte Sitzung 2026-05-08 hat zwei Liefer-Bloecke ausgeliefert:
 
-Naechster sinnvoller Schnitt ist die Phase-3-Vertiefung (in dieser Reihenfolge):
+(A) **Phase 3 Paper-Trading-Erststand** — Schema (`paper_orders`/`paper_transactions` ueber Alembic 0004), Order-Lifecycle-Service mit Net-Yield-Gate auf Annahme, Endpunkte `/api/paper-trading/{orders,transactions,positions,summary}`, Backup/Export/Import, Frontend-Page `/paper-trading` mit Tab-Navigation und chronologischem Trade-Journal (DE/EN).
 
-1. Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten — heute fuellt nur der Place-Time-Snapshot. Hintergrund-Task analog zu `watchlist_alert_dispatch_task` (`main.py:995`); Re-Evaluation aller `status="pending"`-Orders mit `MarketDataService.get_latest_close`. Persistenzaenderung minimal (nur Status/`filled_at`/Transaction-Insert), kein Migrationsbedarf.
+(B) **Datenbasis-Welle 1: FMP-Signale + Macro-Kontext** — `fmp_service.py` um Insider-Trading (FMP v4), Institutional-Holder, Earnings-Surprises, Upcoming-Earnings erweitert; neuer `macro_service.py` mit VIX/10Y/DXY (yfinance, gecacht); `/api/research/{symbol}` liefert `researchSignals` + `macroContext`; AnalysisPage rendert beides.
+
+Naechster sinnvoller Schnitt — beide Straenge parallel weiter (in dieser Reihenfolge):
+
+**Phase 3 weiter:**
+
+1. Pending Limit-Orders periodisch gegen aktuelle Marktdaten neu auswerten — heute fuellt nur der Place-Time-Snapshot. Hintergrund-Task analog zu `watchlist_alert_dispatch_task` (`main.py`); Re-Evaluation aller `status="pending"`-Orders mit `MarketDataService.get_latest_close`. Persistenzaenderung minimal (nur Status/`filled_at`/Transaction-Insert), kein Migrationsbedarf.
 2. Entry-/Exit-Marker im StockChart auf `/analysis/<symbol>` einfuegen (lightweight-charts `setMarkers`); fuer das Watchlist-Symbol die letzten Paper-Transaktionen ueber `/api/paper-trading/transactions` ziehen und zeitlich auf die Candles mappen.
 3. UI-Verlinkung Recommendation-Card -> Paper-Order: Button "Place paper order at this target" auf der Recommendation-Card in `AnalysisPage`, der `/paper-trading` mit vorbelegten Werten (symbol, target_price, source=auto-recommendation) ansteuert.
-4. Phase-3-Pflege: Asset-spezifische Slippage-/Fee-Modelle (heute uniform 0.1% Slippage, Float-Fee aus Portfolio-Settings).
-5. Erst danach Phase 4 Auto-Execution beginnen.
+
+**Datenbasis-Welle 2: Sentiment-Upgrade**
+
+4. TextBlob in `app/sentiment.py` durch finanzspezifischen Sentiment-Stack ersetzen. Zwei Optionen mit klarer Abwaegung:
+   - **VADER** (`vaderSentiment`): klein, sofort, bewusst auf Social-Media-/News-Sprache trainiert, finanziell ok aber nicht spezialisiert. Container waechst nur um wenige MB.
+   - **FinBERT** (`transformers` + `yiyanghkust/finbert-tone` oder `ProsusAI/finbert`): finanzspezifisch trainiert auf Reuters-/SEC-/News-Korpora, spuerbar bessere Trefferquote bei "guidance cut", "miss expectations", "approval"; aber bringt PyTorch (~500 MB) + 400 MB Modell ins Backend-Image. Container-Groesse waechst von ~1.6 GB auf ~2.5 GB.
+   
+   Empfehlung beim Start: VADER zuerst, FinBERT optional als Premium-Schalter ueber `SENTIMENT_PROVIDER=finbert`. Alpha-Vantage-NEWS_SENTIMENT-Score und FMP-Score werden weiter primaer genutzt; lokales Sentiment ist Fallback fuer Provider-leere News.
+
+**Datenbasis-Welle 3+** (siehe `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung"): CoinGecko-Adapter, Reddit/StockTwits, Earnings-Call-Transcripts, Options-Flow.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Sektion "Produktvision" + "Phase 3" + "UX-Direktive"
-- `state/decisions.md` Decision-Block 2026-05-08 zu Paper-Trading-Schema + Gate-Anbindung
-- `src/backend/app/paper_trading.py` als Service-Referenz
-- `src/backend/app/ml_models.py::_enrich_with_yield_model` als verbindliches Eingangsfilter-Beispiel (deren Logik spiegelt `paper_trading.evaluate_net_yield_gate`)
+- `docs/admin/project-plan.md` Sektion "Produktvision" + "Datenbasis-Erweiterung" + "Phase 3"
+- `state/decisions.md` letzte Decision-Bloecke 2026-05-08 (Paper-Trading + Datenbasis-Welle 1)
+- `src/backend/app/fmp_service.py` als Provider-Referenz fuer naechste Endpoints
+- `src/backend/app/macro_service.py` als Pattern fuer kleine cached Adapter
 
 ## Stand Beim Letzten Handover
 

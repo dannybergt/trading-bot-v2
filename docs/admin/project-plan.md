@@ -96,6 +96,27 @@ Offen:
 
 - breitere Fundamentals-Anbindung jenseits Sector/Ratios (Cashflow, Debt, Guidance, Ratings) als optionaler Tiefe-Schritt vor Phase 3
 
+### Datenbasis-Erweiterung (Begleitachse zu Phase 3)
+
+Status: in Arbeit. Welle 1 vom 2026-05-08 liefert Insider-/Institutional-/Earnings-Signale plus Macro-Kontext.
+
+Bereits umgesetzt (Welle 1):
+
+- FMP-Service-Erweiterung: `get_insider_trades` (FMP v4), `get_institutional_holdings`, `get_earnings_surprises`, `get_upcoming_earnings`, plus gebuendelt `normalized_research_signals` mit 90-Tage-Insider-Summary und Earnings-Beat-Quote
+- Neuer Adapter `app/macro_service.py`: VIX, 10Y-Yield (^TNX), DXY ueber yfinance, Modul-Cache 5 min
+- `/api/research/{symbol}` reicht `researchSignals` + `macroContext` durch
+- Frontend AnalysisPage rendert zwei neue Sektionen: ResearchSignalsSection (Insider-Tabelle, Top-Institutional-Holders, Earnings-Beat-Historie, naechstes Earnings-Datum) und MacroContextSection
+- 7 neue Unit-Tests (3 FMP, 4 Macro), API-Regression prueft Felder, UI-Regression best-effort fuer Macro
+
+Naechste Wellen (priorisiert):
+
+- Welle 2: Sentiment-Upgrade — TextBlob durch finanzspezifischen Stack ersetzen (VADER quick-win oder FinBERT fuer Premium-Qualitaet, dann Container-Groesse als Trade-off)
+- Welle 3: CoinGecko-Adapter fuer Crypto-Marktkap, Volumen-Cross-Exchange, Developer-/Community-Score, Fear-and-Greed-Index
+- Welle 4: Reddit/StockTwits-Mentions als Retail-Sentiment-Proxy (volatil, primaerer Hebel bei Meme-Stocks/Squeezes)
+- Welle 5: Earnings-Call-Transcripts (FMP `/earning-call-transcript`) als Volltext-Signal mit Sentiment
+- Welle 6: Options-Flow (Put/Call-Ratio, Open Interest) ueber yfinance options chain
+- Welle 7: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren (zurueckgestellt — erst wenn US-Fokus geschlossen ist)
+
 ### Phase 3: Paper-Trading
 
 Status: in Arbeit. Erster Schnitt vom 2026-05-08 liefert Schema, Backend-Endpunkte, Order-Lifecycle, Trade-Journal, Frontend-Page.

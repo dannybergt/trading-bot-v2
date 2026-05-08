@@ -237,6 +237,24 @@ assert crypto_payload["provider"]["source"] == "Alpha Vantage"
 assert crypto_payload["provider"]["status"] in {"live", "partial", "unavailable"}
 print("crypto asset metadata ok")
 
+stock_research = requests.get(
+    f"{base}/api/research/AAPL",
+    headers=headers,
+    timeout=60,
+)
+stock_research.raise_for_status()
+stock_research_payload = stock_research.json()
+assert stock_research_payload["symbol"] == "AAPL"
+research_signals = stock_research_payload.get("researchSignals")
+assert isinstance(research_signals, dict)
+for key in ("insiderTrades", "insiderSummary", "institutionalHoldings", "earningsSurprises", "earningsBeatRate", "upcomingEarnings", "daysUntilEarnings"):
+    assert key in research_signals, f"missing researchSignals key {key}"
+macro_context = stock_research_payload.get("macroContext")
+assert isinstance(macro_context, dict)
+for instr in ("vix", "yield10y", "dxy"):
+    assert instr in macro_context, f"missing macroContext instrument {instr}"
+print("research signals + macro context shape ok")
+
 crypto_research = requests.get(
     f"{base}/api/research/BTC/USD",
     headers=headers,

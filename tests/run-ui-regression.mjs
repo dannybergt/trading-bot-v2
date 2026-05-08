@@ -350,6 +350,22 @@ async function run() {
     );
     console.log("ui_analysis ok");
 
+    // 8b. Macro-Context-Section renders on the analysis page regardless of
+    // symbol (computed from VIX/^TNX/DXY, not the analyzed symbol). Best-
+    // effort because the underlying yfinance probes for the index symbols
+    // can fail without external connectivity in some CI environments.
+    try {
+      await waitForCondition(
+        client,
+        "macro context section",
+        "!!document.querySelector('[data-testid=\"macro-context-section\"]')",
+        20000,
+      );
+      console.log("ui_macro_context ok");
+    } catch (error) {
+      console.log(`ui_macro_context best_effort_skipped reason="${(error.message || String(error)).slice(0, 120)}"`);
+    }
+
     // 9. Alerts page (rule CRUD form)
     await navigate(client, `${FRONTEND_URL}/alerts`);
     await waitForCondition(

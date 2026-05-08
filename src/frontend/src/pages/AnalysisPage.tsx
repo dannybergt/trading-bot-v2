@@ -71,6 +71,69 @@ type StockResponse = {
   support_resistance?: ChartLevel[] | null;
 };
 
+type InsiderTrade = {
+  date?: string | null;
+  type?: string;
+  isBuy?: boolean;
+  name?: string | null;
+  title?: string | null;
+  shares?: number | null;
+  price?: number | null;
+  value?: number | null;
+};
+
+type InstitutionalHolding = {
+  holder?: string | null;
+  shares?: number | null;
+  weightPct?: number | null;
+  changeShares?: number | null;
+  dateReported?: string | null;
+};
+
+type EarningsSurprise = {
+  date?: string | null;
+  actual?: number | null;
+  estimated?: number | null;
+  beat?: boolean | null;
+  surprisePct?: number | null;
+};
+
+type UpcomingEarnings = {
+  date?: string | null;
+  epsEstimated?: number | null;
+  revenueEstimated?: number | null;
+  time?: string | null;
+  fiscalDateEnding?: string | null;
+};
+
+type ResearchSignals = {
+  insiderTrades?: InsiderTrade[];
+  insiderSummary?: {
+    buys90dShares?: number;
+    sells90dShares?: number;
+    netValue90d?: number;
+  };
+  institutionalHoldings?: InstitutionalHolding[];
+  earningsSurprises?: EarningsSurprise[];
+  earningsBeatRate?: number | null;
+  upcomingEarnings?: UpcomingEarnings | null;
+  daysUntilEarnings?: number | null;
+};
+
+type MacroInstrument = {
+  symbol?: string;
+  label?: string;
+  value?: number | null;
+  changePct?: number | null;
+  asOf?: string | null;
+};
+
+type MacroContext = {
+  vix?: MacroInstrument;
+  yield10y?: MacroInstrument;
+  dxy?: MacroInstrument;
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
@@ -109,6 +172,8 @@ type ResearchPayload = {
       numberAnalystsEstimatedEps?: number;
     }>;
   };
+  researchSignals?: ResearchSignals;
+  macroContext?: MacroContext;
   news?: {
     items?: Array<{
       title?: string;
@@ -296,6 +361,8 @@ export function AnalysisPage() {
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
       <ResearchDepthSection depth={research?.researchDepth} />
+      <ResearchSignalsSection signals={research?.researchSignals} />
+      <MacroContextSection macro={research?.macroContext} />
       <EventsSection events={eventsQuery.data?.events} provider={eventsQuery.data?.provider} />
       <HoldingsSection research={research?.research} />
       <NewsSection news={research?.news} />
@@ -806,6 +873,260 @@ function DebtTable({
         })}
       </ul>
     </div>
+  );
+}
+
+function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefined }) {
+  if (!signals) return null;
+
+  const insiderTrades = signals.insiderTrades ?? [];
+  const insiderSummary = signals.insiderSummary ?? {};
+  const institutional = signals.institutionalHoldings ?? [];
+  const surprises = signals.earningsSurprises ?? [];
+  const upcoming = signals.upcomingEarnings ?? null;
+
+  const hasAnyData =
+    insiderTrades.length > 0 ||
+    institutional.length > 0 ||
+    surprises.length > 0 ||
+    upcoming;
+
+  if (!hasAnyData) return null;
+
+  const beatRatePct =
+    signals.earningsBeatRate != null ? Math.round(signals.earningsBeatRate * 100) : null;
+  const insiderNetValue = insiderSummary.netValue90d ?? 0;
+  const insiderNetSign = insiderNetValue > 0 ? "+" : insiderNetValue < 0 ? "−" : "";
+
+  return (
+    <section className="card space-y-3" data-testid="research-signals-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Research signals
+        </h2>
+        <p className="text-xs text-slate-500">
+          Insider activity, institutional ownership, earnings beat history, next earnings.
+        </p>
+      </header>
+
+      <dl className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Insider net value (90d)
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {insiderNetSign}
+            {Math.abs(insiderNetValue).toLocaleString(undefined, {
+              maximumFractionDigits: 0,
+            })}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            Buys {Math.round(insiderSummary.buys90dShares ?? 0)} sh /
+            Sells {Math.round(insiderSummary.sells90dShares ?? 0)} sh
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Earnings beat rate
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {beatRatePct != null ? `${beatRatePct}%` : "—"}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {surprises.length > 0
+              ? `${surprises.length} reported quarter${surprises.length === 1 ? "" : "s"}`
+              : "no quarters reported"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Next earnings
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {upcoming?.date ?? "—"}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {signals.daysUntilEarnings != null
+              ? `${signals.daysUntilEarnings} days, ${upcoming?.time ?? "tbd"}`
+              : "no upcoming event"}
+          </dd>
+        </div>
+      </dl>
+
+      {insiderTrades.length > 0 ? (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Recent insider transactions
+          </h3>
+          <table className="mt-2 w-full text-left text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1">Date</th>
+                <th>Insider</th>
+                <th>Type</th>
+                <th className="text-right">Shares</th>
+                <th className="text-right">Price</th>
+                <th className="text-right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {insiderTrades.slice(0, 8).map((tx, idx) => (
+                <tr key={idx} className="border-t border-slate-800">
+                  <td className="py-1">{tx.date ?? "—"}</td>
+                  <td>{tx.name ?? "—"}</td>
+                  <td className={tx.isBuy ? "text-bergt-green" : "text-red-300"}>
+                    {tx.isBuy ? "BUY" : "SELL"}
+                  </td>
+                  <td className="text-right">{tx.shares?.toLocaleString() ?? "—"}</td>
+                  <td className="text-right">
+                    {tx.price != null ? tx.price.toFixed(2) : "—"}
+                  </td>
+                  <td className="text-right">
+                    {tx.value != null
+                      ? tx.value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {institutional.length > 0 ? (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Top institutional holders
+          </h3>
+          <table className="mt-2 w-full text-left text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1">Holder</th>
+                <th className="text-right">Shares</th>
+                <th className="text-right">Weight %</th>
+                <th className="text-right">Δ Shares</th>
+                <th>As of</th>
+              </tr>
+            </thead>
+            <tbody>
+              {institutional.slice(0, 6).map((row, idx) => (
+                <tr key={idx} className="border-t border-slate-800">
+                  <td className="py-1">{row.holder ?? "—"}</td>
+                  <td className="text-right">{row.shares?.toLocaleString() ?? "—"}</td>
+                  <td className="text-right">
+                    {row.weightPct != null ? row.weightPct.toFixed(2) : "—"}
+                  </td>
+                  <td
+                    className={
+                      "text-right " +
+                      ((row.changeShares ?? 0) > 0
+                        ? "text-bergt-green"
+                        : (row.changeShares ?? 0) < 0
+                        ? "text-red-300"
+                        : "")
+                    }
+                  >
+                    {row.changeShares != null
+                      ? row.changeShares.toLocaleString()
+                      : "—"}
+                  </td>
+                  <td>{row.dateReported ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {surprises.length > 0 ? (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Earnings beat history
+          </h3>
+          <table className="mt-2 w-full text-left text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1">Date</th>
+                <th className="text-right">Actual EPS</th>
+                <th className="text-right">Estimated</th>
+                <th className="text-right">Surprise %</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {surprises.map((row, idx) => (
+                <tr key={idx} className="border-t border-slate-800">
+                  <td className="py-1">{row.date ?? "—"}</td>
+                  <td className="text-right">
+                    {row.actual != null ? row.actual.toFixed(2) : "—"}
+                  </td>
+                  <td className="text-right">
+                    {row.estimated != null ? row.estimated.toFixed(2) : "—"}
+                  </td>
+                  <td className="text-right">
+                    {row.surprisePct != null ? `${row.surprisePct.toFixed(1)}%` : "—"}
+                  </td>
+                  <td className={row.beat ? "text-bergt-green" : "text-red-300"}>
+                    {row.beat == null ? "—" : row.beat ? "BEAT" : "MISS"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MacroContextSection({ macro }: { macro: MacroContext | undefined }) {
+  if (!macro) return null;
+  const items: Array<[string, MacroInstrument | undefined]> = [
+    ["VIX", macro.vix],
+    ["10Y Yield", macro.yield10y],
+    ["DXY", macro.dxy],
+  ];
+  if (items.every(([, v]) => !v || v.value == null)) return null;
+
+  return (
+    <section className="card space-y-2" data-testid="macro-context-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Macro context
+        </h2>
+        <p className="text-xs text-slate-500">
+          Market-wide weather report. Read every per-symbol signal in this context.
+        </p>
+      </header>
+      <dl className="grid gap-3 sm:grid-cols-3">
+        {items.map(([label, instr]) => {
+          const value = instr?.value;
+          const changePct = instr?.changePct;
+          const changeSign = changePct != null && changePct > 0 ? "+" : "";
+          const changeColor =
+            changePct == null
+              ? "text-slate-400"
+              : changePct > 0
+              ? "text-bergt-green"
+              : changePct < 0
+              ? "text-red-300"
+              : "text-slate-400";
+          return (
+            <div key={label} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+              <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+              <dd className="mt-1 font-mono text-base">
+                {value != null ? value.toFixed(2) : "—"}
+              </dd>
+              <dd className={`mt-1 text-xs ${changeColor}`}>
+                {changePct != null
+                  ? `${changeSign}${changePct.toFixed(2)}% (${instr?.asOf ?? "—"})`
+                  : "no quote"}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
   );
 }
 
