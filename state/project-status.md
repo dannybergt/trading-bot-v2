@@ -8,6 +8,7 @@
 
 ## Gesichert verifiziert
 
+- Datenbasis-Welle 7 am 2026-05-08: FinBERT (`ProsusAI/finbert`) als optionaler Premium-Sentiment-Provider ueber `SENTIMENT_PROVIDER=finbert`. Schwere Dependency-Schicht (transformers + torch) liegt in neuem `src/backend/requirements-finbert.txt`, Default-Container bleibt schmal. `app/sentiment.py` mit Lazy-Singleton-Pipeline (lockguarded), Mapping FinBERT-Label/Score auf [-1, 1], transparenter Fallback auf VADER bei `ImportError` oder Pipeline-Load-Failure (Disabled-Flag verhindert Retry-Storm). 118 Unit-Tests OK (vorher 113 + 5 FinBERT). API+UI-Regression weiter gruen.
 - Docker-Hub-Release `2026.05.08-1` am 2026-05-08 erfolgreich gepusht und upgrade-/restore-rehearsal-validiert:
   - `dbergt/trading-bot-backend:2026.05.08-1` -> `sha256:bbbe4628833921abb880c4ad336ab892445a0254a27bdd066689cd16e4997d13`
   - `dbergt/trading-bot-frontend:2026.05.08-1` -> `sha256:e4c09ffa32194500a1c59d3b44bf1bf3ae4d33296d5531a0f9cff1d88aef9b88`

@@ -133,10 +133,14 @@ Bereits umgesetzt (Welle 6, 2026-05-08):
 
 - Options-Flow-Adapter `app/options_flow_service.py` zieht yfinance `Ticker.option_chain` fuer das nearest-expiry mit >=7 Tagen Restlaufzeit. Aggregiert Put/Call-Volume-Ratio, Put/Call-OI-Ratio, Average-IV ATM (±5%-Band um Last-Close), Top-3-Strikes Calls und Puts nach Volume. Cache 60 min pro Symbol; Crypto skipped. `/api/research/{symbol}` ergaenzt um `optionsFlow`. Frontend `OptionsFlowSection` rendert KPI-Cards plus Top-Strike-Tabellen mit Skew-Pille (bullish/bearish/neutral)
 
+Bereits umgesetzt (Welle 7, 2026-05-08):
+
+- FinBERT (`ProsusAI/finbert`) als optionaler Premium-Sentiment-Provider ueber `SENTIMENT_PROVIDER=finbert`. Schwere Dependency-Schicht (transformers + torch) liegt in `requirements-finbert.txt`, Default-Container bleibt schmal. Lazy-Singleton-Pipeline, Mapping FinBERT-Label/Score auf [-1, 1]; transparenter Fallback auf VADER bei nicht-installiertem `transformers` oder Load-Fehler. Default-Verhalten ist unveraendert VADER
+
 Naechste Wellen (priorisiert):
 
-- Welle 7: FinBERT-Aktivierung als optionaler Premium-Schalter (transformers-Dependency + Container-Groesse-Akzeptanz)
 - Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren
+- Welle 9 (optional): FinBERT-Image-Variant `dbergt/trading-bot-backend-finbert` als zweite Build-Stage damit Premium-Nutzer ein vorgewaermtes Image ziehen koennen
 
 ### Phase 3: Paper-Trading
 

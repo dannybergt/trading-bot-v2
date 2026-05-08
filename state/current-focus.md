@@ -14,32 +14,31 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Datenbasis-Welle 7 + Phase-3-Restverfeinerung
+## Naechster Einstieg 2026-05-09: Datenbasis-Welle 8 + Phase-3-Restverfeinerung
 
 Sitzung 2026-05-08 hat geliefert:
 
-- Phase 3 komplett (bis auf Restverfeinerungen): Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage
-- Datenbasis-Wellen 1-6: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Transcripts, Options-Flow
-- **Release-Tag `v2026.05.08-1` gesetzt + Upgrade-/Restore-Rehearsal bestanden**. Docker-Hub-Tags `dbergt/trading-bot-{backend,frontend}:2026.05.08-1` synced. Deployment-Record `state/runtime/deployments/deployment-20260508T101330Z.env`.
+- Phase 3 Paper-Trading komplett (bis auf Restverfeinerungen)
+- Datenbasis-Wellen 1-7 ausgeliefert: FMP-Signale + Macro-Kontext, VADER-Sentiment, CoinGecko + Fear-and-Greed, StockTwits + Reddit, Earnings-Call-Digest, Options-Flow, **FinBERT-Premium-Schalter** (opt-in via `requirements-finbert.txt` + `SENTIMENT_PROVIDER=finbert`, Default bleibt VADER)
+- Release-Tag `v2026.05.08-1` gesetzt + Upgrade-/Restore-Rehearsal bestanden
 
 Naechster sinnvoller Schnitt:
 
-**Datenbasis Welle 7: FinBERT-Premium-Schalter**
-
-1. Separater `requirements-finbert.txt` mit `transformers`, `torch`. Default-Container bleibt schmal; FinBERT ist Opt-in fuer wer die ~900 MB extra akzeptiert.
-2. `app/sentiment.py` erweitern: bei `SENTIMENT_PROVIDER=finbert` Lazy-Loader fuer `ProsusAI/finbert`, Output `positive/negative/neutral` mit Confidence — Mapping auf [-1, 1] Compound-aequivalent. Bei nicht-installiertem `transformers` Warn-Log, Fallback VADER.
-3. Optional separates Image-Variant `dbergt/trading-bot-backend-finbert` ueber zweite Build-Stage. Damit bleibt der Standard-Image schmal, FinBERT-Nutzer ziehen explizit das fette Image.
-4. Tests: Mock fuer `transformers.pipeline`-Aufruf; Integration mit `analyze_news` ueberprufen.
-
 **Datenbasis Welle 8: Twelve Data**
 
-5. Free Tier ~8 req/min, ueberragende EU-Coverage (Frankfurt, Paris, London, Tokio).
-6. Adapter `app/twelve_data_service.py` analog zu FMP. Bindet sich in `MarketDataService.get_ticker_info` als zweiter Fallback hinter yfinance fuer Non-US-Symbols.
+1. Twelve Data API hat Free-Tier ~8 req/min, ueberragende Coverage fuer Non-US-Maerkte (Frankfurt XETR, Paris EPA, London LSE, Tokio TSE, Hong Kong HKG).
+2. Neuer Adapter `app/twelve_data_service.py` analog zu FMP-Service-Pattern. Endpunkte: `/quote`, `/time_series`, `/profile`, `/statistics`. Rate-Limiter-Provider `twelve_data` mit ~0.13 req/s Default.
+3. Bindet sich in `MarketDataService.get_ticker_info` als zweiter Fallback hinter yfinance fuer Symbols mit Exchange-Suffix (z.B. `SAP.DE`, `BMW.DE`, `LVMH.PA`). Optional `TWELVE_DATA_API_KEY`-Env-Var (kostenlos registrierbar).
+4. `/api/research/{symbol}` reicht den fallback-Pfad transparent durch — kein neues UI-Feld noetig, nur breitere Coverage in den existierenden Fundamentals-Cards.
+
+**Welle 9 (optional): FinBERT-Image-Variant**
+
+5. Zweite Build-Stage in `ops/docker/backend.Dockerfile` mit `RUN pip install -r requirements-finbert.txt` als final-image fuer ein separates Tag `dbergt/trading-bot-backend-finbert:<tag>`. GitHub-Actions-Publish baut beide Images parallel. Erst aufnehmen, wenn ein Nutzer FinBERT produktiv nutzen will.
 
 **Phase 3 Restverfeinerungen** (wann immer):
 
-7. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
-8. Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers).
+6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen.
+7. Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers).
 
 **Phase 4 Auto-Execution** beginnt erst NACH:
 - Risk-Modell (Limits, Position-Size-Caps, Budget pro Strategie, Audit-Log)
@@ -50,9 +49,9 @@ Naechster sinnvoller Schnitt:
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
 - `docs/admin/project-plan.md` Stand 2026-05-08 + Sektion "Phase 3" + "Phase 4" + "Datenbasis-Erweiterung"
-- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen sechs Datenbasis-Wellen
-- `src/backend/app/sentiment.py` als Stelle fuer FinBERT-Erweiterung (lazy + lockguarded Singleton-Pattern)
-- `src/backend/app/options_flow_service.py` als juengstes Adapter-Pattern fuer Welle 8
+- `state/decisions.md` Decision-Bloecke 2026-05-08 zu allen sieben Datenbasis-Wellen
+- `src/backend/app/fmp_service.py` als Adapter-Pattern fuer Welle 8 (Provider-Subset-Mapping zu yfinance-kompatibler `normalized_ticker_info`)
+- `src/backend/app/services.py::MarketDataService.get_ticker_info` als Stelle fuer den dritten Provider-Fallback
 
 ## Stand Beim Letzten Handover
 

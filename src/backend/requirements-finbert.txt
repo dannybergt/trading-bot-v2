@@ -1,0 +1,11 @@
+# Optional FinBERT premium-sentiment dependency stack.
+#
+# Install on top of requirements.txt when you want SENTIMENT_PROVIDER=finbert
+# to use ProsusAI/finbert instead of VADER. Adds ~900 MB to the container
+# (PyTorch + tokenizers + the ~400 MB finbert model on first inference).
+#
+# Default deployments do NOT pull this file — keep the standard image
+# slim. Build a separate finbert variant by adding
+# `RUN pip install -r requirements-finbert.txt` to a downstream stage.
+transformers==4.46.3
+torch==2.5.1
