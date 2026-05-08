@@ -288,6 +288,42 @@ class PaperTradingServiceTests(unittest.TestCase):
         # Limit fills cannot be better than the resting limit price
         self.assertEqual(tx.price, 90.0)
 
+    def test_market_buy_uses_crypto_slippage_when_asset_class_resolved(self):
+        # Crypto carries a 0.3% adverse slippage instead of the 0.1% default
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="BTC/USD",
+            side="buy",
+            qty=1,
+            limit_price=None,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(50_000.0),
+            asset_class_resolver=lambda _s: "crypto",
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # 50000 * (1 + 0.003) = 50150
+        self.assertAlmostEqual(tx.price, 50_150.0, places=2)
+
+    def test_market_buy_uses_etf_slippage_when_asset_class_resolved(self):
+        # ETFs are tighter (0.05%) than the default
+        order = paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="VOO",
+            side="buy",
+            qty=1,
+            limit_price=None,
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(400.0),
+            asset_class_resolver=lambda _s: "etf",
+        )
+        tx = self.db.query(PaperTransaction).filter_by(order_id=order.id).one()
+        # 400 * (1 + 0.0005) = 400.20
+        self.assertAlmostEqual(tx.price, 400.20, places=2)
+
     def test_dispatch_pending_orders_skips_when_no_price(self):
         paper_trading.place_order(
             db=self.db,

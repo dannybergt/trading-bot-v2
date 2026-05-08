@@ -135,6 +135,40 @@ type MacroContext = {
   dxy?: MacroInstrument;
 };
 
+type CryptoMetrics = {
+  coinId?: string;
+  symbol?: string;
+  name?: string;
+  marketCapRank?: number | null;
+  marketCapUsd?: number | null;
+  totalVolumeUsd?: number | null;
+  currentPriceUsd?: number | null;
+  priceChange24hPct?: number | null;
+  priceChange7dPct?: number | null;
+  priceChange30dPct?: number | null;
+  ath?: { valueUsd?: number | null; changePct?: number | null; date?: string | null } | null;
+  atl?: { valueUsd?: number | null; changePct?: number | null; date?: string | null } | null;
+  community?: {
+    twitterFollowers?: number | null;
+    redditSubscribers?: number | null;
+    redditActive48h?: number | null;
+  } | null;
+  developer?: {
+    stars?: number | null;
+    forks?: number | null;
+    subscribers?: number | null;
+    commitCount4Weeks?: number | null;
+  } | null;
+  sentimentVotesUpPct?: number | null;
+  sentimentVotesDownPct?: number | null;
+};
+
+type FearGreedIndex = {
+  value?: number | null;
+  classification?: string | null;
+  timestamp?: string | null;
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
@@ -175,6 +209,8 @@ type ResearchPayload = {
   };
   researchSignals?: ResearchSignals;
   macroContext?: MacroContext;
+  cryptoMetrics?: CryptoMetrics | null;
+  fearGreedIndex?: FearGreedIndex | null;
   news?: {
     items?: Array<{
       title?: string;
@@ -384,7 +420,11 @@ export function AnalysisPage() {
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
-      <MacroContextSection macro={research?.macroContext} />
+      <CryptoMetricsSection metrics={research?.cryptoMetrics} />
+      <MacroContextSection
+        macro={research?.macroContext}
+        fearGreed={research?.fearGreedIndex}
+      />
       <EventsSection events={eventsQuery.data?.events} provider={eventsQuery.data?.provider} />
       <HoldingsSection research={research?.research} />
       <NewsSection news={research?.news} />
@@ -1144,14 +1184,121 @@ function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefi
   );
 }
 
-function MacroContextSection({ macro }: { macro: MacroContext | undefined }) {
-  if (!macro) return null;
+function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | undefined }) {
+  if (!metrics) return null;
+
+  const fmtUsd = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+    if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+    if (Math.abs(value) >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
+    return `$${value.toFixed(2)}`;
+  };
+
+  const fmtPct = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    return `${sign}${Math.abs(value).toFixed(2)}%`;
+  };
+
+  const fmtCount = (value: number | null | undefined): string => {
+    if (value == null) return "—";
+    return Math.round(value).toLocaleString();
+  };
+
+  return (
+    <section className="card space-y-3" data-testid="crypto-metrics-section">
+      <header>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+          Crypto metrics
+        </h2>
+        <p className="text-xs text-slate-500">
+          Market depth, ATH/ATL distance, developer + community activity (CoinGecko).
+        </p>
+      </header>
+      <dl className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            Market cap
+          </dt>
+          <dd className="mt-1 font-mono text-base">{fmtUsd(metrics.marketCapUsd)}</dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            {metrics.marketCapRank != null ? `Rank #${metrics.marketCapRank}` : "—"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            24h volume
+          </dt>
+          <dd className="mt-1 font-mono text-base">{fmtUsd(metrics.totalVolumeUsd)}</dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            24h {fmtPct(metrics.priceChange24hPct)} · 7d {fmtPct(metrics.priceChange7dPct)} · 30d {fmtPct(metrics.priceChange30dPct)}
+          </dd>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-500">
+            ATH / ATL
+          </dt>
+          <dd className="mt-1 font-mono text-base">
+            {fmtUsd(metrics.ath?.valueUsd)}
+          </dd>
+          <dd className="mt-1 text-xs text-slate-400">
+            From ATH {fmtPct(metrics.ath?.changePct)} · From ATL {fmtPct(metrics.atl?.changePct)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500">
+            Developer activity
+          </h3>
+          <dl className="mt-1 grid grid-cols-2 gap-1 text-xs">
+            <dt className="text-slate-500">Stars</dt>
+            <dd className="font-mono">{fmtCount(metrics.developer?.stars)}</dd>
+            <dt className="text-slate-500">Forks</dt>
+            <dd className="font-mono">{fmtCount(metrics.developer?.forks)}</dd>
+            <dt className="text-slate-500">Commits 4w</dt>
+            <dd className="font-mono">{fmtCount(metrics.developer?.commitCount4Weeks)}</dd>
+            <dt className="text-slate-500">Subscribers</dt>
+            <dd className="font-mono">{fmtCount(metrics.developer?.subscribers)}</dd>
+          </dl>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500">
+            Community activity
+          </h3>
+          <dl className="mt-1 grid grid-cols-2 gap-1 text-xs">
+            <dt className="text-slate-500">Twitter</dt>
+            <dd className="font-mono">{fmtCount(metrics.community?.twitterFollowers)}</dd>
+            <dt className="text-slate-500">Reddit subs</dt>
+            <dd className="font-mono">{fmtCount(metrics.community?.redditSubscribers)}</dd>
+            <dt className="text-slate-500">Reddit 48h</dt>
+            <dd className="font-mono">{fmtCount(metrics.community?.redditActive48h)}</dd>
+            <dt className="text-slate-500">Sentiment up</dt>
+            <dd className="font-mono">{fmtPct(metrics.sentimentVotesUpPct)}</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MacroContextSection({
+  macro,
+  fearGreed,
+}: {
+  macro: MacroContext | undefined;
+  fearGreed: FearGreedIndex | null | undefined;
+}) {
   const items: Array<[string, MacroInstrument | undefined]> = [
-    ["VIX", macro.vix],
-    ["10Y Yield", macro.yield10y],
-    ["DXY", macro.dxy],
+    ["VIX", macro?.vix],
+    ["10Y Yield", macro?.yield10y],
+    ["DXY", macro?.dxy],
   ];
-  if (items.every(([, v]) => !v || v.value == null)) return null;
+  const hasMacroData = items.some(([, v]) => v && v.value != null);
+  const hasFearGreed = fearGreed != null && fearGreed.value != null;
+  if (!hasMacroData && !hasFearGreed) return null;
 
   return (
     <section className="card space-y-2" data-testid="macro-context-section">
@@ -1163,7 +1310,7 @@ function MacroContextSection({ macro }: { macro: MacroContext | undefined }) {
           Market-wide weather report. Read every per-symbol signal in this context.
         </p>
       </header>
-      <dl className="grid gap-3 sm:grid-cols-3">
+      <dl className="grid gap-3 sm:grid-cols-4">
         {items.map(([label, instr]) => {
           const value = instr?.value;
           const changePct = instr?.changePct;
@@ -1190,6 +1337,22 @@ function MacroContextSection({ macro }: { macro: MacroContext | undefined }) {
             </div>
           );
         })}
+        {hasFearGreed ? (
+          <div
+            className="rounded-md border border-slate-800 bg-slate-900/40 p-3"
+            data-testid="fear-greed-card"
+          >
+            <dt className="text-xs uppercase tracking-wide text-slate-500">
+              Crypto Fear &amp; Greed
+            </dt>
+            <dd className="mt-1 font-mono text-base">
+              {fearGreed?.value != null ? fearGreed.value : "—"}
+            </dd>
+            <dd className="mt-1 text-xs text-slate-400">
+              {fearGreed?.classification ?? "—"}
+            </dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );

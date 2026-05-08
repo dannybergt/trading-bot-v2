@@ -253,7 +253,25 @@ macro_context = stock_research_payload.get("macroContext")
 assert isinstance(macro_context, dict)
 for instr in ("vix", "yield10y", "dxy"):
     assert instr in macro_context, f"missing macroContext instrument {instr}"
+# fearGreedIndex is best-effort (alternative.me reachability) but the field
+# itself must exist on every response; cryptoMetrics is None for stocks.
+assert "fearGreedIndex" in stock_research_payload
+assert stock_research_payload.get("cryptoMetrics") is None, "stocks must not get crypto metrics"
 print("research signals + macro context shape ok")
+
+crypto_research_full = requests.get(
+    f"{base}/api/research/BTC/USD",
+    headers=headers,
+    timeout=60,
+)
+crypto_research_full.raise_for_status()
+crypto_research_payload = crypto_research_full.json()
+assert "cryptoMetrics" in crypto_research_payload, "missing cryptoMetrics on crypto research"
+# coingecko reachability is best-effort in the regression environment, so
+# the field can be either a populated dict or None — we only assert the
+# key exists. The shape check happens in the unit test for CoinGeckoService.
+assert "fearGreedIndex" in crypto_research_payload
+print("crypto research + crypto metrics shape ok")
 
 crypto_research = requests.get(
     f"{base}/api/research/BTC/USD",

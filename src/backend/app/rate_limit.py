@@ -96,6 +96,8 @@ class ProviderRateLimitRegistry:
         "alpha_vantage": (1.0 / 12.0, 5),  # free tier: 5 req/min, 25/day
         "fmp": (1.0, 5),  # ~60 req/min, conservative for free plan
         "yfinance": (2.0, 10),  # unofficial; 2/s burst of 10
+        "coingecko": (0.5, 10),  # free tier ~30 req/min, conservative
+        "fear_greed": (0.05, 1),  # alternative.me, daily-updated, called rarely
     }
 
     def __init__(self) -> None:

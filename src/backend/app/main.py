@@ -31,6 +31,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
 from app.backup_service import BackupService, backup_scheduler_task
+from app.coingecko_service import get_coingecko_service
 from app.database import init_db, get_db, SessionLocal
 from app.figi_service import figi
 from app.macro_service import get_macro_service
@@ -1021,7 +1022,9 @@ async def paper_order_fill_task():
             db = SessionLocal()
             try:
                 filled = paper_trading.dispatch_pending_orders(
-                    db, service.get_latest_close
+                    db,
+                    service.get_latest_close,
+                    asset_class_resolver=_asset_class_resolver,
                 )
                 if filled:
                     logger.info(
@@ -1733,6 +1736,11 @@ def get_symbol_research(
 
     macro_context = get_macro_service().get_context()
 
+    crypto_metrics = None
+    if asset_profile.get("isCrypto"):
+        crypto_metrics = get_coingecko_service().get_coin_metrics(asset_profile["symbol"])
+    fear_greed = get_coingecko_service().get_fear_greed_index()
+
     return {
         "symbol": asset_profile["symbol"],
         "name": asset_profile["name"],
@@ -1745,6 +1753,8 @@ def get_symbol_research(
         "researchDepth": research_depth,
         "researchSignals": research_signals,
         "macroContext": macro_context,
+        "cryptoMetrics": crypto_metrics,
+        "fearGreedIndex": fear_greed,
         "news": {
             "items": (news_payload or {}).get("items", [])[:5],
             "aggregateScore": (news_payload or {}).get("aggregate_score", 0.0),
@@ -1862,6 +1872,11 @@ def get_stock_news(symbol: str, current_user: User = Depends(get_current_user)):
 
 
 # --- PAPER-TRADING ROUTES ---
+def _asset_class_resolver(symbol: str) -> str | None:
+    profile = service.get_asset_profile(symbol)
+    return profile.get("assetClass") if isinstance(profile, dict) else None
+
+
 @app.post("/api/paper-trading/orders")
 def create_paper_order(
     req: PaperOrderRequest,
@@ -1879,6 +1894,7 @@ def create_paper_order(
             target_price=req.target_price,
             source=req.source,
             latest_close_provider=service.get_latest_close,
+            asset_class_resolver=_asset_class_resolver,
         )
     except paper_trading.NetYieldGateRejection as exc:
         raise HTTPException(

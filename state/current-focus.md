@@ -14,36 +14,47 @@ dann zuerst in genau dieser Reihenfolge lesen:
 
 und danach ohne Rueckfragen an der unten beschriebenen Stelle fortsetzen.
 
-## Naechster Einstieg 2026-05-09: Phase 3 abschliessen + Datenbasis Welle 3
+## Naechster Einstieg 2026-05-09: Datenbasis Welle 4 + Phase-3-Restverfeinerung
 
-Letzte Sitzung 2026-05-08 hat geliefert:
+Sitzung 2026-05-08 hat in mehreren Schnitten ausgeliefert:
 
-(A) **Phase 3 Paper-Trading komplett bis auf Asset-spezifische Slippage** — Schema, Lifecycle, Endpunkte, Frontend-Page, dazu Background-Fill-Task `paper_order_fill_task`, Chart-Marker fuer Paper-Trades, Recommendation→Paper-Order-Verlinkung mit Query-Param-Prefill.
+(A) **Phase 3 vollstaendig (bis auf Restverfeinerungen)** — Schema, Lifecycle mit Net-Yield-Gate, Endpunkte, Frontend-Page, Background-Fill-Task, Chart-Marker, Recommendation→Order-Verlinkung, asset-spezifische Slippage (Stock 0.1%, ETF 0.05%, Crypto 0.3%).
 
-(B) **Datenbasis-Welle 1** — FMP-Signale (Insider/Institutional/Earnings-Surprises/Upcoming-Earnings) + Macro-Kontext (VIX/10Y/DXY). Sektionen rendern auf `/analysis/<symbol>`.
+(B) **Datenbasis-Welle 1** — FMP-Signale (Insider, Institutional, Earnings-Surprises, Upcoming-Earnings) + Macro-Kontext (VIX/10Y/DXY).
 
-(C) **Datenbasis-Welle 2** — Sentiment-Upgrade von TextBlob auf VADER. FinBERT-Schalter dokumentiert, Aktivierung bewusst zurueckgestellt.
+(C) **Datenbasis-Welle 2** — Sentiment-Upgrade von TextBlob auf VADER.
 
-Naechster sinnvoller Schnitt:
+(D) **Datenbasis-Welle 3** — CoinGecko-Adapter (Marktkap, Volumen, ATH/ATL, Developer/Community-Scores) plus Crypto-Fear-and-Greed-Index. CryptoMetricsSection und Fear-Greed-Card auf `/analysis/<symbol>`.
 
-**Phase 3 letzter Punkt:**
+Naechster sinnvoller Schnitt — in dieser Reihenfolge:
 
-1. Asset-spezifische Slippage-/Fee-Modelle. Heute uniform 0.1% Slippage auf Market-Fills und User-Float-Fee. Krypto braucht hoehere Slippage (z.B. 0.3% wegen Spread bei kleineren Coins), Maker-/Taker-Differenzierung waere fair. Stocks unter dem Tagesvolumen-Threshold sollten variable Slippage abhaengig von Position-Size bekommen. Implementierung: Konfigurations-Tabelle `slippage_pct_by_asset_class` plus Liquidity-Adjustment, in `paper_trading._try_fill` einsetzen.
+**Datenbasis Welle 4: Reddit/StockTwits-Retail-Sentiment**
 
-**Datenbasis Welle 3: CoinGecko-Adapter**
+1. Neuer `app/social_sentiment_service.py`. Reddit hat eine offizielle, kostenlose API (PRAW), die fuer Subreddits wie `r/wallstreetbets`, `r/stocks`, `r/CryptoCurrency` Mention-Counts und durchschnittlichen Sentiment liefert (VADER auf den Submissions/Comments). StockTwits hat eine offene Trending-Symbols-API ohne Auth.
+2. Pro Symbol pro Stunde gecacht; Output: `mentionCount24h`, `mentionTrendPct` (24h vs 7d-Average), `avgSentiment`, `topPosts` (links).
+3. Schwierigkeit: Reddit braucht Praw-Client-ID/Secret als Env-Var (kostenlos). Wenn nicht konfiguriert: skip mit warn-Log, nur StockTwits.
+4. Integration: neue Section auf `/analysis/<symbol>` "Retail Sentiment", auch fuer Stocks und Crypto.
 
-2. Neuer `app/coingecko_service.py` (free tier, kein Auth-Pfad): zieht pro Crypto-Symbol Marktkap, Volumen-Cross-Exchange, Developer-Score, Community-Score, Public-Sentiment, plus Fear-and-Greed-Index ueber `alternative.me`. Bindet sich an `/api/research/{symbol}` fuer Crypto-Asset-Klassen analog zum FMP-Pfad fuer Stocks.
+**Datenbasis Welle 5: Earnings-Call-Transcripts**
 
-**Welle 4+:** Reddit/StockTwits-Mentions, Earnings-Call-Transcripts, Options-Flow, FinBERT-Aktivierung — siehe `docs/admin/project-plan.md` Sektion "Datenbasis-Erweiterung" Welle 3-7.
+5. FMP `/earning-call-transcript/{symbol}/{year}/{quarter}`. Transcript-Volltext durch VADER schicken, Summary plus Top-Positiv/Negativ-Sentences. Auf `/analysis/<symbol>` neue "Earnings call digest"-Section.
 
-**Phase 4 Auto-Execution** beginnt erst NACH Slippage-Verfeinerung + Risk-Modell.
+**Phase 3 Restverfeinerungen** (parallel/wann immer):
+
+6. Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen
+7. Asset-spezifische Fee-Multipliers (Crypto typischerweise hoeher als Stock)
+
+**Phase 4 Auto-Execution** beginnt erst NACH:
+- mindestens Welle 4-5 Datenbasis-Erweiterung
+- Risk-Modell (Limits/Budget/Audit-Logs)
+- Manuelle Freigabelogik + Not-Aus
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 
-- `docs/admin/project-plan.md` Sektion "Produktvision" + "Datenbasis-Erweiterung" + "Phase 3"
-- `state/decisions.md` letzte vier Decision-Bloecke 2026-05-08 (Paper-Trading-Schema, Welle 1 Datenbasis, Background-Fill + Chart-Marker + Verlinkung, Sentiment-Upgrade)
-- `src/backend/app/paper_trading.py::_try_fill` als Stelle fuer Slippage-/Fee-Verfeinerung
-- `src/backend/app/macro_service.py` als Pattern fuer den naechsten Adapter (CoinGecko)
+- `docs/admin/project-plan.md` Sektion "Produktvision" + "Datenbasis-Erweiterung" + "Phase 3" + "Phase 4"
+- `state/decisions.md` Decision-Bloecke 2026-05-08 (Slippage, CoinGecko, Sentiment, Background-Fill)
+- `src/backend/app/coingecko_service.py` als Pattern fuer den naechsten Provider-Adapter (Modul-Singleton, Cache, Rate-Limit)
+- `src/backend/app/sentiment.py` als VADER-Helper, den Welle 4/5 wiederverwendet
 
 ## Stand Beim Letzten Handover
 

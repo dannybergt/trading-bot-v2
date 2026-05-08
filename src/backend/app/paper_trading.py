@@ -25,7 +25,22 @@ ORDER_SIDES = {"buy", "sell"}
 ORDER_STATUSES = {"pending", "filled", "cancelled"}
 ORDER_SOURCES = {"manual", "auto-recommendation"}
 
-SLIPPAGE_PCT = 0.1
+# Adverse market-fill slippage in percent. Keyed by asset class so the
+# simulator widens the bid/ask gap for crypto (less liquid, larger
+# spreads) without touching equities and ETFs. Anything outside this
+# map falls back to the default 0.1%.
+DEFAULT_SLIPPAGE_PCT = 0.1
+SLIPPAGE_PCT_BY_ASSET_CLASS: dict[str, float] = {
+    "stock": 0.1,
+    "etf": 0.05,
+    "crypto": 0.3,
+}
+
+
+def _resolve_slippage_pct(asset_class: str | None) -> float:
+    if asset_class is None:
+        return DEFAULT_SLIPPAGE_PCT
+    return SLIPPAGE_PCT_BY_ASSET_CLASS.get(asset_class, DEFAULT_SLIPPAGE_PCT)
 
 
 class NetYieldGateRejection(Exception):
@@ -142,6 +157,7 @@ def _try_fill(
     user: User,
     order: PaperOrder,
     latest_close: float | None,
+    asset_class: str | None = None,
 ) -> bool:
     if latest_close is None or latest_close <= 0:
         return False
@@ -153,7 +169,7 @@ def _try_fill(
             return False
         fill_price = float(order.limit_price)
     else:
-        slip = SLIPPAGE_PCT / 100.0
+        slip = _resolve_slippage_pct(asset_class) / 100.0
         fill_price = latest_close * (1 + slip if order.side == "buy" else 1 - slip)
 
     fee_abs, fee_pct_amt = fee_breakdown(user, float(order.qty), fill_price)
@@ -190,6 +206,7 @@ def _try_fill(
 
 
 PriceProvider = Callable[[str], Optional[float]]
+AssetClassResolver = Callable[[str], Optional[str]]
 
 
 def place_order(
@@ -203,6 +220,7 @@ def place_order(
     target_price: float | None,
     source: str,
     latest_close_provider: PriceProvider,
+    asset_class_resolver: AssetClassResolver | None = None,
 ) -> PaperOrder:
     """Place a paper-trading order.
 
@@ -246,20 +264,37 @@ def place_order(
     db.add(order)
     db.flush()
 
-    _try_fill(db=db, user=user, order=order, latest_close=latest_close)
+    asset_class: str | None = None
+    if asset_class_resolver is not None:
+        try:
+            asset_class = asset_class_resolver(canonical_symbol)
+        except Exception:
+            logger.exception(
+                "paper_order_asset_class_lookup_failed symbol=%s", canonical_symbol
+            )
+
+    _try_fill(
+        db=db,
+        user=user,
+        order=order,
+        latest_close=latest_close,
+        asset_class=asset_class,
+    )
     db.commit()
     db.refresh(order)
     return order
 
 
 def dispatch_pending_orders(
-    db: Session, latest_close_provider: PriceProvider
+    db: Session,
+    latest_close_provider: PriceProvider,
+    asset_class_resolver: AssetClassResolver | None = None,
 ) -> int:
     """Re-evaluate every pending limit order against the current close.
 
-    Returns the number of orders that filled in this cycle. The price
-    provider is called once per distinct symbol to avoid hammering the
-    upstream when many users hold the same ticker.
+    Returns the number of orders that filled in this cycle. The price and
+    asset-class lookups are cached per distinct symbol to avoid hammering
+    upstream providers when many users hold the same ticker.
     """
     pending = (
         db.query(PaperOrder)
@@ -271,6 +306,7 @@ def dispatch_pending_orders(
         return 0
 
     price_cache: dict[str, float | None] = {}
+    asset_class_cache: dict[str, str | None] = {}
 
     def _provider(symbol: str) -> float | None:
         if symbol not in price_cache:
@@ -282,6 +318,19 @@ def dispatch_pending_orders(
                 )
                 price_cache[symbol] = None
         return price_cache[symbol]
+
+    def _asset_class(symbol: str) -> str | None:
+        if asset_class_resolver is None:
+            return None
+        if symbol not in asset_class_cache:
+            try:
+                asset_class_cache[symbol] = asset_class_resolver(symbol)
+            except Exception:
+                logger.exception(
+                    "paper_order_dispatch_asset_class_lookup_failed symbol=%s", symbol
+                )
+                asset_class_cache[symbol] = None
+        return asset_class_cache[symbol]
 
     filled = 0
     for order in pending:
@@ -295,7 +344,11 @@ def dispatch_pending_orders(
             continue
         try:
             if _try_fill(
-                db=db, user=user, order=order, latest_close=_provider(order.symbol)
+                db=db,
+                user=user,
+                order=order,
+                latest_close=_provider(order.symbol),
+                asset_class=_asset_class(order.symbol),
             ):
                 filled += 1
         except Exception:

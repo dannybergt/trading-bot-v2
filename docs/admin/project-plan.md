@@ -110,16 +110,22 @@ Bereits umgesetzt (Welle 1):
 
 Bereits umgesetzt (Welle 2, 2026-05-08):
 
-- Sentiment-Upgrade: `app/sentiment.py` nutzt jetzt VADER (`vaderSentiment.SentimentIntensityAnalyzer`) statt TextBlob als Default; `analyze_sentiment_basic` liefert Compound in [-1, 1], `analyze_news` haelt die alte Schnittstelle und Threshold-Defaults (±0.1) tunbar via `SENTIMENT_BULLISH_THRESHOLD`/`SENTIMENT_BEARISH_THRESHOLD`. `SENTIMENT_PROVIDER=finbert`-Schalter dokumentiert; aktuell Fallback auf VADER mit Warn-Log (FinBERT braucht transformers + ~400 MB Modell, das ist Phase-3-spaeter)
+- Sentiment-Upgrade: `app/sentiment.py` nutzt jetzt VADER (`vaderSentiment.SentimentIntensityAnalyzer`) statt TextBlob als Default; `analyze_sentiment_basic` liefert Compound in [-1, 1], `analyze_news` haelt die alte Schnittstelle und Threshold-Defaults (±0.1) tunbar via `SENTIMENT_BULLISH_THRESHOLD`/`SENTIMENT_BEARISH_THRESHOLD`. `SENTIMENT_PROVIDER=finbert`-Schalter dokumentiert; aktuell Fallback auf VADER mit Warn-Log
+
+Bereits umgesetzt (Welle 3, 2026-05-08):
+
+- CoinGecko-Adapter `app/coingecko_service.py` mit Modul-Cache (5 min Coin-Metriken, 30 min Fear-Greed). Top-30-Static-Map plus `/coins/markets`-Fallback fuer Long-Tail-Coins. Liefert pro Crypto-Symbol Marktkap-Rang/Wert, 24h Cross-Exchange-Volumen, ATH/ATL mit Distance, Community-Daten (Twitter/Reddit) und Developer-Daten (Stars/Forks/Commits 4 Wochen)
+- Crypto-Fear-and-Greed-Index ueber `alternative.me`, gecacht 30 min, Provider-Default 0.05 req/s
+- `/api/research/{symbol}` ergaenzt um `cryptoMetrics` (None fuer Nicht-Crypto) und `fearGreedIndex` (immer best-effort)
+- Frontend `CryptoMetricsSection` auf `/analysis/<symbol>` mit Marktkap/Volumen/ATH-Karten plus Developer-/Community-Tabellen; Fear-and-Greed wandert als 4. Karte in die `MacroContextSection`
 
 Naechste Wellen (priorisiert):
 
-- Welle 3: CoinGecko-Adapter fuer Crypto-Marktkap, Volumen-Cross-Exchange, Developer-/Community-Score, Fear-and-Greed-Index
 - Welle 4: Reddit/StockTwits-Mentions als Retail-Sentiment-Proxy (volatil, primaerer Hebel bei Meme-Stocks/Squeezes)
 - Welle 5: Earnings-Call-Transcripts (FMP `/earning-call-transcript`) als Volltext-Signal mit VADER-Sentiment
 - Welle 6: Options-Flow (Put/Call-Ratio, Open Interest) ueber yfinance options chain
 - Welle 7: FinBERT-Aktivierung als optionaler Premium-Schalter (transformers-Dependency + Container-Groesse-Akzeptanz)
-- Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren (zurueckgestellt — erst wenn US-Fokus geschlossen ist)
+- Welle 8: Twelve Data fuer internationale Maerkte und zusaetzliche Indikatoren
 
 ### Phase 3: Paper-Trading
 
@@ -142,9 +148,14 @@ Bereits umgesetzt (zweiter Schnitt, 2026-05-08):
 - Paper-Trades als Marker im StockChart auf `/analysis/<symbol>` (Buy/Sell-Pfeile mit Qty + Preis als Label)
 - Recommendation-Card bekommt "Place paper order at this target"-Link, der `/paper-trading` mit symbol/side/limitPrice/targetPrice/source-Parametern vorbelegt; PaperTradingPage liest die Params via `useSearchParams` und befuellt das Form
 
+Bereits umgesetzt (dritter Schnitt, 2026-05-08):
+
+- Asset-Klassen-spezifische Slippage im Fill-Simulator: Stocks 0.1%, ETFs 0.05%, Crypto 0.3% (`SLIPPAGE_PCT_BY_ASSET_CLASS`-Map). `_try_fill` nimmt einen `asset_class`-Parameter; `place_order` und `dispatch_pending_orders` einen optionalen `asset_class_resolver`. `main.py` haengt das per `service.get_asset_profile`-Wrapper an
+
 Offene Zielpunkte (Phase 3 weiter):
 
-- Broker-/Fee-Modelle pro Asset-Klasse verfeinern (aktuell uniformer Float-Anteil)
+- Dynamische Slippage abhaengig von Position-Size relativ zum Tagesvolumen (heute fix pro Asset-Klasse)
+- Asset-spezifische Fee-Multipliers (Crypto-Brokers nehmen typischerweise hoehere Prozent-Fees als Stock-Brokers; aktuell uniform aus User-Portfolio-Settings)
 
 ### Phase 4: Live-Trading mit Auto-Execution
 
