@@ -2074,6 +2074,12 @@ def get_symbol_research(
         else {"cashflow": [], "debt": [], "rating": None, "estimates": []}
     )
 
+    fundamentals_detail = (
+        service.fmp.normalized_fundamentals_detail(asset_profile["symbol"])
+        if service.fmp.configured and not asset_profile.get("isCrypto")
+        else {}
+    )
+
     research_signals = (
         service.fmp.normalized_research_signals(asset_profile["symbol"])
         if service.fmp.configured and not asset_profile.get("isCrypto")
@@ -2140,6 +2146,7 @@ def get_symbol_research(
         "quote": provider_quote,
         "research": provider_research,
         "fundamentals": fundamentals,
+        "fundamentalsDetail": fundamentals_detail,
         "researchDepth": research_depth,
         "researchSignals": research_signals,
         "earningsCalls": earnings_calls,

@@ -213,6 +213,33 @@
     }
   },
   "analysis": {
+    "fundamentalsDetail": {
+      "title": "Fundamentals-Detail",
+      "source": "Quelle: FMP",
+      "identifiers": "Kennungen",
+      "valuation": "Bewertung",
+      "earnings": "Gewinn & Bilanz",
+      "dividend": "Dividende",
+      "isin": "ISIN",
+      "wkn": "WKN",
+      "cusip": "CUSIP",
+      "exchange": "Boerse",
+      "currency": "Waehrung",
+      "marketCap": "Marktkapitalisierung",
+      "peRatioTtm": "KGV (TTM)",
+      "forwardPe": "Forward-KGV",
+      "priceToBookTtm": "KBV (TTM)",
+      "priceToSalesTtm": "KUV (TTM)",
+      "beta": "Beta",
+      "epsTtm": "Gewinn pro Aktie (TTM)",
+      "revenue": "Umsatz (Jahr)",
+      "netIncome": "Gewinn (Jahr)",
+      "returnOnEquityTtm": "Eigenkapitalrendite (TTM)",
+      "debtToEquityTtm": "Verschuldungsgrad (TTM)",
+      "dividendYieldTtm": "Dividendenrendite (TTM)",
+      "annualDividend": "Dividende pro Jahr",
+      "payoutRatioTtm": "Ausschuettungsquote (TTM)"
+    },
     "modelPerformance": {
       "title": "Modell-Performance",
       "subtitle": "Walk-Forward-Backtest des persistierten Modells über die letzten {{count}} vorhergesagten Bars{{trained}}.",

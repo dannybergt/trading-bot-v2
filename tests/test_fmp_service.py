@@ -16,7 +16,7 @@ if not (BACKEND_ROOT / "app").exists():
     BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.fmp_service import FmpService  # noqa: E402
+from app.fmp_service import FmpService, isin_to_wkn  # noqa: E402
 
 
 def _response(payload, status: int = 200):
@@ -483,6 +483,124 @@ class FmpServiceTests(unittest.TestCase):
         with patch("app.fmp_service.acquire_rate_limit", return_value=True), \
              patch("app.fmp_service.requests.get", return_value=bad_response):
             self.assertIsNone(service.get_profile("AAPL"))
+
+
+class IsinToWknTests(unittest.TestCase):
+    def test_extracts_sap_wkn(self):
+        self.assertEqual("716460", isin_to_wkn("DE0007164600"))
+
+    def test_extracts_alphanumeric_wkn_for_adidas(self):
+        self.assertEqual("A1EWWW", isin_to_wkn("DE000A1EWWW0"))
+
+    def test_lowercase_input_is_normalised(self):
+        self.assertEqual("716460", isin_to_wkn("de0007164600"))
+
+    def test_us_isin_returns_none(self):
+        self.assertIsNone(isin_to_wkn("US0378331005"))
+
+    def test_invalid_inputs_return_none(self):
+        for value in (None, "", "DE00071646", "DE00071646000", "XX0007164600"):
+            self.assertIsNone(isin_to_wkn(value))
+
+
+class NormalizedFundamentalsDetailTests(unittest.TestCase):
+    def _seed_responses(self):
+        from datetime import date
+
+        within_window = date.today().replace(day=1).isoformat()
+        profile_payload = [
+            {
+                "symbol": "SAP.DE",
+                "companyName": "SAP SE",
+                "isin": "DE0007164600",
+                "cusip": "Y7434K100",
+                "exchangeShortName": "XETRA",
+                "currency": "EUR",
+                "beta": 0.92,
+                "mktCap": 200_000_000_000,
+            }
+        ]
+        key_metrics_ttm_payload = [
+            {
+                "peRatioTTM": 24.5,
+                "pbRatioTTM": 4.2,
+                "priceToSalesRatioTTM": 5.1,
+                "netIncomePerShareTTM": 4.10,
+                "dividendYieldTTM": 0.018,
+                "payoutRatioTTM": 0.35,
+                "debtToEquityTTM": 0.4,
+                "roeTTM": 0.17,
+            }
+        ]
+        ratios_payload = [{"dividendYielTTM": 0.018, "payoutRatioTTM": 0.35}]
+        income_payload = [
+            {
+                "date": "2025-12-31",
+                "revenue": 33_000_000_000,
+                "netIncome": 5_800_000_000,
+            }
+        ]
+        dividend_payload = {
+            "symbol": "SAP.DE",
+            "historical": [
+                {"date": within_window, "dividend": 2.20, "adjDividend": 2.20},
+            ],
+        }
+        return [
+            _response(profile_payload),
+            _response(key_metrics_ttm_payload),
+            _response(ratios_payload),
+            _response(income_payload),
+            _response(dividend_payload),
+        ]
+
+    def test_aggregates_profile_metrics_income_dividends(self):
+        service = FmpService(api_key="k")
+        responses = iter(self._seed_responses())
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(responses)
+        ):
+            detail = service.normalized_fundamentals_detail("SAP.DE")
+
+        self.assertEqual("DE0007164600", detail["isin"])
+        self.assertEqual("716460", detail["wkn"])
+        self.assertEqual("XETRA", detail["exchange"])
+        self.assertEqual("EUR", detail["currency"])
+        self.assertAlmostEqual(0.92, detail["beta"])
+        self.assertEqual(200_000_000_000, detail["marketCap"])
+        self.assertAlmostEqual(24.5, detail["peRatioTtm"])
+        self.assertAlmostEqual(4.10, detail["epsTtm"])
+        self.assertEqual(33_000_000_000, detail["revenue"])
+        self.assertEqual("2025-12-31", detail["revenueDate"])
+        self.assertEqual(5_800_000_000, detail["netIncome"])
+        self.assertAlmostEqual(0.018, detail["dividendYieldTtm"])
+        self.assertAlmostEqual(2.20, detail["annualDividend"])
+        self.assertAlmostEqual(0.35, detail["payoutRatioTtm"])
+
+    def test_strips_none_values(self):
+        service = FmpService(api_key="k")
+        sparse_responses = [
+            _response([{"symbol": "FOO", "companyName": "Foo Co"}]),  # profile, no isin/mktCap
+            _response([]),  # key-metrics-ttm empty
+            _response([]),  # ratios empty
+            _response([]),  # income empty
+            _response({"symbol": "FOO", "historical": []}),  # dividends empty
+        ]
+        iterator = iter(sparse_responses)
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), patch(
+            "app.fmp_service.requests.get", side_effect=lambda *a, **kw: next(iterator)
+        ):
+            detail = service.normalized_fundamentals_detail("FOO")
+
+        self.assertNotIn("isin", detail)
+        self.assertNotIn("marketCap", detail)
+        self.assertNotIn("annualDividend", detail)
+
+    def test_unconfigured_returns_empty_dict(self):
+        service = FmpService(api_key="")
+        with patch("app.fmp_service.requests.get") as get_mock:
+            self.assertEqual({}, service.normalized_fundamentals_detail("AAPL"))
+        get_mock.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -30,12 +30,11 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-12: Welle 15c/d, 16b/c oder UI-Probelauf
+## Naechster Einstieg 2026-05-12: Welle 15d, 16b/c oder UI-Probelauf
 
-Welle 15b (Dashboard-KPIs klickbar + Hilfe-Doku auf DE) ist ausgeliefert und in `main`. Damit sind die ersten beiden Punkte aus dem User-Feedback der letzten Runde abgehakt. Aktuell offen:
+Welle 15b (Dashboard-KPIs klickbar + Hilfe-Doku auf DE) und Welle 15c (Fundamentals-Vollausbau auf AnalysisPage) sind ausgeliefert und in `main`. Damit sind drei der User-Feedback-Punkte aus der ersten UI-Probelauf-Runde abgehakt. Aktuell offen:
 
-- **Welle 15c** — Fundamentals-Vollausbau auf AnalysisPage (WKN/ISIN/KGV/EPS/Umsatz/Gewinn/Dividenden/Estimates). Groesserer Schnitt: FMP/AlphaVantage-Wiring + UI-Section + i18n + Tests.
-- **Welle 15d** — Multi-Currency pro Asset + Datumsfilter auf AnalysisPage/PaperTrading.
+- **Welle 15d** — Multi-Currency pro Asset + Datumsfilter auf AnalysisPage/PaperTrading. Multi-Currency bedeutet FX-Provider-Adapter (frankfurter.app oder Open Exchange Rates) plus per-User-Anzeige-Waehrung; Datumsfilter ist konzeptionell einfacher.
 - **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts). Vergleich zum XGBoost+LightGBM+RF-Ensemble.
 - **Welle 16c** — UI-A/B-Switch zwischen Modellen + Backtest-Vergleichstabelle.
 - **UI-Probelauf** mit dem User (immer noch nicht durchgefuehrt).
@@ -47,9 +46,9 @@ Phase 4e-paper (Auto-Paper-Trading-Loop) ist ausgeliefert und in `main`. Der Use
 
 Empfehlung beim naechsten Resume:
 
-- Wenn der User Geduld hat: **Welle 15c** (Fundamentals-Vollausbau) — beantwortet einen konkreten User-Wunsch und macht die AnalysisPage wesentlich aussagekraeftiger.
-- Wenn der User schneller Wert braucht: **Welle 15d** (Multi-Currency + Datumsfilter) — kleinerer Schnitt, sichtbar im UI.
-- **UI-Probelauf** ist weiterhin der ehrlichste naechste Schritt: der User hat das Tool noch nie selbst gesehen.
+- **UI-Probelauf** ist der ehrlichste naechste Schritt: der User hat das Tool noch nie selbst gesehen.
+- Wenn weiterer Code-Aufbau: **Welle 15d** (Datumsfilter zuerst, Multi-Currency danach) — beides aus der gleichen User-Feedback-Runde. Datumsfilter ist klein, Multi-Currency ist mittelgross.
+- ML-Track: **Welle 16b** (N-BEATS) macht die Predictions-Tiefe vergleichbar, ist aber tief technisch.
 
 Parallel-Wellen wie bisher offen:
 - **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.

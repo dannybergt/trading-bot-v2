@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -32,6 +32,27 @@ FMP_BASE_URL_V4 = "https://financialmodelingprep.com/api/v4"
 # Backwards-compatible alias for callers that still reference the v3 default.
 FMP_BASE_URL = FMP_BASE_URL_V3
 DEFAULT_TIMEOUT_SECONDS = 12.0
+
+
+def isin_to_wkn(isin: str | None) -> str | None:
+    """Extract the German WKN from a DE-ISIN.
+
+    German ISIN format: `DE` + 3 reserve chars + 6-char WKN + 1 check digit
+    (12 chars total). Returns None for non-DE ISINs or malformed input.
+
+    Examples:
+        DE0007164600 → 716460 (SAP)
+        DE000A1EWWW0 → A1EWWW (adidas, alphanumeric WKN)
+    """
+    if not isin or not isinstance(isin, str):
+        return None
+    cleaned = isin.strip().upper()
+    if len(cleaned) != 12 or not cleaned.startswith("DE"):
+        return None
+    candidate = cleaned[5:11]
+    if not candidate.isalnum():
+        return None
+    return candidate
 
 
 class FmpService:
@@ -94,6 +115,30 @@ class FmpService:
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
+
+    def get_key_metrics_ttm(self, symbol: str) -> dict[str, Any] | None:
+        """Trailing-twelve-months snapshot. Distinct endpoint from the
+        annual `get_key_metrics`. Returns TTM-suffixed keys
+        (`peRatioTTM`, `revenuePerShareTTM`, `dividendYieldTTM`, …)."""
+        if not symbol:
+            return None
+        payload = self._request(f"/key-metrics-ttm/{symbol.upper()}", params={"limit": 1})
+        if isinstance(payload, list) and payload:
+            return payload[0]
+        return None
+
+    def get_income_statement(
+        self, symbol: str, *, period: str = "annual", limit: int = 4
+    ) -> list[dict[str, Any]]:
+        """Recent income statements. Default annual; pass `period="quarter"`
+        for TTM-summation by the caller."""
+        if not symbol:
+            return []
+        payload = self._request(
+            f"/income-statement/{symbol.upper()}",
+            params={"period": period, "limit": max(1, min(limit, 12))},
+        )
+        return payload if isinstance(payload, list) else []
 
     def get_ratios(self, symbol: str) -> dict[str, Any] | None:
         if not symbol:
@@ -270,6 +315,65 @@ class FmpService:
             "rating": rating,
             "estimates": estimates,
         }
+
+    def normalized_fundamentals_detail(self, symbol: str) -> dict[str, Any]:
+        """Bundle the explicit fundamental KPIs (ISIN, WKN, P/E, P/B, EPS,
+        Revenue, NetIncome, Dividend) into a single payload for the
+        AnalysisPage fundamentals section.
+
+        The structure intentionally mixes profile/identifier fields, TTM
+        ratio snapshots, and the latest annual income-statement line so the
+        UI can render everything as one KPI grid plus a dividend block.
+        """
+        profile = self.get_profile(symbol) or {}
+        metrics_ttm = self.get_key_metrics_ttm(symbol) or {}
+        ratios = self.get_ratios(symbol) or {}
+        income_rows = self.get_income_statement(symbol, period="annual", limit=1)
+        dividend_history = self.get_dividends(symbol)
+
+        if not profile and not metrics_ttm and not ratios and not income_rows:
+            return {}
+
+        latest_income = income_rows[0] if income_rows and isinstance(income_rows[0], dict) else {}
+
+        annual_dividend = _sum_trailing_dividends(dividend_history)
+
+        isin = profile.get("isin")
+        detail: dict[str, Any] = {
+            "isin": isin,
+            "wkn": isin_to_wkn(isin),
+            "cusip": profile.get("cusip"),
+            "exchange": profile.get("exchangeShortName") or profile.get("exchange"),
+            "currency": profile.get("currency"),
+            "beta": _safe_float(profile.get("beta")),
+            "marketCap": _safe_int(profile.get("mktCap")),
+            "peRatioTtm": _safe_float(metrics_ttm.get("peRatioTTM")),
+            "forwardPe": _safe_float(metrics_ttm.get("forwardPE") or profile.get("forwardPE")),
+            "priceToBookTtm": _safe_float(metrics_ttm.get("pbRatioTTM")),
+            "priceToSalesTtm": _safe_float(metrics_ttm.get("priceToSalesRatioTTM")),
+            "epsTtm": _safe_float(
+                metrics_ttm.get("netIncomePerShareTTM")
+                or ratios.get("netIncomePerShareTTM")
+            ),
+            "revenue": _safe_float(latest_income.get("revenue")),
+            "revenueDate": latest_income.get("date") or latest_income.get("fiscalDateEnding"),
+            "netIncome": _safe_float(latest_income.get("netIncome")),
+            "netIncomeDate": latest_income.get("date") or latest_income.get("fiscalDateEnding"),
+            "dividendYieldTtm": _safe_float(
+                metrics_ttm.get("dividendYieldTTM")
+                or ratios.get("dividendYieldTTM")
+                or ratios.get("dividendYielTTM")
+            ),
+            "annualDividend": annual_dividend,
+            "payoutRatioTtm": _safe_float(
+                metrics_ttm.get("payoutRatioTTM") or ratios.get("payoutRatioTTM")
+            ),
+            "debtToEquityTtm": _safe_float(metrics_ttm.get("debtToEquityTTM")),
+            "returnOnEquityTtm": _safe_float(metrics_ttm.get("roeTTM")),
+        }
+        # Strip None values so the UI's null-checks don't show every row as
+        # "—" when only one provider line is missing.
+        return {k: v for k, v in detail.items() if v is not None}
 
     def get_insider_trades(self, symbol: str, *, limit: int = 50) -> list[dict[str, Any]]:
         """Recent insider transactions (CEO/CFO/director buys + sells).
@@ -833,6 +937,40 @@ def _safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _sum_trailing_dividends(history: list[dict[str, Any]]) -> float | None:
+    """Sum the per-share dividend amounts within the trailing 365 days.
+
+    Returns None if no parseable row falls inside the window so the UI
+    can render "—" instead of a misleading 0.00.
+    """
+    if not history:
+        return None
+    cutoff = date.today() - timedelta(days=365)
+    total = 0.0
+    matched = False
+    for row in history:
+        if not isinstance(row, dict):
+            continue
+        row_date = _parse_date(row.get("date"))
+        if row_date is None or row_date < cutoff:
+            continue
+        amount = _safe_float(row.get("dividend") or row.get("adjDividend"))
+        if amount is None:
+            continue
+        total += amount
+        matched = True
+    return total if matched else None
 
 
 def _parse_date(value: Any):

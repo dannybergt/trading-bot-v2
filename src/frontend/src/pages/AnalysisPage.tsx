@@ -346,12 +346,37 @@ type SectorContextPayload = {
   };
 };
 
+type FundamentalsDetail = {
+  isin?: string | null;
+  wkn?: string | null;
+  cusip?: string | null;
+  exchange?: string | null;
+  currency?: string | null;
+  beta?: number | null;
+  marketCap?: number | null;
+  peRatioTtm?: number | null;
+  forwardPe?: number | null;
+  priceToBookTtm?: number | null;
+  priceToSalesTtm?: number | null;
+  epsTtm?: number | null;
+  revenue?: number | null;
+  revenueDate?: string | null;
+  netIncome?: number | null;
+  netIncomeDate?: string | null;
+  dividendYieldTtm?: number | null;
+  annualDividend?: number | null;
+  payoutRatioTtm?: number | null;
+  debtToEquityTtm?: number | null;
+  returnOnEquityTtm?: number | null;
+};
+
 type ResearchPayload = {
   symbol: string;
   name: string;
   research?: {
     holdings?: Array<{ symbol?: string; name?: string; weight?: number }>;
   };
+  fundamentalsDetail?: FundamentalsDetail;
   researchDepth?: {
     cashflow?: Array<{
       date?: string;
@@ -621,6 +646,7 @@ export function AnalysisPage() {
       )}
 
       <FundamentalsSection info={stock?.info} provider={stock?.provider} />
+      <FundamentalsDetailSection detail={research?.fundamentalsDetail} />
       <ModelPerformanceSection
         backtest={backtestQuery.data?.result}
         modelTrainedAt={stock?.prediction?.modelTrainedAt}
@@ -1145,6 +1171,139 @@ function FundamentalsSection({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function FundamentalsDetailSection({
+  detail,
+}: {
+  detail: FundamentalsDetail | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!detail) return null;
+  const hasContent =
+    detail.isin ||
+    detail.wkn ||
+    detail.marketCap != null ||
+    detail.peRatioTtm != null ||
+    detail.epsTtm != null ||
+    detail.revenue != null ||
+    detail.dividendYieldTtm != null;
+  if (!hasContent) return null;
+
+  const currency = detail.currency || "USD";
+  const fmtPct = (v: number | null | undefined) =>
+    v == null ? null : `${(v * 100).toFixed(2)}%`;
+  const fmtRatio = (v: number | null | undefined, digits = 2) =>
+    v == null ? null : v.toFixed(digits);
+  const fmtMoneyShort = (v: number | null | undefined) =>
+    v == null ? null : `${formatLarge(v)} ${currency}`;
+  const fmtMoneyExact = (v: number | null | undefined, digits = 2) =>
+    v == null ? null : `${v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${currency}`;
+
+  const identifiers: Array<[string, string]> = [];
+  if (detail.isin) identifiers.push([t("analysis.fundamentalsDetail.isin"), detail.isin]);
+  if (detail.wkn) identifiers.push([t("analysis.fundamentalsDetail.wkn"), detail.wkn]);
+  if (detail.cusip) identifiers.push([t("analysis.fundamentalsDetail.cusip"), detail.cusip]);
+  if (detail.exchange) identifiers.push([t("analysis.fundamentalsDetail.exchange"), detail.exchange]);
+  if (detail.currency) identifiers.push([t("analysis.fundamentalsDetail.currency"), detail.currency]);
+
+  const valuation: Array<[string, string]> = [];
+  const mc = fmtMoneyShort(detail.marketCap);
+  if (mc) valuation.push([t("analysis.fundamentalsDetail.marketCap"), mc]);
+  const peTtm = fmtRatio(detail.peRatioTtm, 1);
+  if (peTtm) valuation.push([t("analysis.fundamentalsDetail.peRatioTtm"), peTtm]);
+  const peFwd = fmtRatio(detail.forwardPe, 1);
+  if (peFwd) valuation.push([t("analysis.fundamentalsDetail.forwardPe"), peFwd]);
+  const pb = fmtRatio(detail.priceToBookTtm);
+  if (pb) valuation.push([t("analysis.fundamentalsDetail.priceToBookTtm"), pb]);
+  const ps = fmtRatio(detail.priceToSalesTtm);
+  if (ps) valuation.push([t("analysis.fundamentalsDetail.priceToSalesTtm"), ps]);
+  const beta = fmtRatio(detail.beta);
+  if (beta) valuation.push([t("analysis.fundamentalsDetail.beta"), beta]);
+
+  const earnings: Array<[string, string, string?]> = [];
+  const eps = fmtMoneyExact(detail.epsTtm, 2);
+  if (eps) earnings.push([t("analysis.fundamentalsDetail.epsTtm"), eps]);
+  const rev = fmtMoneyShort(detail.revenue);
+  if (rev)
+    earnings.push([
+      t("analysis.fundamentalsDetail.revenue"),
+      rev,
+      detail.revenueDate || undefined,
+    ]);
+  const ni = fmtMoneyShort(detail.netIncome);
+  if (ni)
+    earnings.push([
+      t("analysis.fundamentalsDetail.netIncome"),
+      ni,
+      detail.netIncomeDate || undefined,
+    ]);
+  const roe = fmtPct(detail.returnOnEquityTtm);
+  if (roe) earnings.push([t("analysis.fundamentalsDetail.returnOnEquityTtm"), roe]);
+  const dte = fmtRatio(detail.debtToEquityTtm);
+  if (dte) earnings.push([t("analysis.fundamentalsDetail.debtToEquityTtm"), dte]);
+
+  const dividend: Array<[string, string]> = [];
+  const divY = fmtPct(detail.dividendYieldTtm);
+  if (divY) dividend.push([t("analysis.fundamentalsDetail.dividendYieldTtm"), divY]);
+  const annDiv = fmtMoneyExact(detail.annualDividend, 2);
+  if (annDiv) dividend.push([t("analysis.fundamentalsDetail.annualDividend"), annDiv]);
+  const payout = fmtPct(detail.payoutRatioTtm);
+  if (payout) dividend.push([t("analysis.fundamentalsDetail.payoutRatioTtm"), payout]);
+
+  const renderRow = (entries: Array<[string, string, string?]>) =>
+    entries.length === 0 ? null : (
+      <div className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
+        {entries.map(([label, value, hint]) => (
+          <div key={label}>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="mt-0.5 text-sm font-medium">{value}</p>
+            {hint ? <p className="text-[10px] text-slate-500">{hint}</p> : null}
+          </div>
+        ))}
+      </div>
+    );
+
+  return (
+    <section className="card" data-testid="analysis-fundamentals-detail">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">{t("analysis.fundamentalsDetail.title")}</h2>
+        <span className="text-xs text-slate-500">{t("analysis.fundamentalsDetail.source")}</span>
+      </header>
+      {identifiers.length > 0 ? (
+        <div>
+          <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.fundamentalsDetail.identifiers")}
+          </p>
+          {renderRow(identifiers)}
+        </div>
+      ) : null}
+      {valuation.length > 0 ? (
+        <div>
+          <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.fundamentalsDetail.valuation")}
+          </p>
+          {renderRow(valuation)}
+        </div>
+      ) : null}
+      {earnings.length > 0 ? (
+        <div>
+          <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.fundamentalsDetail.earnings")}
+          </p>
+          {renderRow(earnings)}
+        </div>
+      ) : null}
+      {dividend.length > 0 ? (
+        <div>
+          <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+            {t("analysis.fundamentalsDetail.dividend")}
+          </p>
+          {renderRow(dividend)}
+        </div>
+      ) : null}
     </section>
   );
 }
