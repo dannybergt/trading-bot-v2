@@ -67,6 +67,18 @@ type GateBreakdown = {
 
 type Tab = "openOrders" | "journal" | "positions" | "summary";
 
+type JournalRange = "7d" | "30d" | "90d" | "1y" | "all";
+
+const JOURNAL_RANGE_DAYS: Record<JournalRange, number | null> = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+  "1y": 365,
+  all: null,
+};
+
+const JOURNAL_RANGES: JournalRange[] = ["7d", "30d", "90d", "1y", "all"];
+
 function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
@@ -216,12 +228,25 @@ export function PaperTradingPage() {
     placeMutation.mutate(payload);
   };
 
+  const [journalRange, setJournalRange] = useState<JournalRange>("all");
+
+  const filteredTransactions = useMemo(() => {
+    const days = JOURNAL_RANGE_DAYS[journalRange];
+    if (days === null) return transactions;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return transactions.filter((tx) => {
+      if (!tx.executedAt) return true;
+      const ts = Date.parse(tx.executedAt);
+      return Number.isNaN(ts) ? true : ts >= cutoff;
+    });
+  }, [transactions, journalRange]);
+
   const journalTotals = useMemo(() => {
-    const totalRealized = transactions.reduce((acc, tx) => acc + tx.realizedPnl, 0);
-    const totalFees = transactions.reduce((acc, tx) => acc + tx.feeTotal, 0);
-    const totalTax = transactions.reduce((acc, tx) => acc + tx.taxAmount, 0);
+    const totalRealized = filteredTransactions.reduce((acc, tx) => acc + tx.realizedPnl, 0);
+    const totalFees = filteredTransactions.reduce((acc, tx) => acc + tx.feeTotal, 0);
+    const totalTax = filteredTransactions.reduce((acc, tx) => acc + tx.taxAmount, 0);
     return { totalRealized, totalFees, totalTax };
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   return (
     <div className="space-y-6" data-testid="paper-trading-page">
@@ -386,8 +411,44 @@ export function PaperTradingPage() {
 
       {tab === "journal" ? (
         <section className="card space-y-4" data-testid="paper-tab-content-journal">
+          <div
+            className="flex flex-wrap items-center gap-2"
+            data-testid="paper-journal-range"
+            role="group"
+            aria-label={t("paperTrading.journal.range.title")}
+          >
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              {t("paperTrading.journal.range.title")}
+            </span>
+            {JOURNAL_RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setJournalRange(r)}
+                data-testid={`paper-journal-range-${r}`}
+                aria-pressed={journalRange === r}
+                className={`rounded-md px-2.5 py-1 text-xs transition ${
+                  journalRange === r
+                    ? "bg-bergt-green/20 text-bergt-green"
+                    : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                {t(`paperTrading.journal.range.${r}`)}
+              </button>
+            ))}
+            {journalRange !== "all" ? (
+              <span className="text-xs text-slate-500">
+                {t("paperTrading.journal.range.filteredCount", {
+                  shown: filteredTransactions.length,
+                  total: transactions.length,
+                })}
+              </span>
+            ) : null}
+          </div>
           {transactions.length === 0 ? (
             <p className="text-sm text-slate-400">{t("paperTrading.journal.empty")}</p>
+          ) : filteredTransactions.length === 0 ? (
+            <p className="text-sm text-slate-400">{t("paperTrading.journal.emptyInRange")}</p>
           ) : (
             <>
               <table className="w-full text-left text-sm">
@@ -405,7 +466,7 @@ export function PaperTradingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((tx) => (
+                  {filteredTransactions.map((tx) => (
                     <tr key={tx.id} className="border-t border-slate-800">
                       <td className="py-2 text-slate-400">{formatDateTime(tx.executedAt)}</td>
                       <td className="font-medium">{tx.symbol}</td>
@@ -439,7 +500,7 @@ export function PaperTradingPage() {
                   </div>
                   <div>
                     <dt className="text-xs text-slate-500">{t("paperTrading.journal.totalCount")}</dt>
-                    <dd className="font-mono">{transactions.length}</dd>
+                    <dd className="font-mono">{filteredTransactions.length}</dd>
                   </div>
                 </dl>
               </div>

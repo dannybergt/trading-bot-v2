@@ -6,7 +6,7 @@ Place simulated orders against your watchlist universe. Fills run against the la
 ## Tabs
 
 - **Open orders** — pending limit orders waiting for the market to cross the limit. The background fill task re-evaluates them every three minutes.
-- **Trade journal** — chronological list of every fill with quantity, price, fees, capital-gains tax, and both nominal and percent realized P&L.
+- **Trade journal** — chronological list of every fill with quantity, price, fees, capital-gains tax, and both nominal and percent realized P&L. A time-range selector at the top of the tab (7 days / 30 days / 90 days / 1 year / All) filters the table client-side; the totals row recalculates against the filtered subset so realized P/L, fees, and tax always match what's on screen.
 - **Positions** — current open positions with average entry price, last price, unrealized P&L, plus per-position fee and tax totals.
 - **Summary** — totals across all transactions: realized P&L, unrealized P&L, fee total, tax total, open exposure, transaction count.
 

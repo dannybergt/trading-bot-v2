@@ -171,6 +171,7 @@
     },
     "journal": {
       "empty": "No transactions yet. Filled orders appear here in chronological order.",
+      "emptyInRange": "No transactions in the selected time range. Switch to a wider range to see older trades.",
       "headers": {
         "executedAt": "Executed",
         "symbol": "Symbol",
@@ -186,7 +187,16 @@
       "totalRealized": "Realized P/L (after fees + tax)",
       "totalFees": "Total fees",
       "totalTax": "Total capital-gains tax",
-      "totalCount": "Transactions"
+      "totalCount": "Transactions",
+      "range": {
+        "title": "Time range",
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days",
+        "1y": "1 year",
+        "all": "All",
+        "filteredCount": "{{shown}} of {{total}} shown"
+      }
     },
     "positions": {
       "empty": "No open positions.",

@@ -6,7 +6,7 @@ Setze simulierte Orders gegen dein Watchlist-Universum. Fills laufen gegen den l
 ## Tabs
 
 - **Open orders** — pending Limit-Orders, die warten, dass der Markt das Limit kreuzt. Der Background-Fill-Task bewertet sie alle drei Minuten neu.
-- **Trade journal** — chronologische Liste jedes Fills mit Stueckzahl, Preis, Gebuehren, Kapitalertragssteuer sowie nominalem und prozentualem realisiertem P&L.
+- **Trade journal** — chronologische Liste jedes Fills mit Stueckzahl, Preis, Gebuehren, Kapitalertragssteuer sowie nominalem und prozentualem realisiertem P&L. Ein Zeitraum-Selektor oben im Tab (7 Tage / 30 Tage / 90 Tage / 1 Jahr / Alle) filtert die Tabelle clientseitig; die Summenzeile rechnet auf den gefilterten Datensatz, damit realisierter P/L, Gebuehren und Steuern immer dem entsprechen, was angezeigt wird.
 - **Positions** — aktuelle offene Positionen mit Durchschnittseintrittspreis, letztem Preis, unrealisiertem P&L, plus Gebuehren- und Steuer-Summen pro Position.
 - **Summary** — Summen ueber alle Transaktionen: realisierter P&L, unrealisierter P&L, Gebuehren-Summe, Steuer-Summe, offene Exposure, Transaktions-Count.
 

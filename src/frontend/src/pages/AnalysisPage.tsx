@@ -465,7 +465,7 @@ const TIMEFRAMES = [
   { value: "3M", label: "3M" },
   { value: "6M", label: "6M" },
   { value: "1Y", label: "1Y" },
-  { value: "MAX", label: "Max" },
+  { value: "ALL", label: "Max" },
 ];
 
 export function AnalysisPage() {

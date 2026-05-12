@@ -171,6 +171,7 @@
     },
     "journal": {
       "empty": "Noch keine Transaktionen. Gefüllte Orders erscheinen hier chronologisch.",
+      "emptyInRange": "Keine Transaktionen im gewählten Zeitraum. Wähle einen weiteren Zeitraum, um ältere Trades zu sehen.",
       "headers": {
         "executedAt": "Ausgeführt",
         "symbol": "Symbol",
@@ -186,7 +187,16 @@
       "totalRealized": "Realisierte G/V (nach Gebühren + Steuer)",
       "totalFees": "Gebühren gesamt",
       "totalTax": "Kapitalertragssteuer gesamt",
-      "totalCount": "Transaktionen"
+      "totalCount": "Transaktionen",
+      "range": {
+        "title": "Zeitraum",
+        "7d": "7 Tage",
+        "30d": "30 Tage",
+        "90d": "90 Tage",
+        "1y": "1 Jahr",
+        "all": "Alle",
+        "filteredCount": "{{shown}} von {{total}} angezeigt"
+      }
     },
     "positions": {
       "empty": "Keine offenen Positionen.",
