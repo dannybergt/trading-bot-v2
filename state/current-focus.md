@@ -30,20 +30,31 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-09: User probiert Tool selbst + parallel weitere Wellen
+## Naechster Einstieg 2026-05-12: Welle 15c/d, 16b/c oder UI-Probelauf
 
-Phase 4e-paper (Auto-Paper-Trading-Loop) ist ausgeliefert und in `main`. Der User hat das Tool **noch nie selbst angeschaut** — naechster Sitzungsstart ist die UI-Probelauf-Anleitung, damit er endlich einen tiefen Blick auf alles werfen kann. Parallel koennen die folgenden Wellen weitergezogen werden.
+Welle 15b (Dashboard-KPIs klickbar + Hilfe-Doku auf DE) ist ausgeliefert und in `main`. Damit sind die ersten beiden Punkte aus dem User-Feedback der letzten Runde abgehakt. Aktuell offen:
+
+- **Welle 15c** — Fundamentals-Vollausbau auf AnalysisPage (WKN/ISIN/KGV/EPS/Umsatz/Gewinn/Dividenden/Estimates). Groesserer Schnitt: FMP/AlphaVantage-Wiring + UI-Section + i18n + Tests.
+- **Welle 15d** — Multi-Currency pro Asset + Datumsfilter auf AnalysisPage/PaperTrading.
+- **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts). Vergleich zum XGBoost+LightGBM+RF-Ensemble.
+- **Welle 16c** — UI-A/B-Switch zwischen Modellen + Backtest-Vergleichstabelle.
+- **UI-Probelauf** mit dem User (immer noch nicht durchgefuehrt).
+- Phase 4f echter Broker-Adapter (braucht User-Entscheidung welcher Broker zuerst).
+
+Phase 4e-paper (Auto-Paper-Trading-Loop) ist ausgeliefert und in `main`. Der User hat das Tool **noch nie selbst angeschaut** — UI-Probelauf-Anleitung waere weiterhin ein guter Einstieg.
 
 **Wichtige Klarstellung:** Alpaca ist NICHT der echte Broker des Operators. Alpaca diente bisher nur als Paper-/Quotes-Source. Der `mode=live`-Pfad ist deshalb aktuell **kein produktiver Pfad fuer echte Geld-Trades**, sondern nur Code-Path-Test gegen die Alpaca-Live-Tier. Phase 4f (echter Broker-Adapter) braucht zuerst eine User-Entscheidung welcher Broker (Trade Republic / Comdirect / Scalable / Interactive Brokers / ...).
 
-Naechste Schritte:
+Empfehlung beim naechsten Resume:
 
-1. **UI-Probelauf** mit User: Anleitung wie er den lokalen Stack startet (`bash ops/automation/start.sh`) und im Browser auf `http://localhost:18094` (Frontend) bzw. `http://localhost:18090` (Backend-API) zugreift. Login-Flow, Onboarding-Wizard, alle Pages durchgehen.
-2. **Phase 4f vorbereiten**: User-Frage nach echtem Broker beantworten, dann Broker-Adapter-Spec schreiben (REST/WebSocket-API, OAuth-Flow, Order-Lifecycle-Mapping). Erst implementieren wenn der User mit dem Paper-Loop zufrieden ist UND den Broker freigegeben hat.
-3. **Parallel-Wellen**:
-   - **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
-   - **Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
-   - **Phase 5+** — UX-Verfeinerung, Multi-Account, Backtesting-UI.
+- Wenn der User Geduld hat: **Welle 15c** (Fundamentals-Vollausbau) — beantwortet einen konkreten User-Wunsch und macht die AnalysisPage wesentlich aussagekraeftiger.
+- Wenn der User schneller Wert braucht: **Welle 15d** (Multi-Currency + Datumsfilter) — kleinerer Schnitt, sichtbar im UI.
+- **UI-Probelauf** ist weiterhin der ehrlichste naechste Schritt: der User hat das Tool noch nie selbst gesehen.
+
+Parallel-Wellen wie bisher offen:
+- **Welle 13 FinBERT-Image-Variant** — `dbergt/trading-bot-backend-finbert` als zweite Build-Stage fuer Premium-Sentiment.
+- **Welle 11 Phase B** — Capacitor + Biometric + App-Store fuer echte Native-App.
+- **Phase 5+** — UX-Verfeinerung, Multi-Account, Backtesting-UI.
 
 Wichtige Doku-Quellen vor dem Start nochmal kurz lesen:
 

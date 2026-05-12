@@ -48,6 +48,33 @@ def _docs_dir() -> Path | None:
 _TOPIC_PATTERN = re.compile(r"^[a-z0-9_-]{1,40}$")
 _PAGE_FRONTMATTER = re.compile(r"^<!--\s*page:\s*(.+?)\s*-->", re.IGNORECASE)
 _TITLE_PATTERN = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+_SUPPORTED_LOCALES = ("en", "de")
+_DEFAULT_LOCALE = "en"
+
+
+def _normalize_locale(value: str | None) -> str:
+    if not value:
+        return _DEFAULT_LOCALE
+    lower = value.strip().lower()
+    if lower in _SUPPORTED_LOCALES:
+        return lower
+    # Accept browser-style "de-DE" or "en-US"
+    short = lower.split("-", 1)[0]
+    if short in _SUPPORTED_LOCALES:
+        return short
+    return _DEFAULT_LOCALE
+
+
+def _resolve_topic_path(docs_dir: Path, slug: str, locale: str) -> Path | None:
+    # Lookup-Order: <slug>.<locale>.md (if non-default) → <slug>.md
+    if locale != _DEFAULT_LOCALE:
+        localized = docs_dir / f"{slug}.{locale}.md"
+        if localized.is_file():
+            return localized
+    fallback = docs_dir / f"{slug}.md"
+    if fallback.is_file():
+        return fallback
+    return None
 
 
 def _parse_title_and_page(content: str) -> tuple[str | None, str | None]:
@@ -60,18 +87,31 @@ def _parse_title_and_page(content: str) -> tuple[str | None, str | None]:
     return title, page
 
 
-def list_topics() -> list[dict[str, Any]]:
-    """Return the metadata for every topic file in the docs directory."""
+def list_topics(locale: str | None = None) -> list[dict[str, Any]]:
+    """Return the metadata for every topic in the docs directory.
+
+    Locale resolution: for each slug, prefer `<slug>.<locale>.md`; fall back
+    to `<slug>.md` so a partial translation still surfaces every topic. The
+    `*.<locale>.md` files are skipped at directory-iteration time so they
+    don't appear as standalone topics like `dashboard-de`.
+    """
     docs_dir = _docs_dir()
     if docs_dir is None:
         return []
+    resolved_locale = _normalize_locale(locale)
     topics: list[dict[str, Any]] = []
     for path in sorted(docs_dir.glob("*.md")):
         slug = path.stem
+        # Skip locale variants (foo.de, foo.en) — only the base slug counts.
+        if "." in slug:
+            continue
         if not _TOPIC_PATTERN.match(slug):
             continue
+        resolved = _resolve_topic_path(docs_dir, slug, resolved_locale)
+        if resolved is None:
+            continue
         try:
-            content = path.read_text(encoding="utf-8")
+            content = resolved.read_text(encoding="utf-8")
         except Exception:
             logger.exception("docs_inapp_read_failed slug=%s", slug)
             continue
@@ -81,19 +121,21 @@ def list_topics() -> list[dict[str, Any]]:
                 "slug": slug,
                 "title": title or slug.replace("-", " ").title(),
                 "page": page,
+                "locale": resolved_locale if resolved.name.endswith(f".{resolved_locale}.md") else _DEFAULT_LOCALE,
             }
         )
     return topics
 
 
-def get_topic(slug: str) -> dict[str, Any] | None:
+def get_topic(slug: str, locale: str | None = None) -> dict[str, Any] | None:
     if not slug or not _TOPIC_PATTERN.match(slug):
         return None
     docs_dir = _docs_dir()
     if docs_dir is None:
         return None
-    path = docs_dir / f"{slug}.md"
-    if not path.is_file():
+    resolved_locale = _normalize_locale(locale)
+    path = _resolve_topic_path(docs_dir, slug, resolved_locale)
+    if path is None:
         return None
     try:
         content = path.read_text(encoding="utf-8")
@@ -106,23 +148,28 @@ def get_topic(slug: str) -> dict[str, Any] | None:
         "title": title or slug.replace("-", " ").title(),
         "page": page,
         "content": content,
+        "locale": resolved_locale if path.name.endswith(f".{resolved_locale}.md") else _DEFAULT_LOCALE,
     }
 
 
-@lru_cache(maxsize=1)
-def get_page_to_topic_map() -> dict[str, str]:
+@lru_cache(maxsize=4)
+def get_page_to_topic_map(locale: str | None = None) -> dict[str, str]:
     """Map frontend route prefix → topic slug, derived from the
     `<!-- page: ... -->` annotation at the top of each markdown file.
     Used by the help drawer to look up the right topic for the
     currently-rendered page."""
     mapping: dict[str, str] = {}
-    for entry in list_topics():
+    for entry in list_topics(locale=locale):
         page = entry.get("page")
         if not page:
             continue
         normalized = page if page.startswith("/") else f"/{page}"
         mapping[normalized] = entry["slug"]
     return mapping
+
+
+def supported_locales() -> tuple[str, ...]:
+    return _SUPPORTED_LOCALES
 
 
 def reset_caches_for_tests() -> None:

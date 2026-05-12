@@ -69,7 +69,19 @@
       "trackedSymbols": "Beobachtete Symbole",
       "alertRules": "Alert-Regeln",
       "openEvents": "Offene Events",
-      "enabled": "{{count}} aktiv"
+      "enabled": "{{count}} aktiv",
+      "watchlistsAria": "Watchlists oeffnen",
+      "trackedSymbolsAria": "Watchlists oeffnen",
+      "alertRulesAria": "Alert-Regeln oeffnen",
+      "openEventsAria": "Alert-Events oeffnen"
+    },
+    "providerCoverage": {
+      "title": "Provider-Abdeckung",
+      "live": "Live",
+      "partial": "Teilweise",
+      "unavailable": "Nicht verfuegbar",
+      "research": "Research",
+      "movers": "Bewegungen"
     },
     "onboarding": {
       "title": "Einrichtungs-Fortschritt",

@@ -35,20 +35,28 @@ function resolveSlug(pathname: string, pageMap: Record<string, string>): string 
 }
 
 export function HelpDrawer() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [pageMap, setPageMap] = useState<Record<string, string> | null>(null);
   const [topic, setTopic] = useState<DocTopic | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const location = useLocation();
+  const lang = (i18n.language || "en").split("-", 1)[0];
+
+  useEffect(() => {
+    setPageMap(null);
+  }, [lang]);
 
   useEffect(() => {
     if (pageMap !== null) return;
-    apiFetch<DocsTopicsResponse>("/api/docs/topics", { skipAuth: true })
+    apiFetch<DocsTopicsResponse>(
+      `/api/docs/topics?lang=${encodeURIComponent(lang)}`,
+      { skipAuth: true },
+    )
       .then((payload) => setPageMap(payload.pageMap || {}))
       .catch(() => setPageMap({}));
-  }, [pageMap]);
+  }, [pageMap, lang]);
 
   useEffect(() => {
     if (!open || !pageMap) return;
@@ -60,11 +68,14 @@ export function HelpDrawer() {
     }
     setLoading(true);
     setError(null);
-    apiFetch<DocTopic>(`/api/docs/${slug}`, { skipAuth: true })
+    apiFetch<DocTopic>(
+      `/api/docs/${slug}?lang=${encodeURIComponent(lang)}`,
+      { skipAuth: true },
+    )
       .then((payload) => setTopic(payload))
       .catch(() => setError(t("docs.loadError")))
       .finally(() => setLoading(false));
-  }, [open, location.pathname, pageMap, t]);
+  }, [open, location.pathname, pageMap, t, lang]);
 
   return (
     <>

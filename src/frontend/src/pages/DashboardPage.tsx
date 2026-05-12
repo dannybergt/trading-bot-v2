@@ -151,10 +151,14 @@ export function DashboardPage() {
         <Stat
           label={t("dashboard.stats.watchlists")}
           value={watchlistsQuery.isLoading ? "…" : String(watchlists.length)}
+          to="/watchlists"
+          ariaLabel={t("dashboard.stats.watchlistsAria")}
         />
         <Stat
           label={t("dashboard.stats.trackedSymbols")}
           value={watchlistsQuery.isLoading ? "…" : String(totalSymbols)}
+          to="/watchlists"
+          ariaLabel={t("dashboard.stats.trackedSymbolsAria")}
         />
         <Stat
           label={t("dashboard.stats.alertRules")}
@@ -170,6 +174,8 @@ export function DashboardPage() {
                 })
               : undefined
           }
+          to="/alerts"
+          ariaLabel={t("dashboard.stats.alertRulesAria")}
         />
         <Stat
           label={t("dashboard.stats.openEvents")}
@@ -178,6 +184,8 @@ export function DashboardPage() {
               ? "…"
               : String(alertsSummaryQuery.data?.summary.openEvents ?? 0)
           }
+          to="/alerts"
+          ariaLabel={t("dashboard.stats.openEventsAria")}
         />
       </section>
 
@@ -242,18 +250,35 @@ function Stat({
   label,
   value,
   hint,
+  to,
+  ariaLabel,
 }: {
   label: string;
   value: string;
   hint?: string;
+  to?: string;
+  ariaLabel?: string;
 }) {
-  return (
-    <div className="card">
+  const body = (
+    <>
       <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
       {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <Link
+        to={to}
+        aria-label={ariaLabel ?? label}
+        data-testid={`dashboard-stat-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        className="card block transition hover:border-bergt-green/60 hover:bg-slate-900/60"
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className="card">{body}</div>;
 }
 
 function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
@@ -347,6 +372,7 @@ function ProviderCoverage({
 }: {
   data: WatchlistAlertsPayload | undefined;
 }) {
+  const { t } = useTranslation();
   if (!data) return null;
   const summary = data.summary ?? {};
   const live = summary.providerLive ?? 0;
@@ -357,15 +383,17 @@ function ProviderCoverage({
   if (live + partial + unavailable + research + movers === 0) {
     return null;
   }
+  const wlId = data.watchlist?.id;
+  const wlTarget = wlId ? `/watchlists#${encodeURIComponent(wlId)}` : "/watchlists";
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Provider coverage</h2>
+      <h2 className="text-lg font-semibold">{t("dashboard.providerCoverage.title")}</h2>
       <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-        <Mini label="Live" value={live} accent="text-bergt-green" />
-        <Mini label="Partial" value={partial} accent="text-amber-300" />
-        <Mini label="Unavailable" value={unavailable} accent="text-slate-400" />
-        <Mini label="Research" value={research} />
-        <Mini label="Movers" value={movers} />
+        <Mini label={t("dashboard.providerCoverage.live")} value={live} accent="text-bergt-green" to={wlTarget} />
+        <Mini label={t("dashboard.providerCoverage.partial")} value={partial} accent="text-amber-300" to={wlTarget} />
+        <Mini label={t("dashboard.providerCoverage.unavailable")} value={unavailable} accent="text-slate-400" to={wlTarget} />
+        <Mini label={t("dashboard.providerCoverage.research")} value={research} to={wlTarget} />
+        <Mini label={t("dashboard.providerCoverage.movers")} value={movers} to="/scanner" />
       </div>
     </section>
   );
@@ -375,18 +403,35 @@ function Mini({
   label,
   value,
   accent,
+  to,
 }: {
   label: string;
   value: number;
   accent?: string;
+  to?: string;
 }) {
-  return (
-    <div className="rounded-md border border-slate-800 bg-slate-950/40 p-2">
+  const body = (
+    <>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-0.5 text-xl font-semibold tabular-nums ${accent ?? "text-slate-200"}`}>
         {value}
       </p>
-    </div>
+    </>
+  );
+  if (to) {
+    return (
+      <Link
+        to={to}
+        aria-label={label}
+        data-testid={`dashboard-provider-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        className="block rounded-md border border-slate-800 bg-slate-950/40 p-2 transition hover:border-bergt-green/60 hover:bg-slate-900/60"
+      >
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <div className="rounded-md border border-slate-800 bg-slate-950/40 p-2">{body}</div>
   );
 }
 

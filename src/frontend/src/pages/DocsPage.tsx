@@ -20,31 +20,38 @@ type DocsTopicsResponse = {
 const ROOT_SLUG = "getting-started";
 
 export function DocsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { slug } = useParams();
   const targetSlug = slug || ROOT_SLUG;
+  const lang = (i18n.language || "en").split("-", 1)[0];
   const [topics, setTopics] = useState<DocTopic[]>([]);
   const [topic, setTopic] = useState<DocTopic | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    apiFetch<DocsTopicsResponse>("/api/docs/topics", { skipAuth: true })
+    apiFetch<DocsTopicsResponse>(
+      `/api/docs/topics?lang=${encodeURIComponent(lang)}`,
+      { skipAuth: true },
+    )
       .then((payload) => setTopics(payload.topics || []))
       .catch(() => setTopics([]));
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    apiFetch<DocTopic>(`/api/docs/${targetSlug}`, { skipAuth: true })
+    apiFetch<DocTopic>(
+      `/api/docs/${targetSlug}?lang=${encodeURIComponent(lang)}`,
+      { skipAuth: true },
+    )
       .then((payload) => setTopic(payload))
       .catch(() => {
         setTopic(null);
         setError(t("docs.missing"));
       })
       .finally(() => setLoading(false));
-  }, [targetSlug, t]);
+  }, [targetSlug, t, lang]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_1fr]" data-testid="docs-page">

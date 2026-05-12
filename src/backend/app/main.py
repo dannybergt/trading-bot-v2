@@ -1482,18 +1482,21 @@ def read_root():
     return {"status": "online", "message": "AI Trading Bot Backend V2"}
 
 @app.get("/api/docs/topics")
-def list_doc_topics():
+def list_doc_topics(lang: str | None = None):
     """Public list of in-app help topics. No auth — the docs are
-    descriptive, not sensitive."""
+    descriptive, not sensitive. `lang=de` returns the German variant
+    of any topic that has been translated; missing translations fall
+    back to English transparently."""
     return {
-        "topics": docs_service.list_topics(),
-        "pageMap": docs_service.get_page_to_topic_map(),
+        "topics": docs_service.list_topics(locale=lang),
+        "pageMap": docs_service.get_page_to_topic_map(locale=lang),
+        "supportedLocales": list(docs_service.supported_locales()),
     }
 
 
 @app.get("/api/docs/{slug}")
-def get_doc_topic(slug: str):
-    topic = docs_service.get_topic(slug)
+def get_doc_topic(slug: str, lang: str | None = None):
+    topic = docs_service.get_topic(slug, locale=lang)
     if topic is None:
         raise HTTPException(status_code=404, detail="Doc topic not found")
     return topic

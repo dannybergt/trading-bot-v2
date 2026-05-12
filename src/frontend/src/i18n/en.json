@@ -69,7 +69,19 @@
       "trackedSymbols": "Tracked symbols",
       "alertRules": "Alert rules",
       "openEvents": "Open events",
-      "enabled": "{{count}} enabled"
+      "enabled": "{{count}} enabled",
+      "watchlistsAria": "Open watchlists",
+      "trackedSymbolsAria": "Open watchlists",
+      "alertRulesAria": "Open alert rules",
+      "openEventsAria": "Open alert events"
+    },
+    "providerCoverage": {
+      "title": "Provider coverage",
+      "live": "Live",
+      "partial": "Partial",
+      "unavailable": "Unavailable",
+      "research": "Research",
+      "movers": "Movers"
     },
     "onboarding": {
       "title": "Setup progress",

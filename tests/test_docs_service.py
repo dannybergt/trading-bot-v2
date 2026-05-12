@@ -80,5 +80,72 @@ class DocsServiceTests(unittest.TestCase):
             self.assertIsNone(self.docs_service.get_topic(unsafe))
 
 
+class DocsServiceLocaleTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.docs_dir = Path(self._tmp.name)
+        (self.docs_dir / "dashboard.md").write_text(
+            "<!-- page: / -->\n# Dashboard\n\nLanding page.\n",
+            encoding="utf-8",
+        )
+        (self.docs_dir / "dashboard.de.md").write_text(
+            "<!-- page: / -->\n# Dashboard DE\n\nStartseite.\n",
+            encoding="utf-8",
+        )
+        (self.docs_dir / "watchlists.md").write_text(
+            "<!-- page: /watchlists -->\n# Watchlists\n\nEnglish only.\n",
+            encoding="utf-8",
+        )
+        os.environ["DOCS_INAPP_DIR"] = str(self.docs_dir)
+        for module_name in list(sys.modules):
+            if module_name.startswith("app.docs_service"):
+                del sys.modules[module_name]
+        from app import docs_service  # noqa: WPS433
+
+        docs_service.reset_caches_for_tests()
+        self.docs_service = docs_service
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        os.environ.pop("DOCS_INAPP_DIR", None)
+
+    def test_list_topics_de_returns_translated_title_and_falls_back(self):
+        topics = self.docs_service.list_topics(locale="de")
+        by_slug = {entry["slug"]: entry for entry in topics}
+        self.assertEqual({"dashboard", "watchlists"}, set(by_slug.keys()))
+        self.assertEqual("Dashboard DE", by_slug["dashboard"]["title"])
+        self.assertEqual("de", by_slug["dashboard"]["locale"])
+        # English-only topic still appears, marked as default locale
+        self.assertEqual("Watchlists", by_slug["watchlists"]["title"])
+        self.assertEqual("en", by_slug["watchlists"]["locale"])
+
+    def test_get_topic_de_serves_translated_content(self):
+        topic = self.docs_service.get_topic("dashboard", locale="de")
+        self.assertIsNotNone(topic)
+        self.assertIn("Startseite", topic["content"])
+        self.assertEqual("de", topic["locale"])
+
+    def test_get_topic_de_falls_back_to_english(self):
+        topic = self.docs_service.get_topic("watchlists", locale="de")
+        self.assertIsNotNone(topic)
+        self.assertIn("English only", topic["content"])
+        self.assertEqual("en", topic["locale"])
+
+    def test_locale_normalization_accepts_browser_form(self):
+        topic = self.docs_service.get_topic("dashboard", locale="de-DE")
+        self.assertIsNotNone(topic)
+        self.assertEqual("de", topic["locale"])
+
+    def test_unsupported_locale_falls_back_to_default(self):
+        topic = self.docs_service.get_topic("dashboard", locale="fr")
+        self.assertIsNotNone(topic)
+        self.assertEqual("en", topic["locale"])
+        self.assertIn("Landing page", topic["content"])
+
+    def test_locale_variant_files_dont_become_standalone_topics(self):
+        slugs = {entry["slug"] for entry in self.docs_service.list_topics()}
+        self.assertNotIn("dashboard.de", slugs)
+
+
 if __name__ == "__main__":
     unittest.main()
