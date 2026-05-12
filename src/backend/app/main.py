@@ -2363,6 +2363,31 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
         logger.exception("symbol_search_failed query=%s", query)
         return []
 
+@app.get("/api/fx/rates")
+def get_fx_rates(base: str = "USD"):
+    """ECB reference rates via frankfurter.app, cached server-side for 60 min.
+
+    No auth — the rates are public. Returns `{base, date, rates, supported}`
+    where `rates` includes an identity entry `{base: 1.0}` so callers can
+    treat the dict uniformly. Returns 503 when the upstream is unreachable
+    so the frontend can fall back to "no conversion" mode.
+    """
+    from app.fx_service import get_fx_service, SUPPORTED_CURRENCIES
+
+    payload = get_fx_service().get_rates(base=base)
+    if payload is None:
+        # Surface a degraded but valid shape — identity rate so the UI
+        # keeps rendering instead of erroring out.
+        return {
+            "base": (base or "USD").upper(),
+            "date": None,
+            "rates": {(base or "USD").upper(): 1.0},
+            "supported": list(SUPPORTED_CURRENCIES),
+            "degraded": True,
+        }
+    return payload
+
+
 @app.get("/api/macro/calendar")
 def get_macro_calendar(current_user: User = Depends(get_current_user)):
     """Macro calendar: treasury yields, commodities, and upcoming FRED releases.

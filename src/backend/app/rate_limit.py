@@ -103,6 +103,7 @@ class ProviderRateLimitRegistry:
         "twelve_data": (0.13, 5),  # ~8 req/min on the free tier
         "rss": (1.0, 10),  # public RSS feeds — generous, but cached 5 min
         "fred": (1.5, 10),  # free tier ~120 req/min; very generous for our use
+        "fx": (1.0, 5),  # frankfurter.app — no documented limit; refreshes daily
     }
 
     def __init__(self) -> None:

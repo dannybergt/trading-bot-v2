@@ -16,7 +16,10 @@ type PortfolioSettings = {
   min_target_yield: number;
   capital_gains_tax_bps: number;
   income_tax_bps: number;
+  display_currency: string;
 };
+
+const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"] as const;
 
 type MfaSetup = {
   secret: string;
@@ -158,6 +161,7 @@ function PortfolioSection() {
   const [minYield, setMinYield] = useState(0);
   const [capitalGainsPct, setCapitalGainsPct] = useState(0);
   const [incomeTaxPct, setIncomeTaxPct] = useState(0);
+  const [displayCurrency, setDisplayCurrency] = useState("USD");
 
   useEffect(() => {
     if (query.data) {
@@ -166,6 +170,7 @@ function PortfolioSection() {
       setMinYield(query.data.min_target_yield);
       setCapitalGainsPct((query.data.capital_gains_tax_bps ?? 0) / 100);
       setIncomeTaxPct((query.data.income_tax_bps ?? 0) / 100);
+      setDisplayCurrency(query.data.display_currency || "USD");
     }
   }, [query.data]);
 
@@ -188,6 +193,7 @@ function PortfolioSection() {
       min_target_yield: Number(minYield) || 0,
       capital_gains_tax_bps: Math.round((Number(capitalGainsPct) || 0) * 100),
       income_tax_bps: Math.round((Number(incomeTaxPct) || 0) * 100),
+      display_currency: displayCurrency,
     });
   }
 
@@ -263,6 +269,21 @@ function PortfolioSection() {
             onChange={(event) => setIncomeTaxPct(Number(event.target.value))}
             placeholder="0 if not applicable"
           />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-300">Display currency</span>
+          <select
+            className="input"
+            value={displayCurrency}
+            onChange={(event) => setDisplayCurrency(event.target.value)}
+            data-testid="settings-display-currency"
+          >
+            {SUPPORTED_CURRENCIES.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
         </label>
         <div className="sm:col-span-3 text-xs text-slate-500">
           Capital-gains rate dominates if both are set; income-tax fallback

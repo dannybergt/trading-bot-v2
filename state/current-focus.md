@@ -30,11 +30,13 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-12: Welle 15f (FX-Konvertierung), 16b/c oder UI-Probelauf
+## Naechster Einstieg 2026-05-12: Welle 16b/c oder UI-Probelauf
 
-Welle 15b (Dashboard-KPIs klickbar + Hilfe-Doku auf DE), Welle 15c (Fundamentals-Vollausbau auf AnalysisPage), Welle 15d (Datumsfilter: Chart-Range MAX-Bug + Trade-Journal-Filter) und Welle 15e (Currency-Anzeige pro Asset — info.currency durchreichen, Quote-Header/FundamentalsSection mit Currency-Suffix) sind ausgeliefert und in `main`. Damit zeigen Aktien jetzt ihre native Currency. Aktuell offen:
+Welle 15b-15f komplett: Dashboard-KPIs klickbar + DE-Hilfe (15b), Fundamentals-Vollausbau (15c), Datumsfilter Chart-MAX + Trade-Journal (15d), native Currency pro Asset (15e), User-Display-Currency + FX-Konvertierung (15f). Damit ist die komplette 15er-Welle aus dem User-Feedback durch.
 
-- **Welle 15f** — User-Display-Currency mit FX-Konvertierung (frankfurter.app oder ECB-Reference-Rates als FX-Provider, per-User-Anzeige-Waehrung als Setting, Migration aller relevanten Money-Anzeigen). Welle 15e zeigt nur die native Currency; 15f wuerde sie auf einen User-bevorzugten Wert (z.B. EUR) konvertieren.
+Welle 15f Details: FX-Service via frankfurter.app (ECB-Reference-Rates, kein API-Key, 60min Cache), neuer `GET /api/fx/rates?base=USD`-Endpoint, User-Model um `display_currency` (Alembic 0008) erweitert, Frontend hat `useDisplayCurrency` + `useFxRates` + `convertMoney`-Helper, SettingsPage hat einen Currency-Dropdown, AnalysisPage-Quote-Header zeigt konvertierten Wert + Native-Wert als Hint. Die weitere UI-Migration (PaperTrading-Journal, Dashboard-Werte, FundamentalsSection) bleibt bewusst offen — das ist Inkrement und kann pro Welle einzeln nachgezogen werden.
+
+Aktuell offen:
 - **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts). Vergleich zum XGBoost+LightGBM+RF-Ensemble.
 - **Welle 16c** — UI-A/B-Switch zwischen Modellen + Backtest-Vergleichstabelle.
 - **UI-Probelauf** mit dem User (immer noch nicht durchgefuehrt).

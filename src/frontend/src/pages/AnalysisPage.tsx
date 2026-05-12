@@ -13,6 +13,8 @@ import {
   type ChartZones,
 } from "../components/StockChart";
 import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumeProfile";
+import { useDisplayCurrency } from "../hooks/useDisplayCurrency";
+import { convertMoney, useFxRates } from "../hooks/useFxRates";
 
 type FeatureContribution = {
   feature: string;
@@ -565,6 +567,15 @@ export function AnalysisPage() {
       ? ((lastClose - firstClose) / firstClose) * 100
       : null;
 
+  const displayCurrency = useDisplayCurrency();
+  const fxRatesQuery = useFxRates("USD");
+  const nativeCurrency = stock?.info?.currency || "USD";
+  const isConverted = nativeCurrency !== displayCurrency;
+  const lastCloseConverted =
+    isConverted && lastClose != null
+      ? convertMoney(lastClose, nativeCurrency, displayCurrency, fxRatesQuery.data?.rates)
+      : lastClose;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
@@ -588,11 +599,14 @@ export function AnalysisPage() {
           {lastClose != null ? (
             <div className="text-right">
               <p className="text-3xl font-semibold tabular-nums">
-                {lastClose.toFixed(2)}
-                <span className="ml-1 text-base text-slate-400">
-                  {stock?.info?.currency || "USD"}
-                </span>
+                {(lastCloseConverted ?? lastClose).toFixed(2)}
+                <span className="ml-1 text-base text-slate-400">{displayCurrency}</span>
               </p>
+              {isConverted ? (
+                <p className="text-[10px] text-slate-500">
+                  {lastClose.toFixed(2)} {nativeCurrency} → {displayCurrency}
+                </p>
+              ) : null}
               {periodChangePct != null ? (
                 <p
                   className={`text-sm tabular-nums ${

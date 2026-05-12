@@ -32,6 +32,10 @@ class User(Base):
     # Optional income-tax fallback in basis points for jurisdictions/brokers
     # that tax short-term gains as ordinary income.
     income_tax_bps = Column(Integer, default=0)
+    # ISO-4217 currency code the user wants money values displayed in. The
+    # actual conversion happens client-side against FX rates served from
+    # `/api/fx/rates`; this field only persists the preference.
+    display_currency = Column(String(8), default="USD", server_default="USD", nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")

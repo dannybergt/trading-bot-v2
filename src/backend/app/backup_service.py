@@ -79,6 +79,7 @@ class BackupService:
                         "min_target_yield": user.min_target_yield,
                         "capital_gains_tax_bps": user.capital_gains_tax_bps or 0,
                         "income_tax_bps": user.income_tax_bps or 0,
+                        "display_currency": user.display_currency or "USD",
                         "created_at": user.created_at.isoformat() if user.created_at else None,
                     }
                     for user in users
@@ -352,6 +353,7 @@ class BackupService:
                     min_target_yield=record.get("min_target_yield", 1),
                     capital_gains_tax_bps=record.get("capital_gains_tax_bps", 0),
                     income_tax_bps=record.get("income_tax_bps", 0),
+                    display_currency=record.get("display_currency") or "USD",
                 )
             )
 

@@ -159,6 +159,7 @@ class PortfolioSettingsResponse(BaseModel):
     min_target_yield: int
     capital_gains_tax_bps: int = 0
     income_tax_bps: int = 0
+    display_currency: str = "USD"
 
 class PortfolioSettingsRequest(BaseModel):
     trade_fee_absolute: int
@@ -166,6 +167,7 @@ class PortfolioSettingsRequest(BaseModel):
     min_target_yield: int
     capital_gains_tax_bps: int = 0
     income_tax_bps: int = 0
+    display_currency: str = "USD"
 
 class PushSubscriptionRequest(BaseModel):
     endpoint: str
@@ -373,15 +375,25 @@ def get_my_portfolio_settings(current_user: User = Depends(get_current_user)):
         "min_target_yield": current_user.min_target_yield,
         "capital_gains_tax_bps": current_user.capital_gains_tax_bps or 0,
         "income_tax_bps": current_user.income_tax_bps or 0,
+        "display_currency": current_user.display_currency or "USD",
     }
 
 @router.put("/me/portfolio-settings", response_model=PortfolioSettingsResponse)
 def update_my_portfolio_settings(req: PortfolioSettingsRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.fx_service import SUPPORTED_CURRENCIES
+
     current_user.trade_fee_absolute = req.trade_fee_absolute
     current_user.trade_fee_percent = req.trade_fee_percent
     current_user.min_target_yield = req.min_target_yield
     current_user.capital_gains_tax_bps = max(0, min(req.capital_gains_tax_bps, 10000))
     current_user.income_tax_bps = max(0, min(req.income_tax_bps, 10000))
+    # display_currency: validate against the supported set; fall back to USD
+    # rather than 400 so an older client without the field doesn't break.
+    requested_currency = (req.display_currency or "USD").upper().strip()
+    if requested_currency in SUPPORTED_CURRENCIES:
+        current_user.display_currency = requested_currency
+    else:
+        current_user.display_currency = "USD"
     db.commit()
     audit_service.log_event(
         db,
@@ -393,6 +405,7 @@ def update_my_portfolio_settings(req: PortfolioSettingsRequest, current_user: Us
             "min_target_yield": req.min_target_yield,
             "capital_gains_tax_bps": current_user.capital_gains_tax_bps,
             "income_tax_bps": current_user.income_tax_bps,
+            "display_currency": current_user.display_currency,
         },
     )
     return get_my_portfolio_settings(current_user)
