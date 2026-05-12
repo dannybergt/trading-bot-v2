@@ -103,6 +103,7 @@ type StockResponse = {
   info?: {
     sector?: string;
     industry?: string;
+    currency?: string;
     marketCap?: number;
     dividendYield?: number;
     trailingPE?: number;
@@ -588,6 +589,9 @@ export function AnalysisPage() {
             <div className="text-right">
               <p className="text-3xl font-semibold tabular-nums">
                 {lastClose.toFixed(2)}
+                <span className="ml-1 text-base text-slate-400">
+                  {stock?.info?.currency || "USD"}
+                </span>
               </p>
               {periodChangePct != null ? (
                 <p
@@ -1136,17 +1140,21 @@ function FundamentalsSection({
   provider: StockResponse["provider"];
 }) {
   if (!info) return null;
+  const currency = info.currency || "USD";
   const entries: Array<[string, string]> = [];
   if (info.sector) entries.push(["Sector", info.sector]);
   if (info.industry) entries.push(["Industry", info.industry]);
-  if (info.marketCap) entries.push(["Market cap", formatLarge(info.marketCap)]);
+  if (info.marketCap)
+    entries.push(["Market cap", `${formatLarge(info.marketCap)} ${currency}`]);
   if (info.dividendYield)
     entries.push(["Dividend yield", `${(info.dividendYield * 100).toFixed(2)}%`]);
   if (info.trailingPE) entries.push(["Trailing P/E", info.trailingPE.toFixed(1)]);
   if (info.forwardPE) entries.push(["Forward P/E", info.forwardPE.toFixed(1)]);
   if (info.priceToBook) entries.push(["P/B", info.priceToBook.toFixed(2)]);
-  if (info["52WeekHigh"]) entries.push(["52W high", info["52WeekHigh"].toFixed(2)]);
-  if (info["52WeekLow"]) entries.push(["52W low", info["52WeekLow"].toFixed(2)]);
+  if (info["52WeekHigh"])
+    entries.push(["52W high", `${info["52WeekHigh"].toFixed(2)} ${currency}`]);
+  if (info["52WeekLow"])
+    entries.push(["52W low", `${info["52WeekLow"].toFixed(2)} ${currency}`]);
   if (entries.length === 0) return null;
   return (
     <section className="card">

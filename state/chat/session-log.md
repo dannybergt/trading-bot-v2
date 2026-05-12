@@ -505,3 +505,16 @@
   (5) **Tests**: rein clientseitiger Schnitt — keine neuen Unit-Tests, kein Backend-Impact. UI-Regression deckt den Journal-Tab schon ab; mit Default `all` aendert sich das Verhalten nicht.
   Verifikation: `bash ops/automation/build.sh` ok, `bash ops/automation/test.sh` 224 Unit-Tests OK (unveraendert), `SKIP_BUILD=1 bash tests/run-api-regression.sh` gruen, `SKIP_BUILD=1 bash tests/run-ui-regression.sh` gruen (ui_macro_context diesmal auch ok, ui_admin best-effort wie immer).
   Offen: Welle 15e (Multi-Currency pro Asset) als naechster Schnitt — kann auf `fundamentalsDetail.currency` aufsetzen, braucht aber FX-Provider-Adapter (frankfurter.app oder ECB-Reference-Rates), per-User-Anzeige-Waehrung als Setting, und Migration aller $-Anzeigen. Welle 16b (N-BEATS) bleibt ML-Track. UI-Probelauf mit User immer noch offen.
+
+
+- Datum: 2026-05-12
+  Kontext: User-Auftrag "mach weiter" — vierter Eigeninitiative-Schnitt in dieser Sitzung. Welle 15e gezogen. "Currency-Umstellung pro Asset" pragmatisch als "native Currency pro Asset anzeigen" interpretiert; User-Display-Currency-mit-FX-Konvertierung auf neue Welle 15f geschoben.
+  Erledigt:
+  (1) **Backend-Currency-Pfad**: drei Provider-Adapter reichen `currency` durch. `services.get_stock_data` setzt `info["currency"] = tickerInfo.get("currency") or "USD"` (yfinance liefert das Feld bereits zuverlaessig). `fmp_service.normalized_ticker_info` ergaenzt um `currency: profile.get("currency")` (None-Stripping bleibt aktiv). `twelve_data_service.normalized_ticker_info` analog mit `currency: profile.get("currency") or quote.get("currency")` (Twelve Data liefert beide Stellen).
+  (2) **Frontend-Type**: `StockResponse.info` um `currency?: string` erweitert in `AnalysisPage.tsx`.
+  (3) **Quote-Header**: lastClose-Anzeige im AnalysisPage-Header zeigt jetzt `{lastClose} {currency}` mit USD-Fallback. Visuell als kleines Suffix in slate-400 neben dem grossen 3xl-Preis.
+  (4) **FundamentalsSection**: Market-Cap, 52W-High und 52W-Low haengen `{currency}` an. P/E, P/B, Dividend-Yield bleiben einheitenlos (Ratios und Prozente sind Currency-unabhaengig).
+  (5) **FundamentalsDetailSection** (Welle 15c) hat `detail.currency` schon genutzt — keine Aenderung noetig. Damit sind alle expliziten Money-Werte auf der AnalysisPage Currency-bewusst.
+  (6) **PaperTrading/Dashboard bewusst nicht angefasst**: die Trades mischen aus verschiedenen Symbol-Currencies; eine korrekte Anzeige braucht die FX-Konvertierung aus Welle 15f. Sie als USD-implizit zu lassen ist ehrlicher als sie mit der ersten Trade-Currency zu beschriften.
+  Verifikation: `bash ops/automation/build.sh` ok, `bash ops/automation/test.sh` 224 Unit-Tests OK (keine neuen Tests noetig — `currency` ist Pass-Through, `test_normalized_ticker_info_covers_yfinance_subset` bleibt kompatibel weil das neue Feld nur additiv ist), `SKIP_BUILD=1 bash tests/run-api-regression.sh` gruen, `SKIP_BUILD=1 bash tests/run-ui-regression.sh` gruen (`ui_macro_context` und `ui_admin` best-effort wie dokumentiert).
+  Offen: Welle 15f (User-Display-Currency + FX-Konvertierung) wenn der User die Currency-Wahl freischalten will. Welle 16b (N-BEATS) bleibt ML-Track. UI-Probelauf mit User immer noch offen.

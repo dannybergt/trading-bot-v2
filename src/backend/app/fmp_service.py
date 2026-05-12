@@ -794,6 +794,7 @@ class FmpService:
             "longName": profile.get("companyName"),
             "sector": profile.get("sector"),
             "industry": profile.get("industry"),
+            "currency": profile.get("currency"),
             "marketCap": profile.get("mktCap"),
             "fiftyTwoWeekHigh": (
                 _parse_range_high(profile.get("range")) if profile.get("range") else None

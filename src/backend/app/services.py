@@ -417,6 +417,7 @@ class MarketDataService:
             'shortName': asset_profile['name'],
             'sector': tickerInfo.get('sector', 'N/A'),
             'industry': tickerInfo.get('industry', 'N/A'),
+            'currency': tickerInfo.get('currency') or 'USD',
             'marketCap': tickerInfo.get('marketCap', 0),
             'dividendYield': tickerInfo.get('dividendYield', 0),
             '52WeekHigh': tickerInfo.get('fiftyTwoWeekHigh', 0),

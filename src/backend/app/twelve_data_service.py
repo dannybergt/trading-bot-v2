@@ -137,6 +137,7 @@ class TwelveDataService:
             "longName": profile.get("name"),
             "sector": profile.get("sector"),
             "industry": profile.get("industry"),
+            "currency": profile.get("currency") or quote.get("currency"),
             "marketCap": _safe_int(valuations.get("market_capitalization")),
             "fiftyTwoWeekHigh": _safe_float(quote.get("fifty_two_week", {}).get("high"))
             if isinstance(quote.get("fifty_two_week"), dict)
