@@ -754,7 +754,11 @@ function DataQualitySection({ report }: { report?: DataQualityReport }) {
             <div className="mt-0.5 text-sm font-medium">
               {field.confidence}
             </div>
-            <div className="text-[10px] opacity-80">{field.provider}</div>
+            <div className="text-[10px] opacity-80">
+              {typeof field.provider === "string"
+                ? field.provider
+                : (field.provider as { source?: string } | null)?.source ?? "—"}
+            </div>
           </li>
         ))}
       </ul>

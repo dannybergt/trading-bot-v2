@@ -292,10 +292,21 @@ def evaluate_symbol_data_quality(
     # News
     news = research.get("news") or {}
     news_items = news.get("items") or []
+    # `news.get("provider")` may be a dict (`{status, source, assetClass,
+    # lastUpdated}` from `services.get_market_news`) or a string. The
+    # frontend treats this field as a plain string and rendering a dict
+    # directly throws React error #31 — extract `source` and fall back.
+    news_provider_raw = news.get("provider")
+    if isinstance(news_provider_raw, dict):
+        news_provider = news_provider_raw.get("source") or None
+    elif isinstance(news_provider_raw, str):
+        news_provider = news_provider_raw
+    else:
+        news_provider = None
     if isinstance(news_items, list) and len(news_items) >= 3:
-        fields.append(_field("news", FULL, news.get("provider") or "Alpaca / FMP / Alpha Vantage"))
+        fields.append(_field("news", FULL, news_provider or "Alpaca / FMP / Alpha Vantage"))
     elif isinstance(news_items, list) and len(news_items) > 0:
-        fields.append(_field("news", PARTIAL, news.get("provider") or "single news provider"))
+        fields.append(_field("news", PARTIAL, news_provider or "single news provider"))
     else:
         fields.append(_field("news", MISSING, "no recent news"))
 

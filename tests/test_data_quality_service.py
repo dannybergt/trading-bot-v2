@@ -151,6 +151,46 @@ class DataQualityServiceTests(unittest.TestCase):
         )
         self.assertEqual("low", dq._overall_confidence(fields))
 
+    def test_news_provider_dict_is_flattened_to_source_string(self):
+        """Backend services.get_market_news ships `news.provider` as a dict
+        (`{status, source, assetClass, lastUpdated}`). The data-quality
+        report exposes `provider` as a flat string to the frontend — a
+        dict here used to crash AnalysisPage with React error #31."""
+        payload = _full_research_payload()
+        payload["news"] = {
+            "items": [{"title": "a"}, {"title": "b"}, {"title": "c"}],
+            "provider": {
+                "status": "live",
+                "source": "benzinga",
+                "assetClass": "stock",
+                "lastUpdated": "2026-05-13T17:00:00Z",
+            },
+        }
+        report = dq.evaluate_symbol_data_quality(
+            symbol="NVDA",
+            asset_class="stock",
+            research_payload=payload,
+            stock_payload=_stock_payload(),
+        )
+        news_field = next(f for f in report["fields"] if f["key"] == "news")
+        self.assertIsInstance(news_field["provider"], str)
+        self.assertEqual(news_field["provider"], "benzinga")
+
+    def test_news_provider_string_passes_through(self):
+        payload = _full_research_payload()
+        payload["news"] = {
+            "items": [{"title": "a"}, {"title": "b"}, {"title": "c"}],
+            "provider": "Alpha Vantage",
+        }
+        report = dq.evaluate_symbol_data_quality(
+            symbol="NVDA",
+            asset_class="stock",
+            research_payload=payload,
+            stock_payload=_stock_payload(),
+        )
+        news_field = next(f for f in report["fields"] if f["key"] == "news")
+        self.assertEqual(news_field["provider"], "Alpha Vantage")
+
 
 if __name__ == "__main__":
     unittest.main()
