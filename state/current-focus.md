@@ -30,6 +30,21 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
+## Naechster Einstieg 2026-05-13: UI-Probelauf laeuft, Bug 15g gefixt
+
+User hat den ersten echten UI-Probelauf am 2026-05-13 gestartet (lokaler Stack auf `trading-bot-v2-backend:local`+`trading-bot-v2-frontend:local`, gepuncht via direktes `docker compose up -d` weil `dbergt/trading-bot-backend:latest` aktuell nur per `docker login` ziehbar ist und der lokale Klon 3 Wochen alt war). Erster Bug-Fund: `/admin`-Seite rendert komplett schwarz. Ursache war ein API-Schema-Drift: `GET /api/admin/backups` liefert `{"items": [...]}`, `AdminPage.BackupsSection` rief `.map()` auf das Wrapper-Objekt → `TypeError: (n.data ?? []).map is not a function` → React reisst den gesamten Tree ab. Fix: Query-Type auf `{items: BackupListItem[]}`, `const backups = backupsQuery.data?.items ?? []`, Renderpfad nutzt `backups`. UI-Regression assertiert jetzt zusaetzlich das "Backups"-Heading, damit ein Re-Drift nicht wieder als `ui_admin best_effort_skipped` durchrutscht. Der veraltete `React.lazy`-Kommentar im UI-Regression-Code ist mitkorrigiert (AdminPage ist seit l. mehreren Wellen kein Lazy-Chunk mehr).
+
+Aktiver Stack laeuft weiterhin lokal (BACKEND_PORT=18090, FRONTEND_PORT=18094). Postgres-Volume ist persistiert, Alembic ist auf head (`0008_add_user_display_currency`, rev `d5e6f7a8b9c0`). 2 Admin-User existieren (`superadmin@local.de`, `dannybergt@yahoo.de`), 4 Watchlists ("Tech Giants"+"Crypto Proxies" pro User mit AAPL/MSFT/NVDA/GOOGL bzw. COIN/MSTR/MARA).
+
+Zweiter offener Befund aus dem Probelauf (noch nicht gefixt): `GET /api/watchlists/{id}/alerts` liefert HTTP 500 (mehrfach gesehen fuer Watchlist `7433d431`). Stacktrace noch nicht eingeholt — naechster Schritt wenn der User weiter macht.
+
+Aktuell offen:
+- **Watchlist-Alert-500** auf `/api/watchlists/{id}/alerts` analysieren + fixen (Backend-Stacktrace noetig).
+- **UI-Probelauf** weiterlaufen lassen; weitere Feedback-Wellen 15g+ sind absehbar.
+- **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts). Vergleich zum XGBoost+LightGBM+RF-Ensemble.
+- **Welle 16c** — UI-A/B-Switch zwischen Modellen + Backtest-Vergleichstabelle.
+- Phase 4f echter Broker-Adapter (braucht User-Entscheidung welcher Broker zuerst).
+
 ## Naechster Einstieg 2026-05-12: Welle 16b/c oder UI-Probelauf
 
 Welle 15b-15f komplett: Dashboard-KPIs klickbar + DE-Hilfe (15b), Fundamentals-Vollausbau (15c), Datumsfilter Chart-MAX + Trade-Journal (15d), native Currency pro Asset (15e), User-Display-Currency + FX-Konvertierung (15f). Damit ist die komplette 15er-Welle aus dem User-Feedback durch.

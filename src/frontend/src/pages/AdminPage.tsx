@@ -316,8 +316,9 @@ function BackupsSection() {
   const queryClient = useQueryClient();
   const backupsQuery = useQuery({
     queryKey: ["admin-backups"],
-    queryFn: () => apiFetch<BackupListItem[]>("/api/admin/backups"),
+    queryFn: () => apiFetch<{ items: BackupListItem[] }>("/api/admin/backups"),
   });
+  const backups = backupsQuery.data?.items ?? [];
 
   const createBackup = useMutation({
     mutationFn: () => apiFetch("/api/admin/backups", { method: "POST" }),
@@ -364,7 +365,7 @@ function BackupsSection() {
         ) : null}
       </div>
       <ul className="space-y-2">
-        {(backupsQuery.data ?? []).map((backup) => (
+        {backups.map((backup) => (
           <li
             key={backup.filename}
             className="card flex flex-wrap items-center justify-between gap-3"
@@ -385,7 +386,7 @@ function BackupsSection() {
             </button>
           </li>
         ))}
-        {backupsQuery.data && backupsQuery.data.length === 0 ? (
+        {backupsQuery.data && backups.length === 0 ? (
           <p className="text-sm text-slate-500">No backups yet.</p>
         ) : null}
       </ul>

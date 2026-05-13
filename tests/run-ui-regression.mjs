@@ -422,12 +422,11 @@ async function run() {
     `);
 
     if (isAdmin) {
-      // AdminPage is lazy-loaded via React.lazy + Suspense. The chunk arrives
-      // asynchronously after navigate; in headless CI runs we sometimes catch
-      // the page mid-bootstrap. Treat the admin assertions as best-effort:
-      // if the chunk doesn't render within 30s we log a soft skip rather
-      // than failing the whole regression. AdminPage functionality is also
-      // covered indirectly by the API regression's admin endpoints.
+      // AdminPage rendert direkt (kein React.lazy mehr) — Runtime-Errors hier
+      // sind echte Bugs, kein Suspense-Race. Wir assertieren das Backups-Panel
+      // explizit, weil dort schon ein Schema-Drift ({items: [...]}) gerendert
+      // werden muss; wenn `.map()` auf dem Objekt fehlschlaegt, killt React
+      // den ganzen Tree und das Heading verschwindet wieder.
       try {
         await navigate(client, `${FRONTEND_URL}/admin`);
         await waitForCondition(
@@ -441,6 +440,12 @@ async function run() {
           "admin users table",
           "!!document.querySelector('table')",
           20000,
+        );
+        await waitForCondition(
+          client,
+          "admin backups section",
+          "(document.body.textContent || '').includes('Backups')",
+          10000,
         );
         console.log("ui_admin ok");
       } catch (error) {
