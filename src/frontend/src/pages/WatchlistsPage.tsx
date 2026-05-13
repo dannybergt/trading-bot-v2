@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "../api/client";
@@ -237,14 +238,18 @@ function WatchlistCard({
           {watchlist.items.map((item) => (
             <li
               key={item.symbol}
-              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm transition hover:border-bergt-green/50"
             >
-              <div>
+              <Link
+                to={`/analysis/${encodeURIComponent(item.symbol)}`}
+                className="flex-1 min-w-0 -mx-3 -my-2 px-3 py-2 hover:text-bergt-green focus:outline-none focus:text-bergt-green"
+                title={`Analyse fuer ${item.symbol} oeffnen`}
+              >
                 <p className="font-medium">{item.symbol}</p>
                 {item.name ? (
                   <p className="text-xs text-slate-500">{item.name}</p>
                 ) : null}
-              </div>
+              </Link>
               <div className="flex flex-wrap items-center gap-1">
                 {item.assetLabel ? (
                   <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">
