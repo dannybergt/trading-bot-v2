@@ -71,9 +71,17 @@ class FredService:
     """Wraps the FRED REST API with caching + rate limiting."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = (api_key if api_key is not None else os.getenv("FRED_API_KEY", "")).strip()
+        self._api_key_override = api_key.strip() if isinstance(api_key, str) else None
         self._series_cache: dict[str, dict[str, Any]] = {}
         self._calendar_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
+
+    @property
+    def api_key(self) -> str:
+        if self._api_key_override is not None:
+            return self._api_key_override
+        from app import platform_config
+
+        return (platform_config.get_value_with_short_session("FRED_API_KEY") or "").strip()
 
     @property
     def configured(self) -> bool:

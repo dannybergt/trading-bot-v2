@@ -55,9 +55,18 @@ def _parse_feed_env(raw: str | None) -> list[dict[str, str]] | None:
 
 class RssNewsService:
     def __init__(self, feeds: list[dict[str, str]] | None = None) -> None:
-        configured = _parse_feed_env(os.getenv("RSS_NEWS_FEEDS"))
-        self.feeds = feeds or configured or list(DEFAULT_FEEDS)
+        self._feeds_override = feeds
         self._cache: dict[str, dict[str, Any]] = {}
+
+    @property
+    def feeds(self) -> list[dict[str, str]]:
+        if self._feeds_override:
+            return self._feeds_override
+        from app import platform_config
+
+        managed = platform_config.get_value_with_short_session("RSS_NEWS_FEEDS")
+        configured = _parse_feed_env(managed)
+        return configured or list(DEFAULT_FEEDS)
 
     def get_items(self, *, limit: int = 50) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []

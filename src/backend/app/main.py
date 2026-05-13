@@ -2219,6 +2219,158 @@ def list_data_sources(admin: User = Depends(get_current_admin_user)):
     return {"providers": data_quality_service.get_provider_catalogue()}
 
 
+# ---- Platform configuration (managed provider keys) ------------------------
+# Admin UI lets operators set/unset a small allowlist of operational keys
+# (Alpha Vantage, FMP, etc.) without editing `.env.local` and restarting.
+# Values are encrypted at rest, read-precedence is DB > env > None, and a
+# 60s in-memory cache (in `platform_config`) keeps the hot path off the DB.
+
+class PlatformConfigValueRequest(BaseModel):
+    value: str = Field(..., min_length=1, max_length=2048)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+@app.get("/api/admin/platform-config")
+def list_platform_config(
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app import platform_config as _platform_config
+
+    items = [
+        {
+            "key": item.key,
+            "source": item.source,
+            "configured": item.configured,
+            "lastUpdatedAt": item.last_updated_at,
+            "lastUpdatedByUserId": item.last_updated_by_user_id,
+        }
+        for item in _platform_config.list_status(db)
+    ]
+    return {"items": items, "managedKeys": sorted(_platform_config.MANAGED_KEYS)}
+
+
+@app.put("/api/admin/platform-config/{key}")
+def set_platform_config(
+    key: str,
+    payload: PlatformConfigValueRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app import platform_config as _platform_config
+
+    if not _platform_config.is_managed(key):
+        raise HTTPException(status_code=400, detail="key is not managed")
+    try:
+        _platform_config.set_value(
+            db, key, payload.value, updated_by_user_id=admin.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_PLATFORM_CONFIG_UPDATE,
+        resource_type="platform_config",
+        resource_id=key,
+        details={"key": key},
+    )
+    return {"status": "updated", "key": key}
+
+
+@app.delete("/api/admin/platform-config/{key}")
+def delete_platform_config(
+    key: str,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app import platform_config as _platform_config
+
+    if not _platform_config.is_managed(key):
+        raise HTTPException(status_code=400, detail="key is not managed")
+    removed = _platform_config.delete_value(db, key)
+    db.commit()
+    if removed:
+        audit_service.log_event(
+            db,
+            user_id=admin.id,
+            action=audit_service.ACTION_PLATFORM_CONFIG_DELETE,
+            resource_type="platform_config",
+            resource_id=key,
+            details={"key": key},
+        )
+    return {"status": "deleted" if removed else "not_found", "key": key}
+
+
+@app.post("/api/admin/platform-config/{key}/test")
+def test_platform_config(
+    key: str,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Probe the configured provider with a minimal real call.
+
+    Returns `{ok: bool, detail: str}` — does not consume more rate-limit
+    budget than a single read. The admin UI uses this to confirm a new
+    key actually works before persisting trust in it.
+    """
+    from app import platform_config as _platform_config
+
+    if not _platform_config.is_managed(key):
+        raise HTTPException(status_code=400, detail="key is not managed")
+    value = _platform_config.get_value(db, key)
+    if not value:
+        return {"ok": False, "detail": "no value configured (neither DB nor env)"}
+
+    try:
+        if key == "ALPHA_VANTAGE_API_KEY":
+            from app.alpha_vantage_service import AlphaVantageService
+
+            svc = AlphaVantageService(api_key=value)
+            data = svc.get_provider_snapshot("AAPL", "stock")
+            ok = bool(data)
+            return {"ok": ok, "detail": "alpha vantage AAPL snapshot ok" if ok else "no payload"}
+        if key == "FMP_API_KEY":
+            from app.fmp_service import FmpService
+
+            svc = FmpService(api_key=value)
+            data = svc.get_profile("AAPL")
+            ok = bool(data)
+            return {"ok": ok, "detail": "fmp profile AAPL ok" if ok else "no payload"}
+        if key == "TWELVE_DATA_API_KEY":
+            from app.twelve_data_service import TwelveDataService
+
+            svc = TwelveDataService(api_key=value)
+            data = svc.get_quote("AAPL")
+            ok = bool(data)
+            return {"ok": ok, "detail": "twelve data quote AAPL ok" if ok else "no payload"}
+        if key == "COINGECKO_API_KEY":
+            from app.coingecko_service import CoinGeckoService
+
+            svc = CoinGeckoService(api_key=value)
+            data = svc.get_coin_metrics("BTC/USD")
+            ok = bool(data)
+            return {"ok": ok, "detail": "coingecko BTC ok" if ok else "no payload"}
+        if key == "FRED_API_KEY":
+            from app.fred_service import FredService
+
+            svc = FredService(api_key=value)
+            data = svc.get_series_observations("DGS10", limit=1)
+            ok = bool(data)
+            return {"ok": ok, "detail": "fred DGS10 ok" if ok else "no payload"}
+        if key == "RSS_NEWS_FEEDS":
+            return {"ok": True, "detail": "feed list accepted (no live probe in test path)"}
+        if key == "SENTIMENT_PROVIDER":
+            if value.lower() not in ("vader", "finbert"):
+                return {"ok": False, "detail": "value must be 'vader' or 'finbert'"}
+            return {"ok": True, "detail": f"sentiment provider set to {value.lower()}"}
+        return {"ok": False, "detail": "no test handler for this key"}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("platform_config_test_failed key=%s", key)
+        return {"ok": False, "detail": f"probe raised: {type(exc).__name__}"}
+
+
 @app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,

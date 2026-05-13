@@ -296,3 +296,13 @@ class AutoExecutionEvent(Base):
     reason = Column(Text, nullable=True)
     payload_json = Column(Text, nullable=False, default="{}")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)
+
+
+class PlatformConfiguration(Base):
+    __tablename__ = "platform_configuration"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(64), unique=True, index=True, nullable=False)
+    encrypted_value = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

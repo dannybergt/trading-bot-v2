@@ -30,7 +30,25 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-13: UI-Probelauf laeuft, Bug 15g gefixt
+## Naechster Einstieg 2026-05-13: Welle 17 ausgeliefert + UI-Probelauf laeuft
+
+Welle 17 — Platform-Configuration-UI-Schicht aus dem Probelauf-Feedback geboren: globale Operator-API-Keys (Alpha Vantage, FMP, Twelve Data, CoinGecko, FRED, RSS-Feeds, Sentiment-Provider) sind jetzt direkt aus `/admin` heraus konfigurierbar statt nur via `.env.local`. Allowlist `MANAGED_KEYS` schliesst Bootstrap-Secrets (JWT, APP_ENCRYPTION_KEY, INITIAL_ADMIN, POSTGRES, VAPID) bewusst aus. Werte sind Fernet-encrypted at rest (gleicher `encrypt_secret`-Wrapper wie Alpaca-Keys), Read-Order DB > env > None, 60s-Cache mit expliziter `invalidate()`. Alembic-Migration `0009_add_platform_configuration` (rev `e6f7a8b9c0d1`). UI: DataSourcesSection bekommt "Configure"-Button pro managed Provider, Modal mit Password-Input + Save + Save&Test + Unset. Audit-Events `platform_config.update`/`.delete` loggen Key-Name (NICHT Value, NICHT Fingerprint).
+
+Welle 15g — AdminPage-Blank-Screen-Bug aus Probelauf 2026-05-13 gefixt: `/api/admin/backups` liefert `{items: [...]}`, Frontend rief `.map()` direkt → unhandled TypeError → React reisst den Tree ab. Fix in 3 Zeilen `AdminPage.tsx`, plus UI-Regression-Assertion gegen "Backups"-Heading + Korrektur des veralteten `React.lazy`-Skip-Kommentars.
+
+Aktiver Stack laeuft weiterhin lokal (BACKEND_PORT=18090, FRONTEND_PORT=18094) gegen `trading-bot-v2-{backend,frontend}:local`-Images. Postgres-Volume persistiert. Alembic-Head jetzt `e6f7a8b9c0d1`. 2 Admin-User existieren (`superadmin@local.de`, `dannybergt@yahoo.de`), 4 Watchlists. 243 Unit-Tests OK (+12 platform_config seit Welle 16a).
+
+Zweiter offener Befund aus dem Probelauf (noch nicht gefixt): `GET /api/watchlists/{id}/alerts` liefert HTTP 500 fuer Watchlist `7433d431`. Backend-Stacktrace ist im Container-Log einsehbar — naechster konkreter Fix-Kandidat sobald der User weiter klickt.
+
+Aktuell offen:
+- **Watchlist-Alert-500** auf `/api/watchlists/{id}/alerts` analysieren + fixen.
+- **UI-Probelauf** fortsetzen; weitere Feedback-Wellen 15h/17b+ absehbar.
+- **Welle 17b** — UI fuer Multi-line-Werte (RSS_NEWS_FEEDS verlangt mehrere `label|url`-Eintraege; aktueller Password-Input ist eine Zeile, das ist nicht ideal).
+- **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts).
+- Phase 4f echter Broker-Adapter.
+- **Welle 18** — globaler React-Error-Boundary, damit ein einzelner Component-Crash nicht den ganzen Page-Tree killt (war Diagnose-Schmerz bei 15g).
+
+## Naechster Einstieg 2026-05-12: Welle 16b/c oder UI-Probelauf
 
 User hat den ersten echten UI-Probelauf am 2026-05-13 gestartet (lokaler Stack auf `trading-bot-v2-backend:local`+`trading-bot-v2-frontend:local`, gepuncht via direktes `docker compose up -d` weil `dbergt/trading-bot-backend:latest` aktuell nur per `docker login` ziehbar ist und der lokale Klon 3 Wochen alt war). Erster Bug-Fund: `/admin`-Seite rendert komplett schwarz. Ursache war ein API-Schema-Drift: `GET /api/admin/backups` liefert `{"items": [...]}`, `AdminPage.BackupsSection` rief `.map()` auf das Wrapper-Objekt → `TypeError: (n.data ?? []).map is not a function` → React reisst den gesamten Tree ab. Fix: Query-Type auf `{items: BackupListItem[]}`, `const backups = backupsQuery.data?.items ?? []`, Renderpfad nutzt `backups`. UI-Regression assertiert jetzt zusaetzlich das "Backups"-Heading, damit ein Re-Drift nicht wieder als `ui_admin best_effort_skipped` durchrutscht. Der veraltete `React.lazy`-Kommentar im UI-Regression-Code ist mitkorrigiert (AdminPage ist seit l. mehreren Wellen kein Lazy-Chunk mehr).
 

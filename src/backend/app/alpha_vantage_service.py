@@ -61,10 +61,21 @@ def _normalize_alpha_timestamp(raw_value: Any) -> str | None:
 
 class AlphaVantageService:
     def __init__(self, api_key: str | None = None, session: requests.Session | None = None):
-        self.api_key = (api_key or os.getenv("ALPHA_VANTAGE_API_KEY", "")).strip()
+        # Explicit override (test injection / fixed config); when None we
+        # resolve dynamically per call via `platform_config` so admin-UI
+        # changes propagate without a restart.
+        self._api_key_override = api_key.strip() if isinstance(api_key, str) else None
         self.base_url = "https://www.alphavantage.co/query"
         self.session = session or requests.Session()
         self._cache: dict[str, dict[str, Any]] = {}
+
+    @property
+    def api_key(self) -> str:
+        if self._api_key_override is not None:
+            return self._api_key_override
+        from app import platform_config
+
+        return (platform_config.get_value_with_short_session("ALPHA_VANTAGE_API_KEY") or "").strip()
 
     def is_configured(self) -> bool:
         return bool(self.api_key)

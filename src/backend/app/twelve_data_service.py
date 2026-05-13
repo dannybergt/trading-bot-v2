@@ -34,7 +34,15 @@ class TwelveDataService:
     """Wraps Twelve Data REST endpoints used as a non-US fallback."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = (api_key if api_key is not None else os.getenv("TWELVE_DATA_API_KEY", "")).strip()
+        self._api_key_override = api_key.strip() if isinstance(api_key, str) else None
+
+    @property
+    def api_key(self) -> str:
+        if self._api_key_override is not None:
+            return self._api_key_override
+        from app import platform_config
+
+        return (platform_config.get_value_with_short_session("TWELVE_DATA_API_KEY") or "").strip()
 
     @property
     def configured(self) -> bool:

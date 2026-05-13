@@ -58,6 +58,9 @@ ACTION_ADMIN_USER_CREATE = "admin.user_create"
 ACTION_ADMIN_USER_PASSWORD_RESET = "admin.user_password_reset"
 ACTION_ADMIN_USER_TOGGLE_ACTIVE = "admin.user_toggle_active"
 
+ACTION_PLATFORM_CONFIG_UPDATE = "platform_config.update"
+ACTION_PLATFORM_CONFIG_DELETE = "platform_config.delete"
+
 
 def _fingerprint(value: str | None) -> str | None:
     """8-byte SHA-256 hex of `value`. Stable across runs, doesn't leak

@@ -134,7 +134,12 @@ def analyze_sentiment_basic(text: str) -> float:
     """
     if not text:
         return 0.0
-    provider = os.getenv("SENTIMENT_PROVIDER", "vader").lower()
+    from app import platform_config
+
+    provider = (
+        platform_config.get_value_with_short_session("SENTIMENT_PROVIDER")
+        or "vader"
+    ).lower()
     if provider == "finbert":
         score = _finbert_score(text)
         if score is not None:

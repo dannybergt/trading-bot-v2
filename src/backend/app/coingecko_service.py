@@ -87,9 +87,17 @@ def _normalize_base_symbol(symbol: str) -> str:
 
 class CoinGeckoService:
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = (api_key if api_key is not None else os.getenv("COINGECKO_API_KEY", "")).strip()
+        self._api_key_override = api_key.strip() if isinstance(api_key, str) else None
         self._coin_metrics_cache: dict[str, dict[str, Any]] = {}
         self._fear_greed_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
+
+    @property
+    def api_key(self) -> str:
+        if self._api_key_override is not None:
+            return self._api_key_override
+        from app import platform_config
+
+        return (platform_config.get_value_with_short_session("COINGECKO_API_KEY") or "").strip()
 
     def _request(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         if not acquire_rate_limit("coingecko", timeout=4.0):

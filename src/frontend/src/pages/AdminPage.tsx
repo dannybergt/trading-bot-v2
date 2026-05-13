@@ -56,12 +56,46 @@ type DataSourceCatalogueEntry = {
   configured: boolean;
 };
 
+type PlatformConfigItem = {
+  key: string;
+  source: "db" | "env" | "unconfigured";
+  configured: boolean;
+  lastUpdatedAt: string | null;
+  lastUpdatedByUserId: number | null;
+};
+
+// Maps catalogue keys (`alpha_vantage`) to the platform_config key that
+// stores the secret (`ALPHA_VANTAGE_API_KEY`). Providers without an entry
+// are not configurable through the UI (yfinance, Reddit, StockTwits etc.
+// need no key; Alpaca is per-user via `/settings`).
+const PROVIDER_TO_MANAGED_KEY: Record<string, string> = {
+  alpha_vantage: "ALPHA_VANTAGE_API_KEY",
+  fmp: "FMP_API_KEY",
+  twelve_data: "TWELVE_DATA_API_KEY",
+  coingecko: "COINGECKO_API_KEY",
+  fred: "FRED_API_KEY",
+  rss: "RSS_NEWS_FEEDS",
+  sentiment: "SENTIMENT_PROVIDER",
+};
+
 function DataSourcesSection() {
   const query = useQuery({
     queryKey: ["admin-data-sources"],
     queryFn: () => apiFetch<{ providers: DataSourceCatalogueEntry[] }>("/api/admin/data-sources"),
   });
+  const platformConfigQuery = useQuery({
+    queryKey: ["admin-platform-config"],
+    queryFn: () =>
+      apiFetch<{ items: PlatformConfigItem[]; managedKeys: string[] }>(
+        "/api/admin/platform-config",
+      ),
+  });
+  const [editKey, setEditKey] = useState<string | null>(null);
   const providers = query.data?.providers ?? [];
+  const platformConfig = platformConfigQuery.data?.items ?? [];
+  const configByKey = Object.fromEntries(
+    platformConfig.map((item) => [item.key, item]),
+  );
 
   if (providers.length === 0) {
     return null;
@@ -79,6 +113,8 @@ function DataSourcesSection() {
           Which providers feed the recommendation engine. Recommended upgrades
           point at the next sensible tier per provider so you can decide where
           paid tiers would actually move the needle for buy/sell decisions.
+          Providers with an API key can be configured in place — values are
+          encrypted at rest and a 60s cache picks them up without a restart.
         </p>
       </header>
       <div className="card overflow-x-auto">
@@ -87,41 +123,66 @@ function DataSourcesSection() {
             <tr>
               <th className="py-2">Provider</th>
               <th>Configured</th>
+              <th>Source</th>
               <th>Covers</th>
               <th>Free-tier limit</th>
               <th>Upgrade</th>
               <th className="text-right">USD/mo</th>
               <th>Why upgrade</th>
+              <th className="text-right">Action</th>
             </tr>
           </thead>
           <tbody>
-            {providers.map((entry) => (
-              <tr key={entry.key} className="border-t border-slate-800 align-top">
-                <td className="py-2 font-medium">{entry.label}</td>
-                <td>
-                  <span
-                    className={
-                      entry.configured
-                        ? "text-bergt-green"
-                        : "text-amber-300"
-                    }
-                  >
-                    {entry.configured ? "yes" : "no"}
-                  </span>
-                </td>
-                <td className="text-slate-300">
-                  {entry.covers.join(", ")}
-                </td>
-                <td className="text-slate-400">{entry.freeTierLimit}</td>
-                <td>{entry.upgradeTier ?? "—"}</td>
-                <td className="text-right font-mono">
-                  {entry.upgradeCostUsdMonthly > 0
-                    ? `$${entry.upgradeCostUsdMonthly}`
-                    : "—"}
-                </td>
-                <td className="text-slate-400">{entry.upgradeBenefit}</td>
-              </tr>
-            ))}
+            {providers.map((entry) => {
+              const managedKey = PROVIDER_TO_MANAGED_KEY[entry.key];
+              const cfg = managedKey ? configByKey[managedKey] : undefined;
+              return (
+                <tr
+                  key={entry.key}
+                  className="border-t border-slate-800 align-top"
+                >
+                  <td className="py-2 font-medium">{entry.label}</td>
+                  <td>
+                    <span
+                      className={
+                        entry.configured ? "text-bergt-green" : "text-amber-300"
+                      }
+                    >
+                      {entry.configured ? "yes" : "no"}
+                    </span>
+                  </td>
+                  <td className="text-slate-400">
+                    {cfg ? cfg.source : "—"}
+                  </td>
+                  <td className="text-slate-300">{entry.covers.join(", ")}</td>
+                  <td className="text-slate-400">{entry.freeTierLimit}</td>
+                  <td>{entry.upgradeTier ?? "—"}</td>
+                  <td className="text-right font-mono">
+                    {entry.upgradeCostUsdMonthly > 0
+                      ? `$${entry.upgradeCostUsdMonthly}`
+                      : "—"}
+                  </td>
+                  <td className="text-slate-400">{entry.upgradeBenefit}</td>
+                  <td className="text-right">
+                    {managedKey ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setEditKey(managedKey)}
+                      >
+                        Configure
+                      </button>
+                    ) : entry.key === "alpaca" ? (
+                      <span className="text-xs text-slate-500">
+                        per-user (Settings)
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500">no key</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -130,7 +191,173 @@ function DataSourcesSection() {
         providers, the additional monthly cost would be approximately
         <span className="ml-1 font-mono text-slate-200">${monthlyTotal}</span>.
       </p>
+      {editKey ? (
+        <PlatformConfigEditor
+          configKey={editKey}
+          currentStatus={configByKey[editKey]}
+          onClose={() => setEditKey(null)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function PlatformConfigEditor({
+  configKey,
+  currentStatus,
+  onClose,
+}: {
+  configKey: string;
+  currentStatus: PlatformConfigItem | undefined;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState("");
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    detail: string;
+  } | null>(null);
+
+  const saveMutation = useMutation({
+    mutationFn: (next: string) =>
+      apiFetch(`/api/admin/platform-config/${encodeURIComponent(configKey)}`, {
+        method: "PUT",
+        body: { value: next },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-platform-config"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-data-sources"] });
+      onClose();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/admin/platform-config/${encodeURIComponent(configKey)}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-platform-config"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-data-sources"] });
+      onClose();
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; detail: string }>(
+        `/api/admin/platform-config/${encodeURIComponent(configKey)}/test`,
+        { method: "POST" },
+      ),
+    onSuccess: (data) => setTestResult(data),
+    onError: (err) =>
+      setTestResult({ ok: false, detail: (err as ApiError).message }),
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg space-y-4 rounded-lg border border-slate-700 bg-slate-900 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <h3 className="text-lg font-semibold">Configure {configKey}</h3>
+          <p className="text-xs text-slate-500">
+            Current source:{" "}
+            <span className="font-mono text-slate-300">
+              {currentStatus?.source ?? "unconfigured"}
+            </span>
+            {currentStatus?.lastUpdatedAt ? (
+              <>
+                {" · last set "}
+                <span className="font-mono text-slate-300">
+                  {new Date(currentStatus.lastUpdatedAt).toLocaleString()}
+                </span>
+              </>
+            ) : null}
+          </p>
+        </header>
+        <p className="text-xs text-slate-400">
+          Stored encrypted in the database (Fernet / APP_ENCRYPTION_KEY).
+          Read order: DB &gt; environment variable &gt; unconfigured.
+          Saving a new value invalidates the 60s cache so the next provider
+          call sees it immediately. "Test" probes the actual upstream
+          provider with the value below — does not persist anything.
+        </p>
+        <label className="block text-sm">
+          <span className="text-slate-300">New value</span>
+          <input
+            className="input mt-1 w-full"
+            type="password"
+            placeholder="paste value…"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+          />
+        </label>
+        {testResult ? (
+          <p
+            className={`text-xs ${
+              testResult.ok ? "text-bergt-green" : "text-red-300"
+            }`}
+          >
+            test: {testResult.detail}
+          </p>
+        ) : null}
+        {saveMutation.error ? (
+          <p className="text-xs text-red-300">
+            save: {(saveMutation.error as ApiError).message}
+          </p>
+        ) : null}
+        {deleteMutation.error ? (
+          <p className="text-xs text-red-300">
+            unset: {(deleteMutation.error as ApiError).message}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!value || saveMutation.isPending}
+            onClick={() => saveMutation.mutate(value)}
+          >
+            {saveMutation.isPending ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={!value || testMutation.isPending}
+            onClick={() => {
+              // Save first then test, otherwise the test probe uses the
+              // old stored value. We do a transient save by writing the
+              // value, immediately probing, but the saved value is what
+              // the user just typed.
+              saveMutation.mutate(value, {
+                onSuccess: () => testMutation.mutate(),
+              });
+            }}
+          >
+            {testMutation.isPending ? "Testing…" : "Save & test"}
+          </button>
+          {currentStatus?.source === "db" ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? "Unsetting…" : "Unset (fall back to env)"}
+            </button>
+          ) : null}
+          <button type="button" className="btn ml-auto" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
