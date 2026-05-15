@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ACCESS_TOKEN_KEY, ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 type AdminUser = {
   id: number;
@@ -36,10 +37,18 @@ export function AdminPage() {
           Admin-only surface for user lifecycle and platform backups.
         </p>
       </header>
-      <UsersSection />
-      <DataSourcesSection />
-      <BackupsSection />
-      <ExportSection />
+      <ErrorBoundary variant="section" scope="admin-users">
+        <UsersSection />
+      </ErrorBoundary>
+      <ErrorBoundary variant="section" scope="admin-data-sources">
+        <DataSourcesSection />
+      </ErrorBoundary>
+      <ErrorBoundary variant="section" scope="admin-backups">
+        <BackupsSection />
+      </ErrorBoundary>
+      <ErrorBoundary variant="section" scope="admin-export">
+        <ExportSection />
+      </ErrorBoundary>
     </div>
   );
 }

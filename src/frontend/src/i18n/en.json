@@ -12,6 +12,14 @@
     "languageEnglish": "English",
     "languageGerman": "Deutsch"
   },
+  "errorBoundary": {
+    "pageTitle": "This page hit an unexpected error",
+    "pageDescription": "Something on this page failed to render. The rest of the app is still available — you can retry the page, reload the tab, or move to another section.",
+    "sectionTitle": "This section could not be loaded",
+    "sectionDescription": "The other sections on this page are still working.",
+    "retry": "Retry",
+    "reload": "Reload page"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "watchlists": "Watchlists",

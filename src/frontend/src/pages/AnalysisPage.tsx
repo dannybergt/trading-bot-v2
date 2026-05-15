@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
   StockChart,
   type ChartCandle,
@@ -638,7 +639,9 @@ export function AnalysisPage() {
         </div>
       </header>
 
-      <DataQualitySection report={dataQualityQuery.data} />
+      <ErrorBoundary variant="section" scope="analysis-data-quality">
+        <DataQualitySection report={dataQualityQuery.data} />
+      </ErrorBoundary>
       <PredictionCard
         prediction={stock?.prediction}
         symbol={decoded}

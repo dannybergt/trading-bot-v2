@@ -12,6 +12,14 @@
     "languageEnglish": "English",
     "languageGerman": "Deutsch"
   },
+  "errorBoundary": {
+    "pageTitle": "Diese Seite hat einen unerwarteten Fehler",
+    "pageDescription": "Ein Teil dieser Seite konnte nicht gerendert werden. Der Rest der App ist weiter verfügbar — die Seite neu versuchen, den Tab neu laden oder in eine andere Sektion wechseln.",
+    "sectionTitle": "Diese Sektion konnte nicht geladen werden",
+    "sectionDescription": "Die anderen Sektionen dieser Seite funktionieren weiterhin.",
+    "retry": "Neu versuchen",
+    "reload": "Seite neu laden"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "watchlists": "Watchlists",

@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../auth/AuthContext";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { HelpDrawer } from "./HelpDrawer";
 import { LanguageToggle } from "./LanguageToggle";
 
@@ -83,7 +84,9 @@ export function Layout() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <Outlet />
+        <ErrorBoundary scope="layout-outlet">
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

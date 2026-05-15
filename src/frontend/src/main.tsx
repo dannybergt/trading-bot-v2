@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
 import "./i18n";
 import "./styles.css";
@@ -29,7 +30,9 @@ createRoot(rootElement).render(
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <App />
+          <ErrorBoundary scope="app-root">
+            <App />
+          </ErrorBoundary>
           <PwaUpdatePrompt />
         </AuthProvider>
       </QueryClientProvider>

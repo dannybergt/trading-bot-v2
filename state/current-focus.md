@@ -30,6 +30,29 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
+## Naechster Einstieg 2026-05-15: Welle 18 — globaler React-ErrorBoundary
+
+Welle 18 — Defense-in-Depth gegen den "Tree-Reset"-Klassiker, der bei Welle 15g (AdminPage blank) und 15i (AnalysisPage Scroll-Crash) jeweils die ganze App schwarz gemacht hat. Idee: ein einzelner Component-Crash darf nicht mehr den ganzen React-Tree mitreissen — der Rest der App muss weiter bedienbar bleiben.
+
+Drei-Schicht-Boundary verdrahtet:
+- **App-Level** (`src/frontend/src/main.tsx`): ErrorBoundary direkt um `<App />` als allerletztes Sicherheitsnetz — wenn das Layout selbst crasht (z.B. AuthContext-Bug), gibt es immer noch einen Fallback.
+- **Layout-Level** (`src/frontend/src/components/Layout.tsx`): ErrorBoundary um den `<Outlet />`. Header + Navigation bleiben sichtbar, Page-Bereich kriegt Fallback-Card mit Retry- und Reload-Button.
+- **Section-Level**: AdminPage (`UsersSection`, `DataSourcesSection`, `BackupsSection`, `ExportSection` — alle 4) und AnalysisPage `DataQualitySection` (die zwei realen Crash-Klassen 15g + 15i) bekommen kompakte Section-Fallbacks, sodass die jeweils anderen Sektionen der Page weiter rendern.
+
+Komponente in `src/frontend/src/components/ErrorBoundary.tsx`: Class-Component mit `getDerivedStateFromError` + `componentDidCatch` (loggt mit Scope-Tag), `variant: "page" | "section"`-Prop fuer die zwei Fallback-Varianten, `scope`-Prop fuer Telemetry, optionale custom `fallback`-Render-Funktion. i18n-Keys `errorBoundary.{pageTitle,pageDescription,sectionTitle,sectionDescription,retry,reload}` in EN + DE.
+
+Bewusst NICHT gemacht: Per-Sektion-Wraps auf den restlichen ~15 Sektionen von AnalysisPage. Layout-Boundary fängt jeden Page-Crash global ab — das Sub-Section-Wrap macht nur bei real beobachteten Crash-Klassen Sinn (15i = DataQualitySection). Wenn der UI-Probelauf weitere Sektion-Crashes findet, wrappt eine Folge-Welle die gezielt. Kein Frontend-Test-Framework eingefuehrt (kein vitest/jest im Repo) — Typecheck (`tsc -b`) und UI-Regression decken Happy-Path-Coverage.
+
+Aktiver Stack weiterhin lokal (BACKEND_PORT=18090, FRONTEND_PORT=18094) gegen `trading-bot-v2-{backend,frontend}:local`-Images. Postgres-Volume persistiert + schema-konsistent (Self-Healing aus 15j).
+
+Aktuell offen:
+- **UI-Probelauf** fortsetzen mit der neuen Boundary-Sicherheit; jeder neue Bug ist jetzt nur eine Sektion, nicht der ganze Tree.
+- **Welle 17b** — UI fuer Multi-line-Werte (RSS_NEWS_FEEDS verlangt mehrere `label|url`-Eintraege; aktueller Password-Input ist eine Zeile).
+- **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts).
+- **Phase 4f** — echter Broker-Adapter (User-Entscheidung: Bitvavo/Kraken zuerst, oder Lemon Markets, oder Interactive Brokers).
+- **Init-DB-Model-Imports vervollstaendigen**: 13 von 16 Models werden in init_db importiert; AutoExecutionLimits, AutoExecutionEvent, PlatformConfiguration fehlen explizit (kommen indirekt via main-Imports rein).
+- **Section-Boundaries weiter ausrollen**: AnalysisPage hat noch ~15 Sektionen (NewsSection, FundamentalsDetailSection, MacroContextSection, etc.) die alle externe Daten konsumieren — die zu wrappen ist Defense-in-Depth, falls neue Drift-Klassen auftauchen.
+
 ## Naechster Einstieg 2026-05-15: Welle 15j — Watchlist-Alert-500 + Schema-Drift-Self-Healing
 
 Welle 15j — Root-Cause des Watchlist-Alert-500 aus dem Probelauf 2026-05-13 gefunden und gefixt: Postgres-Volume des User-Stacks war auf einer Codex-Era-DB initialisiert worden, deren init_db-Pfad 3 (`stamp_head_pre_existing_full_schema`) auf head stempelte ohne die Tabellen `watchlist_alert_settings` und `watchlist_alert_deliveries` aus Migration 0001 anzulegen — diese Models gab es im Codex-Build noch nicht. Folge: jeder `/api/watchlists/{id}/alerts`-Aufruf scheiterte an `psycopg.errors.UndefinedTable: relation "watchlist_alert_settings" does not exist`. Welle 15a's `try/except`-Wrapper griff zwar, aber der nachgeholte `len(record.items)`-Lazy-Load auf einer Session in Pending-Rollback-State warf eine **zweite** Exception ausserhalb des Wrappers — daraus wurde der harte 500.
