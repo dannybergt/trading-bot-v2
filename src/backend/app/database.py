@@ -68,6 +68,14 @@ def init_db():
 
     All other shapes hit the default `upgrade head` path which fails fast
     if the schema diverges in unexpected ways.
+
+    After the alembic decision, a final `Base.metadata.create_all` runs as a
+    self-healing safety net. It is idempotent (CREATE TABLE IF NOT EXISTS)
+    and only adds tables that are present in the model registry but missing
+    from the database. This repairs DBs that were stamped on head without
+    actually owning every initial-schema table — a real drift seen on legacy
+    Codex volumes where path 3 stamped head while a few model tables were
+    still absent.
     """
     # Ensure every model is registered on Base.metadata before alembic inspects.
     from app.models import (  # noqa: F401
@@ -107,3 +115,12 @@ def init_db():
     else:
         logger.info("alembic_upgrade_head_fresh")
         command.upgrade(config, "head")
+
+    # Self-heal model/db drift: only adds missing tables, never alters existing ones.
+    inspector_after = inspect(engine)
+    expected = set(Base.metadata.tables.keys())
+    present = set(inspector_after.get_table_names())
+    missing = sorted(expected - present)
+    if missing:
+        logger.warning("schema_drift_detected creating_missing_tables=%s", ",".join(missing))
+        Base.metadata.create_all(bind=engine)

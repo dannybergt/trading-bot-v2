@@ -1686,7 +1686,7 @@ def get_watchlist_alerts(
             news_limit=news_limit,
         )
     except Exception:
-        # Yahoo 429 / provider hiccup must not 500 the whole dashboard.
+        # Yahoo 429 / provider hiccup / schema drift must not 500 the whole dashboard.
         # Return a degraded but well-shaped payload so the UI keeps rendering
         # the watchlist while the alerts column shows an empty state.
         logger.exception(
@@ -1694,6 +1694,17 @@ def get_watchlist_alerts(
             id,
             current_user.id,
         )
+        # Reset the session so any follow-up access (e.g. lazy-loading
+        # record.items) does not raise PendingRollbackError on top of the
+        # original failure.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("watchlist_alert_payload_rollback_failed")
+        try:
+            tracked_count = len(record.items)
+        except Exception:
+            tracked_count = 0
         return {
             "watchlist": {"id": record.id, "name": record.name},
             "alertSettings": {},
@@ -1701,7 +1712,7 @@ def get_watchlist_alerts(
             "trackedAssets": [],
             "items": [],
             "summary": {
-                "trackedSymbols": len(record.items),
+                "trackedSymbols": tracked_count,
                 "popupEligible": 0,
                 "pushEligible": 0,
                 "degraded": True,

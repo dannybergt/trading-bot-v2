@@ -30,6 +30,27 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
+## Naechster Einstieg 2026-05-15: Welle 15j — Watchlist-Alert-500 + Schema-Drift-Self-Healing
+
+Welle 15j — Root-Cause des Watchlist-Alert-500 aus dem Probelauf 2026-05-13 gefunden und gefixt: Postgres-Volume des User-Stacks war auf einer Codex-Era-DB initialisiert worden, deren init_db-Pfad 3 (`stamp_head_pre_existing_full_schema`) auf head stempelte ohne die Tabellen `watchlist_alert_settings` und `watchlist_alert_deliveries` aus Migration 0001 anzulegen — diese Models gab es im Codex-Build noch nicht. Folge: jeder `/api/watchlists/{id}/alerts`-Aufruf scheiterte an `psycopg.errors.UndefinedTable: relation "watchlist_alert_settings" does not exist`. Welle 15a's `try/except`-Wrapper griff zwar, aber der nachgeholte `len(record.items)`-Lazy-Load auf einer Session in Pending-Rollback-State warf eine **zweite** Exception ausserhalb des Wrappers — daraus wurde der harte 500.
+
+Fix dreischichtig:
+- `init_db` (database.py) bekommt nach jedem Alembic-Pfad ein `Base.metadata.create_all(bind=engine)`-Safety-Net mit `schema_drift_detected`-Warning-Log. Idempotent (CREATE TABLE IF NOT EXISTS), legt nur Tabellen an die im Models-Set sind aber in der DB fehlen. Repariert die existierenden Codex-Volumes self-healing beim naechsten Container-Start.
+- Endpoint `/api/watchlists/{id}/alerts` (main.py): `try/except`-Wrapper bekommt `db.rollback()` plus eine defensive `len(record.items)`-Eindeckung. Damit wird auch ein Folge-Crash auf einer dirty Session oder ein lazy-load-Fehler zum degraded payload statt 500.
+- Tests: `test_alembic_init.test_drift_at_head_is_self_healed` (Subprocess + SQLite, simuliert exakte Drift-Situation: alembic_version=head, zwei Tabellen weg, init_db laeuft, Tabellen wieder da). `test_watchlist_alerts.WatchlistAlertEndpointRobustnessTests` (Mock-basiert, deckt RuntimeError + ProgrammingError-Pfad + record.items-Lazy-Crash ab, asserted db.rollback wurde gerufen).
+
+Repro-Pfad fuer kuenftige Sessions: `docker exec trading-bot-v2-backend-1 python -c "from app.auth import create_access_token; from app.database import SessionLocal; from app.models import User; db=SessionLocal(); u=db.query(User).filter(User.id==1).first(); print(create_access_token(u.id, u.email))"` liefert einen JWT fuer User 1 (`superadmin@local.de`); damit lassen sich alle authentifizierten Endpoints ohne Login-Form testen.
+
+Aktiver Stack laeuft weiterhin lokal (BACKEND_PORT=18090, FRONTEND_PORT=18094) gegen `trading-bot-v2-{backend,frontend}:local`-Images. Postgres-Volume persistiert + jetzt schema-konsistent (selbst nach erzwungenem `DROP TABLE` heilt der naechste Container-Start die Drift). Endpoint `/api/watchlists/7433d431/alerts` liefert wieder `200 OK` mit 4 Items.
+
+Aktuell offen:
+- **UI-Probelauf** fortsetzen; weitere Feedback-Wellen 15h+/17b+ absehbar.
+- **Welle 17b** — UI fuer Multi-line-Werte (RSS_NEWS_FEEDS verlangt mehrere `label|url`-Eintraege; aktueller Password-Input ist eine Zeile, das ist nicht ideal).
+- **Welle 16b** — N-BEATS als zweites Time-Series-Modell (darts).
+- Phase 4f echter Broker-Adapter (User-Entscheidung welcher Broker zuerst).
+- **Welle 18** — globaler React-Error-Boundary, damit ein einzelner Component-Crash nicht den ganzen Page-Tree killt (war Diagnose-Schmerz bei 15g + 15i).
+- **Init-DB-Model-Imports vervollstaendigen**: 13 von 16 Models werden in init_db importiert; AutoExecutionLimits, AutoExecutionEvent und PlatformConfiguration fehlen explizit (kommen indirekt via main-Imports rein). Risikoarmer Cleanup, aber besser nicht-implizit.
+
 ## Naechster Einstieg 2026-05-13: Welle 17 ausgeliefert + UI-Probelauf laeuft
 
 Welle 17 — Platform-Configuration-UI-Schicht aus dem Probelauf-Feedback geboren: globale Operator-API-Keys (Alpha Vantage, FMP, Twelve Data, CoinGecko, FRED, RSS-Feeds, Sentiment-Provider) sind jetzt direkt aus `/admin` heraus konfigurierbar statt nur via `.env.local`. Allowlist `MANAGED_KEYS` schliesst Bootstrap-Secrets (JWT, APP_ENCRYPTION_KEY, INITIAL_ADMIN, POSTGRES, VAPID) bewusst aus. Werte sind Fernet-encrypted at rest (gleicher `encrypt_secret`-Wrapper wie Alpaca-Keys), Read-Order DB > env > None, 60s-Cache mit expliziter `invalidate()`. Alembic-Migration `0009_add_platform_configuration` (rev `e6f7a8b9c0d1`). UI: DataSourcesSection bekommt "Configure"-Button pro managed Provider, Modal mit Password-Input + Save + Save&Test + Unset. Audit-Events `platform_config.update`/`.delete` loggen Key-Name (NICHT Value, NICHT Fingerprint).

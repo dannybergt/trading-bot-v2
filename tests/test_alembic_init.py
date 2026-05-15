@@ -110,6 +110,54 @@ class AlembicInitTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
         self.assertIn("OK ", result.stdout)
 
+    def test_drift_at_head_is_self_healed(self):
+        """Schema drift seen on a legacy Codex volume: alembic_version is at
+        HEAD but a couple of initial-schema tables (e.g. watchlist_alert_settings)
+        are missing — typical of a stamp-on-existing-schema run that happened
+        before those models had been added.
+
+        init_db must self-heal by creating the missing tables idempotently.
+        Without the safety net the dashboard 500s on every watchlist alert
+        request because the table referenced by the ORM does not exist.
+        """
+        script = textwrap.dedent(
+            """
+            import sqlite3, os
+            from app import database, models  # noqa: F401
+            from app.database import Base, engine
+            db_path = os.environ['DATABASE_URL'].removeprefix('sqlite:///')
+
+            # Build the full schema, then surgically drop the two tables that
+            # were missing on the real-world drifted DB. alembic_version stays
+            # at HEAD to mimic an already-stamped deployment.
+            database.init_db()
+            con = sqlite3.connect(db_path)
+            con.execute('DROP TABLE watchlist_alert_settings')
+            con.execute('DROP TABLE watchlist_alert_deliveries')
+            con.commit()
+            tables_before = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            assert 'watchlist_alert_settings' not in tables_before
+            assert 'watchlist_alert_deliveries' not in tables_before
+            assert 'alembic_version' in tables_before
+            con.close()
+
+            database.init_db()
+
+            con = sqlite3.connect(db_path)
+            tables_after = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            assert 'watchlist_alert_settings' in tables_after, tables_after
+            assert 'watchlist_alert_deliveries' in tables_after, tables_after
+            print('OK drift_healed')
+            """
+        )
+        result = _run_in_subprocess(script, self.db_path)
+        self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
+        self.assertIn("OK drift_healed", result.stdout)
+
     def test_pre_alembic_baseline_schema_is_stamped_then_upgraded(self):
         """v2026.05.07-1 schema (8 tables) gets stamped at baseline, then
         migration 0002 applies to add alert_rules + alert_events."""
