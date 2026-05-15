@@ -30,7 +30,31 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-05-15: Welle 18 — globaler React-ErrorBoundary
+## Naechster Einstieg: UI-Probelauf fortsetzen (Modus: User klickt, Claude reagiert)
+
+**Wenn der User mit `resume trading-bot-v2` oder einer aehnlich kurzen Aufforderung wiederkommt: NICHT eigeninitiativ in eine neue Welle starten.** Der explizit gewaehlte naechste Schritt aus der Sitzung 2026-05-15 ist **UI-Probelauf**. Der User klickt selbst durch `http://localhost:18094` (Devstack laeuft mit Postgres-Volume persistiert; `superadmin@local.de` und `dannybergt@yahoo.de` als Login). Claude wartet auf konkrete Bug-Reports und faehrt Fix-Wellen (Pattern: 15g → 15h → 15i → 15j alle aus dem letzten Probelauf am 2026-05-13 entstanden).
+
+Wenn der User stattdessen einen anderen Modus will, sagt er das am Anfang — die Optionen sind:
+- **(Default) User klickt, Claude reagiert** — manuelles Testen, ich fixe was kommt
+- **Automatischer Probelauf via CDP** — headless Chrome gegen den Devstack, systematischer Walk, Findings als Liste
+- **Code-Audit der ungetesteten Pages** — NewsHub, Discover, Scanner, PaperTrading, AutoExecution, Settings, Onboarding gegen typische Schema-Drift-/Lazy-Load-/Defense-in-Depth-Klassen
+
+Stack-Status beim Schluss der Sitzung 2026-05-15:
+- BACKEND_PORT=18090, FRONTEND_PORT=18094 (Devstack laeuft mit `trading-bot-v2-{backend,frontend}:local`-Images)
+- Postgres-Volume schema-konsistent (Welle 15j Self-Healing aktiv)
+- ErrorBoundary in 3 Schichten verdrahtet (Welle 18) — jeder neue Crash bleibt jetzt lokal, kein Tree-Reset mehr
+- `main` auf `6b9869a`, alle GitHub Actions gruen (ci/publish/codeql)
+- Aktuell offene Backlog-Punkte (NICHT vorziehen ohne User-Go): Welle 17b Multi-line-Werte, Welle 16b N-BEATS, Phase 4f echter Broker-Adapter, Init-DB-Model-Imports vervollstaendigen, Section-Boundaries weiter ausrollen
+
+Probelauf-Workflow-Pattern aus den letzten Wellen:
+1. User berichtet Symptom mit Zitat ("die seite wird schwarz", "/admin ist leer", "500 auf /api/watchlists/.../alerts")
+2. Claude reproduziert (Browser-DevTools-Probe oder direkter API-Call mit JWT via `docker exec trading-bot-v2-backend-1 python -c "from app.auth import create_access_token; from app.database import SessionLocal; from app.models import User; db=SessionLocal(); u=db.query(User).filter(User.id==1).first(); print(create_access_token(u.id, u.email))"`)
+3. Root-Cause-Analyse mit Stacktrace oder Console-Error
+4. Fix + Defense-in-Depth (z.B. `db.rollback()` plus Self-Healing) plus Test
+5. Build + ops/automation/test.sh + API+UI-Regression
+6. Commit + Push + Actions abwarten + State-Doku-Update als neue Welle (15k/15l/...)
+
+## Vorige Sitzung 2026-05-15: Welle 18 — globaler React-ErrorBoundary
 
 Welle 18 — Defense-in-Depth gegen den "Tree-Reset"-Klassiker, der bei Welle 15g (AdminPage blank) und 15i (AnalysisPage Scroll-Crash) jeweils die ganze App schwarz gemacht hat. Idee: ein einzelner Component-Crash darf nicht mehr den ganzen React-Tree mitreissen — der Rest der App muss weiter bedienbar bleiben.
 
@@ -53,7 +77,7 @@ Aktuell offen:
 - **Init-DB-Model-Imports vervollstaendigen**: 13 von 16 Models werden in init_db importiert; AutoExecutionLimits, AutoExecutionEvent, PlatformConfiguration fehlen explizit (kommen indirekt via main-Imports rein).
 - **Section-Boundaries weiter ausrollen**: AnalysisPage hat noch ~15 Sektionen (NewsSection, FundamentalsDetailSection, MacroContextSection, etc.) die alle externe Daten konsumieren — die zu wrappen ist Defense-in-Depth, falls neue Drift-Klassen auftauchen.
 
-## Naechster Einstieg 2026-05-15: Welle 15j — Watchlist-Alert-500 + Schema-Drift-Self-Healing
+## Vorige Sitzung 2026-05-15: Welle 15j — Watchlist-Alert-500 + Schema-Drift-Self-Healing
 
 Welle 15j — Root-Cause des Watchlist-Alert-500 aus dem Probelauf 2026-05-13 gefunden und gefixt: Postgres-Volume des User-Stacks war auf einer Codex-Era-DB initialisiert worden, deren init_db-Pfad 3 (`stamp_head_pre_existing_full_schema`) auf head stempelte ohne die Tabellen `watchlist_alert_settings` und `watchlist_alert_deliveries` aus Migration 0001 anzulegen — diese Models gab es im Codex-Build noch nicht. Folge: jeder `/api/watchlists/{id}/alerts`-Aufruf scheiterte an `psycopg.errors.UndefinedTable: relation "watchlist_alert_settings" does not exist`. Welle 15a's `try/except`-Wrapper griff zwar, aber der nachgeholte `len(record.items)`-Lazy-Load auf einer Session in Pending-Rollback-State warf eine **zweite** Exception ausserhalb des Wrappers — daraus wurde der harte 500.
 
