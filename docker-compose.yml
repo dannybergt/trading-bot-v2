@@ -1,0 +1,111 @@
+# Self-contained Compose for a managed-node deploy (nexainer / watchtower).
+#
+# This is DELIBERATELY separate from ops/docker/compose.yaml. That file is the
+# development / CI / rehearsal stack: it BUILDS the images, is driven by
+# ops/automation/start.sh (which loads .env/.env.local, resolves image refs,
+# picks ports and prepares host bind-mount dirs incl. chmod), and bind-mounts
+# data under state/runtime/.
+#
+# This root file instead runs standalone via a plain `docker compose up`, which
+# is what a generic orchestrator (nexainer) does:
+#   - pulls PUBLISHED Docker Hub images, never builds
+#   - persists via NAMED VOLUMES. Docker initialises an empty named volume from
+#     the image directory (owned by the non-root `appuser`), so the backend can
+#     write /app/data without any host-side chmod — the failure mode the bind
+#     mount has when the host dir is root-owned.
+#   - reads every secret from the environment injected by the orchestrator.
+#     Mandatory secrets fail CLOSED (${VAR:?...}) instead of falling back to an
+#     insecure default — a missing secret stops the boot with a clear message
+#     rather than silently running with a known key.
+#
+# Required injected env: JWT_SECRET, APP_ENCRYPTION_KEY, POSTGRES_PASSWORD.
+# APP_ENCRYPTION_KEY MUST stay stable across restarts (it decrypts stored
+# per-user Alpaca keys and platform_configuration values). Everything else is
+# optional and degrades gracefully when unset.
+#
+# Backend is NOT published to the host: the frontend nginx proxies /api and /ws
+# to backend:8000 over the compose network, so only the frontend needs a port.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trading_bot_v2}
+      POSTGRES_USER: ${POSTGRES_USER:-trading}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be injected (no insecure default in prod)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trading} -d ${POSTGRES_DB:-trading_bot_v2}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${DOCKERHUB_NAMESPACE:-dbergt}/trading-bot-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_DIR: /app/data
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://trading:${POSTGRES_PASSWORD}@postgres:5432/trading_bot_v2}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be injected}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY must be injected}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_MFA_ENABLED: ${INITIAL_ADMIN_MFA_ENABLED:-false}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:18094,http://localhost:18094}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIMS_SUB: ${VAPID_CLAIMS_SUB:-mailto:admin@example.com}
+      REQUIRE_VAPID_SECRETS: ${REQUIRE_VAPID_SECRETS:-false}
+      BACKUP_DIR: /app/backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-3600}
+      PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL:-http://127.0.0.1:18094/reset-password}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Trading Bot V2}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-false}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-15}
+      ENABLE_INSECURE_DEBUG_RESET_TOKENS: ${ENABLE_INSECURE_DEBUG_RESET_TOKENS:-false}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      ALPACA_PAPER: ${ALPACA_PAPER:-true}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
+      FMP_API_KEY: ${FMP_API_KEY:-}
+    volumes:
+      - backend_data:/app/data
+      - backend_backups:/app/backups
+    labels:
+      # Opt this app image into watchtower auto-updates (label-based). Postgres
+      # is deliberately NOT labelled — its image must not be auto-major-upgraded.
+      - com.centurylinklabs.watchtower.enable=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: ${DOCKERHUB_NAMESPACE:-dbergt}/trading-bot-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-18094}:80"
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+volumes:
+  pgdata:
+  backend_data:
+  backend_backups:
