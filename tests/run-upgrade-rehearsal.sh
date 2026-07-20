@@ -356,6 +356,20 @@ mkdir -p \
   "${RESTORE_ROOT}/postgres" \
   "${DEPLOYMENTS_DIR}"
 
+# The backend runs as a non-root user, so bind-mounted data dirs must be
+# writable before `compose up` — mirrors prepare_runtime_dirs (env.sh). The
+# primary stack gets this via deploy.sh; the restore stack brings the backend
+# up directly (restore_postgres_dump_into_stack), bypassing that path, so the
+# restore data dirs would otherwise stay root-owned and the backend would crash
+# at import on `mkdir /app/data/ml_models`.
+chmod 0777 \
+  "${PRIMARY_ROOT}/backend-data" \
+  "${PRIMARY_ROOT}/backups" \
+  "${PRIMARY_ROOT}/postgres" \
+  "${RESTORE_ROOT}/backend-data" \
+  "${RESTORE_ROOT}/backups" \
+  "${RESTORE_ROOT}/postgres"
+
 trap cleanup EXIT
 
 echo "Primary deploy project: ${PRIMARY_PROJECT}"
