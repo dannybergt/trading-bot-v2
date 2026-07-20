@@ -13,15 +13,19 @@
 #     the image directory (owned by the non-root `appuser`), so the backend can
 #     write /app/data without any host-side chmod — the failure mode the bind
 #     mount has when the host dir is root-owned.
-#   - reads every secret from the environment injected by the orchestrator.
+#   - reads its config from a `.env` file placed in the clone root, which
+#     `docker compose` auto-loads (this is how the node's other nexainer
+#     projects supply config; the registry has no env-injection mechanism).
+#     Copy `.env.example` to `.env`, fill in the values, mode 600, never commit.
 #     Mandatory secrets fail CLOSED (${VAR:?...}) instead of falling back to an
-#     insecure default — a missing secret stops the boot with a clear message
-#     rather than silently running with a known key.
+#     insecure default — a missing/empty value stops the boot with a clear
+#     message rather than silently running with a known key.
 #
-# Required injected env: JWT_SECRET, APP_ENCRYPTION_KEY, POSTGRES_PASSWORD.
+# Required in `.env`: JWT_SECRET, APP_ENCRYPTION_KEY, POSTGRES_PASSWORD.
 # APP_ENCRYPTION_KEY MUST stay stable across restarts (it decrypts stored
-# per-user Alpaca keys and platform_configuration values). Everything else is
-# optional and degrades gracefully when unset.
+# per-user Alpaca keys and platform_configuration values). Leave DATABASE_URL
+# empty to let it derive from POSTGRES_PASSWORD. Everything else is optional and
+# degrades gracefully when unset.
 #
 # Backend is NOT published to the host: the frontend nginx proxies /api and /ws
 # to backend:8000 over the compose network, so only the frontend needs a port.
