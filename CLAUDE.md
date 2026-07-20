@@ -47,6 +47,7 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 
 ## Test-Pipeline (vor jedem Push lokal mindestens lauffaehig)
 
+- One-Shot vor Merge auf einem Docker-Host mit Netzwerk (+Chrome fuer UI): `bash ops/automation/verify-branch.sh` — faehrt die ganze Kette unten und bricht beim ersten roten Gate ab. `SKIP_UI=1`/`SKIP_REHEARSAL=1` als bewusste, geloggte Opt-outs. **Nicht** auf der BC-KI01-Deploy-Node oder ohne Docker-Netzwerk. Einzelgates:
 - `bash ops/automation/build.sh`
 - `bash ops/automation/test.sh` (Unit + Syntax)
 - `SKIP_BUILD=1 bash tests/run-api-regression.sh`
