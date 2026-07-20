@@ -30,6 +30,27 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
+## Naechster Einstieg 2026-07-21 (Abend UTC): Deploy live + Produkt-Audit + Bug-/Feature-Backlog
+
+**Deploy-Stand:** trading-bot-v2 laeuft jetzt produktiv auf BC-KI01 via nexainer (git-sync `main` + watchtower). Start ueber das neue Root-`docker-compose.yml` (Named Volumes, `.env` im Clone-Root `/data/trading-bot-v2/.env`, Mode 600). Beide heutigen PRs gemergt: Migrations-Haertung (`3f159d8`) + Root-Compose (`a4cb512`), `main` @ `a4cb512`, publish/ci gruen. Achtung: `.env.example` pinnt `IMAGE_TAG=2026.05.07-1` (alt) — der User hat auf `IMAGE_TAG=latest` gesetzt; **TODO** `.env.example`-Default auf `latest` fixen (Footgun).
+
+**Produkt-Audit (zwei Explorer, belegt):** Fertigstellungsgrad + KI-Integration bewertet. Kernbefunde:
+- KI = klassisches ML-Ensemble (XGBoost/LightGBM/RandomForest) + Sentiment (VADER/FinBERT). **KEIN LLM/RAG**; "Reasoning" = Template-Strings (`ml_models.py:414`).
+- 🔴 **KRITISCH — Mock-Daten:** `services.py:329-331 _generate_mock_data()` speist bei fehlenden Providern erfundene Random-Walk-Kurse ins ML, **ohne Kennzeichnung** in der API-Antwort; `data_quality_service` stuft Mock faelschlich als FULL/high ein. Empfehlung kann auf Fantasiedaten beruhen.
+- News/Fundamentals-ML-Features sind konstante Snapshots ueber die ganze Historie (`services.py:349,358-365`) → SHAP-Beitrag kosmetisch (erklaert "News +0.00 / Fundamentals +0.00" im UI).
+- Ohne API-Keys (Alpaca/FMP/Alpha Vantage/FRED/Twelve Data — alle leer in `.env.example`) bleibt Grossteil der 14 Wellen leer → "fast alles missing". Frei-ohne-Key: yfinance, CoinGecko, StockTwits/Reddit, RSS-News, Fear&Greed, FX.
+- Display-Currency nur in `AnalysisPage.tsx` verdrahtet — Scanner/PaperTrading/Dashboard/Admin/Alerts zeigen rohe USD.
+- Phase 4f (echter Broker-Adapter) fehlt komplett → nicht echtgeld-produktiv.
+
+**Priorisierter Backlog (Reihenfolge vom User noch zu bestaetigen — Vertrauen zuerst):**
+1. 🔴 Mock-Daten-Ehrlichkeit: Response + Data-Quality als "synthetic/keine echten Daten" kennzeichnen, Verdict/Empfehlung dann unterdruecken/warnen.
+2. 🐞 **Watchlist-Delete-Bug**: User kann Watchlist selbst nicht loeschen (Items schon). Backend-Route (`main.py:1532`) + ORM-Cascade sehen korrekt aus; Verdacht: Frontend (`WatchlistsPage.tsx:43`) verschluckt Delete-Fehler (kein `onError`) + `is_default`-Watchlist per 400 still gesperrt. **NOCH NICHT reproduziert/gefixt** — erst reproduzieren.
+3. 💱 Display-Currency auf Scanner + restliche Money-Views ausrollen (Welle-15f-Rest).
+4. 🧭 **Verdict-Banner (Feature B)** — bereits gemappt, bau-bereit: Felder liegen im Frontend vor (`prediction.direction/confidence/zones.meetsMinimum/zones.riskReward` + `/api/data-quality` `overall`); Banner in `AnalysisPage.tsx` vor Zeile 645 / in `PredictionCard` (788-928, aktuell komplett hart-englisch); i18n-Namespace `analysis.mlSignal.verdict.*` in `de.json`/`en.json` neu. Halt-Trigger (FOMC/Yield-Curve/8-K/Beta) waeren nur mit Backend-Zusatz drin (`_evaluate_halt_triggers` in auto_execution.py, aktuell proposal-gebunden).
+5. Danach: A (App-Strings eindeutschen, backend-generierte englische Strings in `data_quality_service.py` u.a.), C (News auf Deutsch — eigene Design-Entscheidung Uebersetzer/Cache/Injection), spaeter Phase 4f.
+
+Diese Session hat NICHTS an diesen 5 Punkten am Code geaendert — nur Deploy + Audit. Naechster Schritt: mit dem vom User gewaehlten Punkt starten (Reproduzieren→Root-Cause→Fix→Test).
+
 ## Zuletzt 2026-07-20: Persistenz-/Migrations-Haertung (Branch `refactor/harden-migrations`)
 
 Diese Sitzung war KEIN Probelauf — User wollte "den Stand weiterbringen", Richtung "Struktur haerten (Migrationen)". Ergebnis auf Branch `refactor/harden-migrations`:

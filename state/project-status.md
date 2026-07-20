@@ -176,7 +176,16 @@
 
 - Originaler Frontend-Quellstand fehlt
 - Persistenz- und Migrationsstrategie: Alembic ist real im Einsatz (10 Revisionen), seit 2026-07-20 mit CI-Drift-Gate (`test_models_match_migration_head` erzwingt Model==Migration-Head). `create_all`-Self-Heal bleibt als Fail-loud-Netz fuer Legacy-Postgres-Volumes; endgueltiger Rueckbau auf reines Alembic erst nach verifizierter Drift-Freiheit aller Prod-Volumes (BC-KI01)
-- keine belastbare Test-Suite fuer Kernfluesse vorhanden
+- (KORREKTUR 2026-07-21: die fruehere Aussage "keine belastbare Test-Suite" ist veraltet — es gibt ~250 gruene Unit-Tests + API-/UI-Regression + Upgrade-Rehearsal-Gate. Weiterhin duenn: echte End-to-End-Kernfluss-Tests im Frontend.)
+- **Produkt-Audit 2026-07-21 — offene Brocken bis "produktiv nutzbar":**
+  - 🔴 KRITISCH: Mock-Daten-Fallback (`services.py:329-331 _generate_mock_data`) speist bei fehlenden Providern erfundene Random-Walk-Kurse ins ML, ohne Kennzeichnung; `data_quality_service` stuft Mock als FULL ein. Empfehlung kann auf Fantasiedaten beruhen — vertrauens-/sicherheitskritisch.
+  - ML-Features News/Fundamentals sind konstante Snapshots ueber die Historie → SHAP-Beitrag kosmetisch; entweder echte Zeitreihen einbauen oder Gewicht=0 ehrlich anzeigen.
+  - KI = klassisches ML-Ensemble + Sentiment (VADER/FinBERT); KEIN generatives LLM/RAG (Reasoning = Templates). Erwartungshaltung klaeren.
+  - Ohne API-Keys (Alpaca/FMP/Alpha Vantage/FRED/Twelve Data) bleibt Grossteil der Analyse-Tiefe leer — Onboarding-/Erwartungs-Thema.
+  - Display-Currency nur in AnalysisPage verdrahtet — Rollout auf Scanner/PaperTrading/Dashboard/Admin/Alerts offen.
+  - Phase 4f (echter Broker-Adapter) fehlt → kein echtgeld-produktiver Pfad.
+  - Bug: Watchlist selbst nicht loeschbar (Items schon) — noch nicht reproduziert/gefixt.
+  - `.env.example` pinnt veralteten `IMAGE_TAG=2026.05.07-1` (Deploy-Footgun) — auf `latest` fixen.
 - kuenftige Release-Tags muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
 - alte Docker-Hub-Staende vor `sha-f826304a7850` enthalten den BTC-Parserfix noch nicht; fuer Live-Smokes mit BTC/USD mindestens `sha-f826304a7850` oder neuer verwenden
