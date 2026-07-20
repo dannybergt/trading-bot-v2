@@ -82,7 +82,9 @@ if [[ "${SKIP_REHEARSAL:-0}" == "1" ]]; then
   echo "   NOT rehearsed. Not recommended when persistence/schema changed."
 else
   step "5/5 run-upgrade-rehearsal.sh (pre-publish, :local images)"
+  # SKIP_PULL=1: the images were just built locally and are not on a registry.
   IMAGE_TAG=local \
+    SKIP_PULL=1 \
     BACKEND_IMAGE_REF=trading-bot-v2-backend:local \
     FRONTEND_IMAGE_REF=trading-bot-v2-frontend:local \
     bash tests/run-upgrade-rehearsal.sh

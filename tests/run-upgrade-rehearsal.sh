@@ -151,6 +151,7 @@ deploy_stack() {
   IMAGE_TAG="${IMAGE_TAG}" \
   BACKEND_IMAGE_REF="${BACKEND_IMAGE_REF}" \
   FRONTEND_IMAGE_REF="${FRONTEND_IMAGE_REF}" \
+  SKIP_PULL="${SKIP_PULL:-0}" \
   ENV_FILE="${LOADED_ENV_FILE}" \
   bash "${PROJECT_ROOT}/ops/automation/deploy.sh"
 }

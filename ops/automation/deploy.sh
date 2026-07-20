@@ -224,9 +224,23 @@ if [[ -n "$(get_service_container_id backend)" ]]; then
   PRE_UPGRADE_APP_BACKUP="$(create_application_backup "pre-upgrade-$(sanitize_label "${IMAGE_TAG}")")"
 fi
 
-echo "Pulling Docker Hub images"
-docker pull "${TARGET_BACKEND_IMAGE_REF}"
-docker pull "${TARGET_FRONTEND_IMAGE_REF}"
+# SKIP_PULL=1 deploys images that are already present locally (offline /
+# locally-built, e.g. the pre-publish upgrade rehearsal against :local tags).
+# Default stays 0: production deploys pull the pinned registry ref so they get
+# the intended, integrity-checked image rather than a stale local tag.
+if [[ "${SKIP_PULL:-0}" == "1" ]]; then
+  echo "Skipping Docker Hub pull (SKIP_PULL=1); using locally present images"
+  for ref in "${TARGET_BACKEND_IMAGE_REF}" "${TARGET_FRONTEND_IMAGE_REF}"; do
+    if ! docker image inspect "${ref}" >/dev/null 2>&1; then
+      echo "SKIP_PULL=1 but image not present locally: ${ref}" >&2
+      exit 1
+    fi
+  done
+else
+  echo "Pulling Docker Hub images"
+  docker pull "${TARGET_BACKEND_IMAGE_REF}"
+  docker pull "${TARGET_FRONTEND_IMAGE_REF}"
+fi
 
 if compose up -d --no-build \
   && wait_for_http "http://127.0.0.1:${BACKEND_PORT:-18090}/api/health" "Backend health endpoint" \
