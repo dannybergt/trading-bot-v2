@@ -158,6 +158,78 @@ class AlembicInitTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
         self.assertIn("OK drift_healed", result.stdout)
 
+    def test_models_match_migration_head(self):
+        """The migrations alone must fully describe the ORM model registry.
+
+        This is the drift gate. It brings a fresh DB to head with plain
+        `command.upgrade` — deliberately NOT `init_db`, whose `create_all`
+        safety net would materialize every model table and thereby hide a
+        model that has no migration. `alembic check` then autogenerates a diff
+        between the models and the migration-built schema: any pending change
+        (a new table, column, or index without a matching migration) makes
+        `check` raise, failing this test in CI. Drift is caught at build time
+        instead of being silently repaired by the runtime safety net.
+        """
+        script = textwrap.dedent(
+            """
+            from alembic import command
+            from alembic.util.exc import CommandError
+            from app import database
+
+            # Build the schema from migrations ONLY (no init_db self-heal),
+            # then diff the models against it.
+            config = database._alembic_config()
+            command.upgrade(config, "head")
+            try:
+                command.check(config)
+            except CommandError as exc:
+                raise SystemExit(
+                    "model/migration drift detected — add a migration for the "
+                    "model change:\\n" + str(exc)
+                )
+            print('OK no_drift')
+            """
+        )
+        result = _run_in_subprocess(script, self.db_path)
+        self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
+        self.assertIn("OK no_drift", result.stdout)
+
+    def test_init_db_brings_up_every_registered_table(self):
+        """`init_db` must leave a table for every model on `Base.metadata`.
+
+        This is a bring-up smoke for the real startup path (alembic decision +
+        `create_all` safety net), NOT a guard against a forgotten import: since
+        `app/models.py` is a single module, importing any name from it executes
+        the whole module and registers all classes, so the explicit import list
+        in `init_db` cannot drift out today. The check would only bite if the
+        models were ever split across modules AND init_db failed to import one —
+        then `expected` (derived from `Base.metadata`) would also miss it, so
+        this test cannot catch that case either. It verifies that init_db does
+        not regress the >=16-table bring-up and that the sqlite path stays sane.
+        """
+        script = textwrap.dedent(
+            """
+            import sqlite3, os
+            from app import database
+            from app.database import Base
+
+            database.init_db()
+            expected = {t.name for t in Base.metadata.sorted_tables}
+            db_path = os.environ['DATABASE_URL'].removeprefix('sqlite:///')
+            con = sqlite3.connect(db_path)
+            present = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            missing = sorted(expected - present)
+            assert not missing, f'registered models without a table: {missing}'
+            assert len(expected) >= 16, f'expected >=16 tables, got {sorted(expected)}'
+            print('OK', len(expected))
+            """
+        )
+        result = _run_in_subprocess(script, self.db_path)
+        self.assertEqual(0, result.returncode, msg=result.stderr or result.stdout)
+        self.assertIn("OK ", result.stdout)
+
     def test_pre_alembic_baseline_schema_is_stamped_then_upgraded(self):
         """v2026.05.07-1 schema (8 tables) gets stamped at baseline, then
         migration 0002 applies to add alert_rules + alert_events."""

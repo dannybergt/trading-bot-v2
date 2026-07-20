@@ -78,13 +78,21 @@ def init_db():
     still absent.
     """
     # Ensure every model is registered on Base.metadata before alembic inspects.
+    # `app/models.py` is a single module, so importing any name executes the
+    # whole file and registers all classes — this explicit list documents
+    # intent rather than gating registration. Keep it complete anyway: if the
+    # models are ever split across modules, every module must be imported here
+    # so `create_all` and alembic autogenerate see the full metadata.
     from app.models import (  # noqa: F401
         AlertEvent,
         AlertRule,
         AuditEvent,
+        AutoExecutionEvent,
+        AutoExecutionLimits,
         PaperOrder,
         PaperTransaction,
         PasswordResetToken,
+        PlatformConfiguration,
         PushSubscription,
         User,
         Watchlist,
@@ -117,10 +125,21 @@ def init_db():
         command.upgrade(config, "head")
 
     # Self-heal model/db drift: only adds missing tables, never alters existing ones.
+    #
+    # With `test_models_match_migration_head` gating CI, the model registry and
+    # the migration head are guaranteed to agree. A table missing here therefore
+    # means a legacy volume that was stamped at head without owning every table
+    # (Codex-era drift) — NOT a forgotten migration. We heal it idempotently so
+    # the app stays up, but log at ERROR so the drifted deployment is visible in
+    # ops and can be reconciled, rather than silently masked.
     inspector_after = inspect(engine)
     expected = set(Base.metadata.tables.keys())
     present = set(inspector_after.get_table_names())
     missing = sorted(expected - present)
     if missing:
-        logger.warning("schema_drift_detected creating_missing_tables=%s", ",".join(missing))
+        logger.error(
+            "schema_drift_detected legacy_volume_healed missing_tables=%s "
+            "(expected a stamped legacy deployment; not a missing migration)",
+            ",".join(missing),
+        )
         Base.metadata.create_all(bind=engine)

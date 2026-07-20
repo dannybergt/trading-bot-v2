@@ -30,6 +30,16 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
+## Zuletzt 2026-07-20: Persistenz-/Migrations-Haertung (Branch `refactor/harden-migrations`)
+
+Diese Sitzung war KEIN Probelauf — User wollte "den Stand weiterbringen", Richtung "Struktur haerten (Migrationen)". Ergebnis auf Branch `refactor/harden-migrations`:
+- CI-Drift-Gate `test_models_match_migration_head` (alembic check) + `test_all_models_registered_after_init` neu; init_db-Import-Liste auf 16/16 vervollstaendigt; `create_all`-Self-Heal jetzt fail-loud (error statt warning); 3 tote SQLite-Alt-Skripte geloescht.
+- Gate fand echten Drift: Migration `0009` fehlte der `id`-Index → neue additive Migration `0010_add_platform_configuration_id_index` (head jetzt `f7a8b9c0d1e2`).
+- Testsuite 250 gruen (Image-Mount-Lauf); `build.sh` in Sandbox nicht lauffaehig (kein Netzwerk). Details: `state/decisions.md` (2026-07-20), `state/chat/session-log.md`.
+- **Offen bei Wiedereinstieg**: Branch ist committed aber NICHT gemergt/gepusht — falls der User den PR abnickt: nach `main` pushen (loest publish.yml aus), und vor dem naechsten Release-Tag `tests/run-upgrade-rehearsal.sh` mit gebautem Image gegen `0010` fahren.
+
+Der UI-Probelauf-Modus unten bleibt der stehende Default-Modus, sobald der User wieder testen statt bauen will.
+
 ## Naechster Einstieg: UI-Probelauf fortsetzen (Modus: User klickt, Claude reagiert)
 
 **Wenn der User mit `resume trading-bot-v2` oder einer aehnlich kurzen Aufforderung wiederkommt: NICHT eigeninitiativ in eine neue Welle starten.** Der explizit gewaehlte naechste Schritt aus der Sitzung 2026-05-15 ist **UI-Probelauf**. Der User klickt selbst durch `http://localhost:18094` (Devstack laeuft mit Postgres-Volume persistiert; `superadmin@local.de` und `dannybergt@yahoo.de` als Login). Claude wartet auf konkrete Bug-Reports und faehrt Fix-Wellen (Pattern: 15g → 15h → 15i → 15j alle aus dem letzten Probelauf am 2026-05-13 entstanden).

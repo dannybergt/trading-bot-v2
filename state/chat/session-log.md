@@ -1,5 +1,17 @@
 # Sitzungslog
 
+- Datum: 2026-07-20
+  Kontext: `resume trading-bot-v2`, dann Ansage "will noch nicht nach Bugs suchen, sondern den Stand weiterbringen" — also raus aus dem UI-Probelauf-Modus. Auf Nachfrage Richtung gewaehlt: **Struktur haerten (Migrationen)**. Bestandsaufnahme (Explorer-Agent) ergab: Alembic ist real im Einsatz (9 saubere Revisionen, `env.py` korrekt), die "Schwaeche" sind zwei benannte Kompromisse — Import-Luecke in `init_db` + stilles `create_all`-Self-Heal, plus fehlender Model↔Migration-Gate.
+  Erledigt (Branch `refactor/harden-migrations`, 4 Slices):
+  (1) **init_db-Import-Vollstaendigkeit** (`database.py`): `AutoExecutionEvent`, `AutoExecutionLimits`, `PlatformConfiguration` in die explizite Liste ergaenzt (13→16). Das war der im 2026-05-15-ADR als "separat verfolgt" markierte Cleanup.
+  (2) **Drift-Gate** (`tests/test_alembic_init.py`): neuer `test_models_match_migration_head` — frische DB → head → `alembic.command.check()` faengt jede Model↔Migration-Divergenz beim Build; plus `test_all_models_registered_after_init` (jede gemappte Klasse hat nach init_db eine Tabelle). **Der Gate deckte sofort echten Drift auf**: Model `PlatformConfiguration` deklariert `id`-Index (Hauskonvention), Migration `0009` hatte ihn vergessen.
+  (3) **Root-Cause-Fix statt Test lockern** (§2.6): additive Vorwaerts-Migration `0010_add_platform_configuration_id_index` (rev `f7a8b9c0d1e2`) zieht `ix_platform_configuration_id` nach. `0009` unangetastet (released, §9). Rollback up→down→up gegen SQLite verifiziert.
+  (4) **Self-Heal fail-loud** (`database.py`): Drift-Log `warning`→`error` mit "legacy_volume_healed / not a missing migration"-Meldung; Heal-Verhalten unveraendert. Safety-Net bewusst NICHT entfernt (Blast-Radius Prod-Postgres, ohne DB-Zugriff nicht verifizierbar, §13).
+  (5) **Tote Alt-Skripte geloescht**: `app/migrate_db.py`, `app/migrate_push_db.py`, `migrate_yield_settings.py` (SQLite-only, nirgends aufgerufen, alle Spalten/Tabellen in Model+Migrationen vorhanden). `migrate_watchlists.py` bleibt (Startup-Legacy-JSON-Import).
+  Review: reviewer-Agent fand drei Punkte, alle gefixt+verifiziert — (a) BLOCKER `0010` nicht idempotent (Boot-Crash auf self-gehealtem Legacy-Volume) → Inspector-Guard; (b) Gate-Loch: `init_db`-Self-Heal maskierte neue-Tabelle-Drift → Gate auf `command.upgrade(head)`+`check` umgestellt; (c) ueberbehauptender Import-Kommentar → ehrlich. Negativ-Beweis fuer den Gate gefuehrt (Schema@0009+stamp head → `check` meldet `add_index`), Idempotenz-Szenario gefuehrt.
+  Verifikation: Testsuite 248→250, alle gruen im `trading-bot-v2-backend:local`-Image (voller `discover`-Lauf mit gemountetem Stand). Lokaler Syntax-Check aller `app/*.py` ok. Migration-Rollback up→down→up explizit geprueft. **Grenze**: `bash ops/automation/build.sh` nicht lauffaehig — Sandbox ohne Netzwerk (`apt-get`/DNS scheitert); Verifikation daher aequivalent per Image-Mount statt Rebuild. `run-upgrade-rehearsal.sh` mit gebautem Image vor naechstem Release-Tag noch offen.
+  Offen: PR mergen + Push nach `main` (loest publish.yml aus). Upgrade-Rehearsal fuer `0010` vor Release-Tag. UI-Probelauf mit User weiterhin offener Default-Modus. Backlog unveraendert: 17b Multi-line, 16b N-BEATS, Phase 4f Broker-Adapter.
+
 - Datum: 2026-05-15
   Kontext: User-Auftrag "ok, dann mach weiter" nach erfolgreichem Welle-15j-Commit + gruenen Actions (ci/publish/codeql alle gruen). Empfehlung aus dem vorigen Antwort-Block: Welle 18 (globaler React-ErrorBoundary). User akzeptiert die Eigeninitiative-Wahl.
   Erledigt:
