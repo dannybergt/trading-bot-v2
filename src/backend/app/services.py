@@ -333,7 +333,12 @@ class MarketDataService:
 
         if not asset_profile.get("isCrypto") and acquire_rate_limit("yfinance", timeout=2.0):
             try:
-                hist = yf.Ticker(to_yfinance_symbol(symbol)).history(period=f"{lookback_days * 2}d")
+                hist = call_with_timeout(
+                    lambda: yf.Ticker(to_yfinance_symbol(symbol)).history(period=f"{lookback_days * 2}d"),
+                    default=None,
+                    label=f"avg_volume:{symbol}",
+                    provider="yfinance",
+                )
                 if hist is not None and not hist.empty and "Volume" in hist.columns:
                     series = hist["Volume"].dropna().tail(lookback_days)
                     if not series.empty:
@@ -374,8 +379,13 @@ class MarketDataService:
 
         if not asset_profile.get("isCrypto") and acquire_rate_limit("yfinance", timeout=2.0):
             try:
-                hist = yf.Ticker(to_yfinance_symbol(symbol)).history(period="5d")
-                if not hist.empty and "Close" in hist.columns:
+                hist = call_with_timeout(
+                    lambda: yf.Ticker(to_yfinance_symbol(symbol)).history(period="5d"),
+                    default=None,
+                    label=f"latest_close:{symbol}",
+                    provider="yfinance",
+                )
+                if hist is not None and not hist.empty and "Close" in hist.columns:
                     return float(hist["Close"].iloc[-1])
             except Exception:
                 logger.exception("latest_close_yfinance_failed symbol=%s", symbol)
@@ -400,11 +410,12 @@ class MarketDataService:
 
         ticker_info: dict = {}
         if acquire_rate_limit("yfinance", timeout=4.0):
-            try:
-                ticker_info = yf.Ticker(to_yfinance_symbol(symbol)).info or {}
-            except Exception:
-                logger.exception("fundamentals_fetch_failed symbol=%s", symbol)
-                ticker_info = {}
+            ticker_info = call_with_timeout(
+                lambda: yf.Ticker(to_yfinance_symbol(symbol)).info or {},
+                default={},
+                label=f"ticker_info:{symbol}",
+                provider="yfinance",
+            )
         else:
             logger.warning("fundamentals_yfinance_rate_limit_skip symbol=%s", symbol)
 

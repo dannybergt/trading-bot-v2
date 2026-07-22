@@ -59,6 +59,7 @@ from app.models import (
 )
 from app import paper_trading
 from app.push_service import PushService
+from app.net_timeout import call_with_timeout
 from app.services import MarketDataService, fundamentals_detail_from_ticker_info
 from app.watchlist_alerts import (
     build_provider_context,
@@ -151,11 +152,12 @@ def get_search_fallback_result(query_upper: str) -> dict | None:
     if not is_plausible_symbol_query(query_upper):
         return None
 
-    ticker_info = {}
-    try:
-        ticker_info = yf.Ticker(to_yfinance_symbol(query_upper)).info or {}
-    except Exception:
-        logger.debug("symbol_search_fallback_lookup_failed query=%s", query_upper, exc_info=True)
+    ticker_info = call_with_timeout(
+        lambda: yf.Ticker(to_yfinance_symbol(query_upper)).info or {},
+        default={},
+        label=f"search_fallback:{query_upper}",
+        provider="yfinance",
+    )
 
     fallback_name = None
     if isinstance(ticker_info, dict):
@@ -2518,13 +2520,14 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
         
         # 2. Enrich search results with ISIN using yfinance (in parallel for speed)
         def fetch_isin(r):
-            try:
-                t = yf.Ticker(to_yfinance_symbol(r['symbol']))
-                isin = t.isin
-                if isin and isin != '-':
-                    r['isin'] = isin
-            except Exception:
-                logger.debug("symbol_search_isin_enrichment_failed symbol=%s", r['symbol'], exc_info=True)
+            isin = call_with_timeout(
+                lambda: yf.Ticker(to_yfinance_symbol(r['symbol'])).isin,
+                default=None,
+                label=f"isin:{r['symbol']}",
+                provider="yfinance",
+            )
+            if isin and isin != '-':
+                r['isin'] = isin
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             executor.map(fetch_isin, top_results)

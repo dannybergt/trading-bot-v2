@@ -168,11 +168,12 @@ def _safe_dataframe(value: Any) -> pd.DataFrame:
 
 def _resolve_last_close(ticker: yf.Ticker) -> float | None:
     """Pull the most recent close so we can centre the ATM window."""
-    try:
-        hist = ticker.history(period="5d")
-    except Exception:
-        logger.exception("options_flow_last_close_failed")
-        return None
+    hist = call_with_timeout(
+        lambda: ticker.history(period="5d"),
+        default=None,
+        label="options_last_close",
+        provider="yfinance",
+    )
     if hist is None or hist.empty or "Close" not in hist.columns:
         return None
     try:

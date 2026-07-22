@@ -41,7 +41,7 @@ DEFAULT_TIMEOUT_SECONDS = 8.0
 # Circuit breaker: after this many consecutive timeouts for a provider, skip
 # further calls to it for the cooldown window.
 _FAIL_THRESHOLD = 2
-_COOLDOWN_SECONDS = 20.0
+_COOLDOWN_SECONDS = 60.0
 
 _breaker_lock = threading.Lock()
 _breaker: dict[str, dict] = {}  # provider -> {"failures": int, "open_until": float}
