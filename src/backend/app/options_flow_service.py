@@ -77,6 +77,7 @@ class OptionsFlowService:
             lambda: list(ticker.options or []),
             default=[],
             label=f"options_expiries:{symbol}",
+            provider="yfinance",
         )
         if not expiries:
             return self._cache_and_return(cache_key, empty)
@@ -89,6 +90,7 @@ class OptionsFlowService:
             lambda: ticker.option_chain(chosen_expiry),
             default=None,
             label=f"options_chain:{symbol}",
+            provider="yfinance",
         )
         if chain is None:
             return self._cache_and_return(cache_key, empty)

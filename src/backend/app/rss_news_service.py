@@ -20,6 +20,7 @@ from typing import Any
 
 import feedparser
 
+from app.net_timeout import call_with_timeout
 from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_sentiment_basic
 
@@ -82,10 +83,15 @@ class RssNewsService:
             if not acquire_rate_limit("rss", timeout=2.0):
                 logger.warning("rss_rate_limit_skip url=%s", url)
                 continue
-            try:
-                parsed = feedparser.parse(url)
-            except Exception:
-                logger.exception("rss_parse_failed url=%s", url)
+            # feedparser.parse(url) fetches over urllib with no timeout and can
+            # hang on a slow feed; bound it on a wall clock (shared "rss" breaker).
+            parsed = call_with_timeout(
+                lambda: feedparser.parse(url),
+                default=None,
+                label=f"rss:{url}",
+                provider="rss",
+            )
+            if parsed is None:
                 continue
             entries = getattr(parsed, "entries", None) or []
             normalized = []

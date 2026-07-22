@@ -131,6 +131,7 @@ class SectorService:
                 lambda: yf.Ticker(symbol).history(period="9mo"),
                 default=None,
                 label=f"sector:{symbol}",
+                provider="yfinance",
             )
             if hist is None or hist.empty or "Close" not in hist.columns:
                 return []

@@ -257,6 +257,7 @@ class MarketDataService:
             ),
             default=None,
             label=f"stock_history:{symbol}",
+            provider="yfinance",
         )
         if hist is None or hist.empty:
             return pd.DataFrame()

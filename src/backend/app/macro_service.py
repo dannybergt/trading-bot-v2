@@ -67,6 +67,7 @@ class MacroService:
                 lambda: yf.Ticker(symbol).history(period="5d"),
                 default=None,
                 label=f"macro:{symbol}",
+                provider="yfinance",
             )
             if hist is None or hist.empty or "Close" not in hist.columns:
                 return empty
