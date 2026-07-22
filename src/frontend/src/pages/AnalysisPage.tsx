@@ -119,6 +119,7 @@ type StockResponse = {
   chart_data: ChartCandle[];
   patterns: ChartPattern[];
   prediction: Prediction | null;
+  synthetic?: boolean;
   volume_profile?: VolumeProfilePayload | null;
   support_resistance?: ChartLevel[] | null;
 };
@@ -473,6 +474,7 @@ const TIMEFRAMES = [
 ];
 
 export function AnalysisPage() {
+  const { t } = useTranslation();
   const { symbol = "" } = useParams();
   const decoded = decodeURIComponent(symbol);
   const [timeframe, setTimeframe] = useState("6M");
@@ -638,6 +640,16 @@ export function AnalysisPage() {
           </div>
         </div>
       </header>
+
+      {stock?.synthetic ? (
+        <div
+          role="alert"
+          className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        >
+          <p className="font-semibold">{t("analysis.synthetic.title")}</p>
+          <p className="mt-1 text-amber-200/80">{t("analysis.synthetic.body")}</p>
+        </div>
+      ) : null}
 
       <ErrorBoundary variant="section" scope="analysis-data-quality">
         <DataQualitySection report={dataQualityQuery.data} />

@@ -191,6 +191,21 @@ class DataQualityServiceTests(unittest.TestCase):
         news_field = next(f for f in report["fields"] if f["key"] == "news")
         self.assertEqual(news_field["provider"], "Alpha Vantage")
 
+    def test_synthetic_payload_downgrades_price_history_even_with_bars(self):
+        # A synthetic placeholder must never be graded FULL/PARTIAL, even when
+        # it carries a full-length bar array — otherwise the user is told the
+        # analysis rests on live data when it rests on a random walk.
+        report = dq.evaluate_symbol_data_quality(
+            symbol="FAKE",
+            asset_class="stock",
+            research_payload={},
+            stock_payload={"synthetic": True, "chart_data": _stock_payload(180)["chart_data"]},
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.FALLBACK)
+        self.assertIn("synthetic", price_field["provider"])
+        self.assertNotEqual(report["overall"], "high")
+
 
 if __name__ == "__main__":
     unittest.main()

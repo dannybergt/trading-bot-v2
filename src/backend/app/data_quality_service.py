@@ -205,7 +205,13 @@ def evaluate_symbol_data_quality(
 
     # Chart bars
     chart_data = (stock or {}).get("chart_data") or []
-    if isinstance(chart_data, list) and len(chart_data) >= 30:
+    if stock.get("synthetic"):
+        # No provider returned real bars — the chart is a synthetic random-walk
+        # placeholder. Never grade this as FULL/PARTIAL: it must drag the
+        # overall confidence down so the user knows the analysis rests on
+        # fabricated prices, not live data.
+        fields.append(_field("price_history", FALLBACK, "synthetic placeholder — no live provider data"))
+    elif isinstance(chart_data, list) and len(chart_data) >= 30:
         provider = "Alpaca" if (stock.get("provider") or {}).get("source") == "Alpaca" else "yfinance / Alpha Vantage fallback"
         fields.append(_field("price_history", FULL, provider))
     elif isinstance(chart_data, list) and len(chart_data) > 0:

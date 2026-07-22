@@ -299,6 +299,7 @@ class MarketDataService:
         Fetch historical data and calculate indicators.
         """
         df = pd.DataFrame()
+        used_synthetic = False
         market_symbol = canonicalize_symbol(symbol)
         asset_profile = self.get_asset_profile(symbol)
         provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
@@ -329,6 +330,7 @@ class MarketDataService:
         if df.empty:
             logger.warning("market_data_empty_using_mock symbol=%s period=%s interval=%s", symbol, period, interval)
             df = self._generate_mock_data(symbol, period, interval)
+            used_synthetic = True
             
         # Calculate Indicators
         df_analyzed = calculate_indicators(df)
@@ -410,7 +412,27 @@ class MarketDataService:
                     
         except Exception:
             logger.exception("market_prediction_failed symbol=%s", symbol)
-            
+
+        if used_synthetic:
+            # No provider returned real bars — the chart rests on a synthetic
+            # random-walk placeholder (see _generate_mock_data). Any ML output
+            # would be a recommendation on fabricated prices, so we suppress the
+            # actionable verdict and mark the payload synthetic. This keeps the
+            # rest of the pipeline honest by construction: auto_execution
+            # rejects any non-UP/DOWN direction and confidence < 0.6, the push
+            # notification path needs confidence >= 0.80, and the frontend
+            # renders a "placeholder data" banner instead of a buy/sell signal.
+            prediction = {
+                "direction": "HOLD",
+                "confidence": 0.0,
+                "synthetic": True,
+                "reason": (
+                    "Keine echten Marktdaten verfuegbar — kein Provider hat "
+                    "Kursdaten geliefert. Angezeigt werden Platzhalterwerte; "
+                    "es wird keine Handelsempfehlung gegeben."
+                ),
+            }
+
         # Get Info (Enriched with YFinance)
         info = {
             'symbol': symbol,
@@ -441,6 +463,7 @@ class MarketDataService:
             'info': info,
             'asset': asset_profile,
             'provider': provider_snapshot,
+            'synthetic': used_synthetic,
         }
 
     def _generate_mock_data(self, symbol, period, interval):

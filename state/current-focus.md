@@ -30,7 +30,20 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-07-21 (Abend UTC): Deploy live + Produkt-Audit + Bug-/Feature-Backlog
+## Naechster Einstieg 2026-07-22: Backlog #1 erledigt (Mock-Daten-Ehrlichkeit) — auf Branch, Merge-Gate offen
+
+**Erledigt diese Session (Branch `fix/synthetic-data-honesty`, NICHT gepusht):** Backlog-Punkt #1 aus dem Audit umgesetzt — synthetische Random-Walk-Daten werden jetzt gekennzeichnet und die Empfehlung unterdrueckt statt still ins ML zu fliessen. Aenderungen:
+- `services.py`: `get_stock_data` fuehrt `used_synthetic`, gibt `synthetic: bool` zurueck; bei synthetisch → Prognose neutralisiert auf `HOLD/confidence 0.0/synthetic=True` (blockt Auto-Execution [nur UP/DOWN + conf>=0.6] und Push [conf>=0.80] automatisch).
+- `main.py`: `/api/stock` reicht `synthetic` durch.
+- `data_quality_service.py`: `synthetic` → `price_history` = FALLBACK (nie FULL/PARTIAL), zieht `overall` runter.
+- `AnalysisPage.tsx` + `de.json`/`en.json`: deutlicher Warn-Banner (`analysis.synthetic.*`), kein Kauf-/Verkaufssignal mehr auf Platzhalterdaten.
+- Tests: 2 neu (Service-Neutralisierung + Data-Quality-Downgrade). Volle Unit-Suite **252 gruen** (skipped=1); Frontend `tsc` gruen.
+
+**OFFEN vor Merge:** api-/ui-Regression + upgrade-rehearsal in dieser Sandbox nicht lauffaehig (kein Docker-Netz/Chrome). Vor `main`-Push auf einem Docker-Host `bash ops/automation/verify-branch.sh` gruen ziehen — `main`-Push deployt ungated via nexainer auf BC-KI01. Erst dann `git checkout main && git merge --ff-only fix/synthetic-data-honesty && git push`.
+
+**Naechster Schritt danach:** Backlog #2 (Watchlist-Delete-Bug reproduzieren→fixen) oder #4 (Verdict-Banner Feature B). Reihenfolge #3/#5 wie im Backlog unten.
+
+## Vorige Session 2026-07-21 (Abend UTC): Deploy live + Produkt-Audit + Bug-/Feature-Backlog
 
 **Deploy-Stand:** trading-bot-v2 laeuft jetzt produktiv auf BC-KI01 via nexainer (git-sync `main` + watchtower). Start ueber das neue Root-`docker-compose.yml` (Named Volumes, `.env` im Clone-Root `/data/trading-bot-v2/.env`, Mode 600). Beide heutigen PRs gemergt: Migrations-Haertung (`3f159d8`) + Root-Compose (`a4cb512`), `main` @ `a4cb512`, publish/ci gruen. Achtung: `.env.example` pinnt `IMAGE_TAG=2026.05.07-1` (alt) — der User hat auf `IMAGE_TAG=latest` gesetzt; **TODO** `.env.example`-Default auf `latest` fixen (Footgun).
 

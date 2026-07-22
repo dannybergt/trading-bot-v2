@@ -231,6 +231,10 @@
     }
   },
   "analysis": {
+    "synthetic": {
+      "title": "No real market data — placeholder values",
+      "body": "No data provider returned prices for this symbol. The chart, indicators and patterns are based on synthetic placeholder values. No buy/sell recommendation is given on purpose. Configure a suitable provider API key (e.g. Alpaca, Alpha Vantage) to see real data."
+    },
     "fundamentalsDetail": {
       "title": "Fundamentals detail",
       "source": "Source: FMP",

@@ -2038,6 +2038,7 @@ def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = 
         'chart_data': chart_data,
         'patterns': result['patterns'],
         'prediction': prediction,
+        'synthetic': result.get('synthetic', False),
         'volume_profile': volume_profile,
         'support_resistance': support_resistance,
     }

@@ -207,6 +207,41 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertEqual(payload["info"]["trailingPE"], 0.0)
         self.assertEqual(payload["info"]["assetClass"], "crypto")
 
+    def test_get_stock_data_marks_synthetic_and_suppresses_recommendation(self):
+        # When no provider returns bars, the chart falls back to a synthetic
+        # random walk. The payload must be flagged synthetic AND the ML verdict
+        # must be neutralised to a non-actionable HOLD/0.0 so no buy/sell
+        # recommendation ever rides on fabricated prices.
+        service = MarketDataService()
+
+        class _UpPredictor:
+            is_trained = True
+
+            def train(self, df):
+                return {"accuracy": 0.9, "features": []}
+
+            def predict_next_movement(self, df, *, user=None):
+                return {"direction": "UP", "confidence": 0.9}
+
+        service._predictor_cache["FAKE"] = {
+            "predictor": _UpPredictor(),
+            "metadata": None,
+            "expires_at": float("inf"),
+        }
+
+        with patch.object(service, "get_provider_history_df", return_value=pd.DataFrame()), patch.object(
+            service,
+            "get_market_news",
+            return_value={"items": [], "aggregate_score": 0.0, "aggregate_label": "neutral", "provider": None},
+        ), patch.object(service, "get_ticker_info", return_value={}):
+            payload = service.get_stock_data("FAKE", period="6mo", interval="1d")
+
+        self.assertTrue(payload["synthetic"])
+        prediction = payload["prediction"]
+        self.assertTrue(prediction["synthetic"])
+        self.assertEqual(prediction["direction"], "HOLD")
+        self.assertEqual(prediction["confidence"], 0.0)
+
     def test_get_stock_data_uses_alpha_vantage_history_for_etf(self):
         alpha_vantage = _FakeAlphaVantage()
         service = MarketDataService(alpha_vantage_service=alpha_vantage)
