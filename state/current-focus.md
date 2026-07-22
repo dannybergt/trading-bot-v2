@@ -35,7 +35,16 @@ Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verw
 PR #8 nach `main` gemergt (ff-only), `publish.yml` + nexainer deployen auf BC-KI01. **Alle 5 Pflicht-Gates lokal GRUEN** (`verify-branch.sh`: build, unit 262, api-regression, ui-regression, upgrade-rehearsal) — auf diesem Sandbox-Host mit `docker build`-DNS + Chrome gefahren. 6 Commits: Mock-Ehrlichkeit, Gratis-yfinance-Daten (Charts+KPIs), Analystenkonsens (Anzeige), + drei Provider-Robustheit (Wall-Clock-Timeouts, Circuit-Breaker, voller yfinance-Sweep). Die Gate-Iteration deckte einen echten Prod-Bug auf und behob ihn: ungebundene yfinance/RSS-Calls liessen Provider-lastige Endpoints (`/api/research`, `/api/search`) unter Yahoo-Drossel >60s haengen → jetzt `app/net_timeout.py` (Wall-Clock + Provider-Circuit-Breaker, 60s Cooldown).
 **Offen (User):** Live-Verifikation auf BC-KI01 (Backend `/api/health`, echte Aktien-Charts/KPIs ohne Key, Analystenkonsens-Karte, Mock-Banner bei Fantasie-Symbol).
 
-## NAECHSTES GROSSES ZIEL: alle Signale sollen ECHT in die Kauf/Verkauf-Entscheidung einfliessen (Composite, Option C)
+## AUSGELIEFERT 2026-07-22: Stufe 2a Composite-Score gemergt @ da99d4f (PR #9)
+
+Composite-Decision-Layer live: ML(Technik)+Analysten+Fundamentals+News als gewichtete, sichtbare Achsen → Gesamt-Verdict BUY/HOLD/SELL mit Beitrags-Aufschluesselung (Default Tech40/Analyst25/Fund20/News15, vom User bestaetigt). `app/composite_score.py` + `CompositeVerdictCard`. AUGMENT (ML bleibt separat), Auto-Execution unberuehrt. Alle 5 Gates gruen (`verify-branch.sh`, Unit 272). PR #9 ff-only nach main, publish/nexainer deployen.
+
+## Composite-Fortschritt + offene Stufen (Option C)
+- **2a Composite-Score (Anzeige)** — ✅ ERLEDIGT (PR #9)
+- **2b Auto-Execution an Composite haengen** — ⬜ NAECHSTES; `auto_execution.evaluate_proposal_from_prediction` soll den Composite-Score statt nur ML-confidence als Gate/Input nehmen. ERST nach Backtest-Kalibrierung (sonst handelt es auf ungetesteten Gewichten).
+- **2c News/Fundamentals aus ML-Broadcast loesen** — ⬜ die kosmetischen konstanten ML-Features (`services.py` News_Sentiment/PE broadcast) raus/echte Achsen; Composite ist dann die einzige Stelle, wo sie zaehlen.
+- **2d Gewichte konfigurierbar (Admin-UI) + Backtest-Kalibrierung** — ⬜ Gewichte per platform-config + ein Backtest-Report, der die Achsen-Gewichte gegen historische Trefferquote optimiert.
+Wichtig: 2b braucht 2d (Kalibrierung) zuerst, sonst Auto-Trading auf Bauchgefuehl-Gewichten.
 
 **User-Ansage (mehrfach, verbindlich):** Die Entscheidungen sollen wirklich ALLE verfuegbaren Infos/Quellen nutzen (Technical + Analystenmeinungen + Fundamentals + News + Makro), nicht nur anzeigen. Heutiger Stand (code-belegt, s. ADR 2026-07-22 "wie/warum gewichtet"): Empfehlung ist effektiv REIN TECHNISCH (ML-Ensemble aus 15 Indikatoren); News/Fundamentals sind kosmetische Broadcast-Features (~0 Beitrag); Analysten waren nur Anzeige. Ziel = echter gewichteter Composite-Score + Behebung der Broadcast-Schwaeche.
 
