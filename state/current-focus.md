@@ -30,7 +30,12 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-07-22: GROSSES ZIEL bestaetigt — alle Signale sollen ECHT in die Kauf/Verkauf-Entscheidung einfliessen (Option C)
+## AUSGELIEFERT 2026-07-22: PR #8 gemergt @ 22ec0e9 (Ehrlichkeit + Gratis-Daten + Analystenkonsens + Provider-Haertung)
+
+PR #8 nach `main` gemergt (ff-only), `publish.yml` + nexainer deployen auf BC-KI01. **Alle 5 Pflicht-Gates lokal GRUEN** (`verify-branch.sh`: build, unit 262, api-regression, ui-regression, upgrade-rehearsal) — auf diesem Sandbox-Host mit `docker build`-DNS + Chrome gefahren. 6 Commits: Mock-Ehrlichkeit, Gratis-yfinance-Daten (Charts+KPIs), Analystenkonsens (Anzeige), + drei Provider-Robustheit (Wall-Clock-Timeouts, Circuit-Breaker, voller yfinance-Sweep). Die Gate-Iteration deckte einen echten Prod-Bug auf und behob ihn: ungebundene yfinance/RSS-Calls liessen Provider-lastige Endpoints (`/api/research`, `/api/search`) unter Yahoo-Drossel >60s haengen → jetzt `app/net_timeout.py` (Wall-Clock + Provider-Circuit-Breaker, 60s Cooldown).
+**Offen (User):** Live-Verifikation auf BC-KI01 (Backend `/api/health`, echte Aktien-Charts/KPIs ohne Key, Analystenkonsens-Karte, Mock-Banner bei Fantasie-Symbol).
+
+## NAECHSTES GROSSES ZIEL: alle Signale sollen ECHT in die Kauf/Verkauf-Entscheidung einfliessen (Composite, Option C)
 
 **User-Ansage (mehrfach, verbindlich):** Die Entscheidungen sollen wirklich ALLE verfuegbaren Infos/Quellen nutzen (Technical + Analystenmeinungen + Fundamentals + News + Makro), nicht nur anzeigen. Heutiger Stand (code-belegt, s. ADR 2026-07-22 "wie/warum gewichtet"): Empfehlung ist effektiv REIN TECHNISCH (ML-Ensemble aus 15 Indikatoren); News/Fundamentals sind kosmetische Broadcast-Features (~0 Beitrag); Analysten waren nur Anzeige. Ziel = echter gewichteter Composite-Score + Behebung der Broadcast-Schwaeche.
 
