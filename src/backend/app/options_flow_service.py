@@ -26,6 +26,7 @@ import pandas as pd
 import yfinance as yf
 
 from app.asset_metadata import to_yfinance_symbol
+from app.net_timeout import call_with_timeout
 from app.rate_limit import acquire as acquire_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -69,11 +70,14 @@ class OptionsFlowService:
             logger.exception("options_flow_ticker_failed symbol=%s", symbol)
             return empty
 
-        try:
-            expiries: list[str] = list(ticker.options or [])
-        except Exception:
-            logger.exception("options_flow_expiries_failed symbol=%s", symbol)
-            return empty
+        # yfinance's `.options`/`.option_chain` take no timeout argument and can
+        # hang under Yahoo throttling; bound them on a wall clock so a slow
+        # provider degrades to an empty snapshot instead of stalling the request.
+        expiries: list[str] = call_with_timeout(
+            lambda: list(ticker.options or []),
+            default=[],
+            label=f"options_expiries:{symbol}",
+        )
         if not expiries:
             return self._cache_and_return(cache_key, empty)
 
@@ -81,12 +85,12 @@ class OptionsFlowService:
         if chosen_expiry is None:
             return self._cache_and_return(cache_key, empty)
 
-        try:
-            chain = ticker.option_chain(chosen_expiry)
-        except Exception:
-            logger.exception(
-                "options_flow_chain_failed symbol=%s expiry=%s", symbol, chosen_expiry
-            )
+        chain = call_with_timeout(
+            lambda: ticker.option_chain(chosen_expiry),
+            default=None,
+            label=f"options_chain:{symbol}",
+        )
+        if chain is None:
             return self._cache_and_return(cache_key, empty)
 
         calls = _safe_dataframe(getattr(chain, "calls", None))

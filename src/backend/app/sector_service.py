@@ -22,6 +22,7 @@ from typing import Any
 
 import yfinance as yf
 
+from app.net_timeout import call_with_timeout
 from app.rate_limit import acquire as acquire_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,11 @@ class SectorService:
             logger.warning("sector_yfinance_rate_limit_skip symbol=%s", symbol)
             return []
         try:
-            hist = yf.Ticker(symbol).history(period="9mo")
+            hist = call_with_timeout(
+                lambda: yf.Ticker(symbol).history(period="9mo"),
+                default=None,
+                label=f"sector:{symbol}",
+            )
             if hist is None or hist.empty or "Close" not in hist.columns:
                 return []
             return [float(v) for v in hist["Close"].tolist() if v is not None]

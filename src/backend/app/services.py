@@ -8,6 +8,7 @@ from app.analysis import calculate_indicators, detect_patterns
 from app.alpha_vantage_service import AlphaVantageService
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
 from app.fmp_service import FmpService
+from app.net_timeout import call_with_timeout
 from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_news
 from app.ml_models import PricePredictor
@@ -250,13 +251,13 @@ class MarketDataService:
             "1d": "5d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
             "6mo": "6mo", "1y": "1y", "max": "max",
         }.get(period, "6mo")
-        try:
-            hist = yf.Ticker(to_yfinance_symbol(symbol)).history(
+        hist = call_with_timeout(
+            lambda: yf.Ticker(to_yfinance_symbol(symbol)).history(
                 period=yf_period, interval=interval
-            )
-        except Exception:
-            logger.exception("stock_history_yfinance_failed symbol=%s", symbol)
-            return pd.DataFrame()
+            ),
+            default=None,
+            label=f"stock_history:{symbol}",
+        )
         if hist is None or hist.empty:
             return pd.DataFrame()
         columns = ["Open", "High", "Low", "Close", "Volume"]
