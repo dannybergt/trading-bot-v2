@@ -231,6 +231,25 @@
     }
   },
   "analysis": {
+    "analyst": {
+      "title": "Analystenkonsens",
+      "source": "Quelle: {{source}}",
+      "mean": "Ø {{mean}}/5",
+      "analysts": "{{n}} Analysten",
+      "priceTarget": "Kursziel (Ø)",
+      "confirms": "Analysten bestaetigen das technische Signal",
+      "diverges": "Analysten widersprechen dem technischen Signal",
+      "mixed": "Analysten: keine klare Bestaetigung",
+      "rec": {
+        "strong_buy": "Starker Kauf",
+        "buy": "Kaufen",
+        "hold": "Halten",
+        "sell": "Verkaufen",
+        "strong_sell": "Starker Verkauf",
+        "outperform": "Uebergewichten",
+        "underperform": "Untergewichten"
+      }
+    },
     "synthetic": {
       "title": "Keine echten Marktdaten — Platzhalterwerte",
       "body": "Fuer dieses Symbol hat kein Datenanbieter Kursdaten geliefert. Chart, Indikatoren und Muster beruhen auf synthetischen Platzhalterwerten. Es wird bewusst keine Kauf-/Verkaufsempfehlung gegeben. Hinterlege einen passenden Provider-API-Key (z. B. Alpaca, Alpha Vantage), um echte Daten zu sehen."

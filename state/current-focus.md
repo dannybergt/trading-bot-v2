@@ -30,7 +30,18 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-07-22: Backlog #1 + Gratis-Daten-Fallbacks erledigt — auf Branch, Merge-Gate offen
+## Naechster Einstieg 2026-07-22: GROSSES ZIEL bestaetigt — alle Signale sollen ECHT in die Kauf/Verkauf-Entscheidung einfliessen (Option C)
+
+**User-Ansage (mehrfach, verbindlich):** Die Entscheidungen sollen wirklich ALLE verfuegbaren Infos/Quellen nutzen (Technical + Analystenmeinungen + Fundamentals + News + Makro), nicht nur anzeigen. Heutiger Stand (code-belegt, s. ADR 2026-07-22 "wie/warum gewichtet"): Empfehlung ist effektiv REIN TECHNISCH (ML-Ensemble aus 15 Indikatoren); News/Fundamentals sind kosmetische Broadcast-Features (~0 Beitrag); Analysten waren nur Anzeige. Ziel = echter gewichteter Composite-Score + Behebung der Broadcast-Schwaeche.
+
+**Vorschlag-Fahrplan (mit User abzustimmen, mehrstufig, je eigener PR):**
+1. Analystenkonsens erfassen + transparent zeigen — **ERLEDIGT** (dieser Slice, Divergenz-Badge).
+2. Composite-Decision-Layer einfuehren: expliziter, gewichteter Score aus normalisierten Sub-Signalen (technical ML-P(UP), Analysten-stance/Upside, Fundamentals-Value-Score, News-Sentiment-Frische, Makro-Halt), jede Komponente mit sichtbarem Gewicht + Beitrag (Produktvision "explizite Wahrscheinlichkeiten + Quellen"). Ersetzt NICHT das ML, sondern kombiniert es mit den anderen Quellen zu einem nachvollziehbaren Verdict.
+3. News/Fundamentals aus dem kosmetischen ML-Broadcast loesen (entweder echte rolling Features ODER raus aus dem ML und rein in den Composite-Layer als eigene Achsen).
+4. Auto-Execution-Gates an den Composite-Score haengen (nicht nur ML-confidence).
+Wichtig: Kalibrierung + Backtest je Stufe, sonst nur gefuehltes "nutzt alles". Grosser Umbau (>2h, §13) — Stufen einzeln reviewen.
+
+## Erledigt 2026-07-22: Backlog #1 + Gratis-Daten-Fallbacks + Analystenkonsens (Anzeige) — auf Branch, Merge-Gate offen
 
 **Zusatz diese Session (gleicher Branch `fix/synthetic-data-honesty`, NICHT gepusht):** Nach Rueckfrage des Users (woher echte Daten? Konto/Kosten? fehlende Fundamentaldaten/KPIs) zwei Gratis-Luecken geschlossen — beide mit **yfinance, kein Account/Key noetig**:
 - **Aktien-Chart-Historie**: neue `get_yfinance_history_df` (daily/weekly), in `get_stock_data` vor dem synthetischen Fallback fuer `stock` + `1d/1wk` eingehaengt. Aktien-Charts sind jetzt ohne Alpaca-Key echt (Intraday braucht weiter Alpaca → ehrlich synthetisch mit Banner).

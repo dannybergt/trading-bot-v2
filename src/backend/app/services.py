@@ -79,6 +79,73 @@ def fundamentals_detail_from_ticker_info(info: dict) -> dict:
     return {key: value for key, value in detail.items() if value is not None}
 
 
+def analyst_consensus_from_ticker_info(info: dict) -> dict:
+    """Extract the free analyst consensus (recommendation + price target) from a
+    yfinance ``.info`` dict.
+
+    Surfaced as a standalone decision criterion beside the technical ML verdict,
+    deliberately NOT folded into the model's confidence — so the user sees
+    analyst agreement or divergence transparently instead of a blended black box.
+    yfinance provides this without an account; FMP can enrich it later.
+    """
+    if not isinstance(info, dict) or not info:
+        return {}
+
+    def _num(*keys):
+        for key in keys:
+            value = info.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+        return None
+
+    key_raw = info.get("recommendationKey")
+    recommendation = (
+        key_raw.strip().lower()
+        if isinstance(key_raw, str) and key_raw.strip()
+        else None
+    )
+    if recommendation in {"none", "n/a"}:
+        recommendation = None
+    mean = _num("recommendationMean")
+    analyst_count = _num("numberOfAnalystOpinions")
+    target_mean = _num("targetMeanPrice")
+    target_high = _num("targetHighPrice")
+    target_low = _num("targetLowPrice")
+    price = _num("currentPrice", "regularMarketPrice", "previousClose")
+
+    # Stance prefers the discrete recommendation; falls back to the 1..5 mean
+    # (1 = strong buy ... 5 = strong sell) when only that is present.
+    stance = None
+    if recommendation in {"strong_buy", "buy", "outperform"}:
+        stance = "bullish"
+    elif recommendation == "hold":
+        stance = "neutral"
+    elif recommendation in {"sell", "strong_sell", "underperform"}:
+        stance = "bearish"
+    elif mean is not None:
+        stance = "bullish" if mean <= 2.5 else "neutral" if mean <= 3.5 else "bearish"
+
+    if stance is None and target_mean is None:
+        return {}
+
+    upside_pct = None
+    if target_mean is not None and price and price > 0:
+        upside_pct = round((target_mean - price) / price * 100.0, 2)
+
+    consensus = {
+        "recommendation": recommendation,
+        "recommendationMean": mean,
+        "stance": stance,
+        "analystCount": int(analyst_count) if analyst_count is not None else None,
+        "targetMean": target_mean,
+        "targetHigh": target_high,
+        "targetLow": target_low,
+        "targetUpsidePct": upside_pct,
+        "source": "yfinance",
+    }
+    return {key: value for key, value in consensus.items() if value is not None}
+
+
 class MarketDataService:
     def __init__(
         self,
@@ -455,6 +522,14 @@ class MarketDataService:
         forward_pe = tickerInfo.get('forwardPE', 0.0)
         price_to_book = tickerInfo.get('priceToBook', 0.0)
 
+        # Analyst consensus is a standalone criterion (not an ML feature) —
+        # captured here so the API can show it beside the technical verdict.
+        analyst = (
+            analyst_consensus_from_ticker_info(tickerInfo)
+            if include_fundamentals and not asset_profile.get("isCrypto")
+            else {}
+        )
+
         df_analyzed['News_Sentiment'] = sentiment_score
         df_analyzed['PE_Ratio'] = pe_ratio
         df_analyzed['Forward_PE'] = forward_pe
@@ -558,6 +633,7 @@ class MarketDataService:
             'asset': asset_profile,
             'provider': provider_snapshot,
             'synthetic': used_synthetic,
+            'analyst': analyst,
         }
 
     def _generate_mock_data(self, symbol, period, interval):

@@ -50,6 +50,18 @@ type Prediction = {
   modelAccuracy?: number | null;
 };
 
+type AnalystConsensus = {
+  recommendation?: string | null;
+  recommendationMean?: number | null;
+  stance?: "bullish" | "neutral" | "bearish" | null;
+  analystCount?: number | null;
+  targetMean?: number | null;
+  targetHigh?: number | null;
+  targetLow?: number | null;
+  targetUpsidePct?: number | null;
+  source?: string | null;
+};
+
 type BacktestReliability = {
   bucket: string;
   predictedMid: number;
@@ -120,6 +132,7 @@ type StockResponse = {
   patterns: ChartPattern[];
   prediction: Prediction | null;
   synthetic?: boolean;
+  analyst?: AnalystConsensus | null;
   volume_profile?: VolumeProfilePayload | null;
   support_resistance?: ChartLevel[] | null;
 };
@@ -660,6 +673,11 @@ export function AnalysisPage() {
         symbol={decoded}
         confidenceOverall={dataQualityQuery.data?.overall}
       />
+      <AnalystConsensusCard
+        consensus={stock?.analyst}
+        prediction={stock?.prediction}
+        currency={stock?.info?.currency}
+      />
       <PatternsCard patterns={patterns} />
 
       {stockQuery.isLoading ? (
@@ -1162,6 +1180,95 @@ function PatternsCard({ patterns }: { patterns: ChartPattern[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function AnalystConsensusCard({
+  consensus,
+  prediction,
+  currency,
+}: {
+  consensus?: AnalystConsensus | null;
+  prediction?: Prediction | null;
+  currency?: string;
+}) {
+  const { t } = useTranslation();
+  if (!consensus) return null;
+  const { stance, recommendation, recommendationMean, analystCount, targetMean, targetUpsidePct, source } =
+    consensus;
+  if (!stance && targetMean == null) return null;
+
+  // Compare the analyst stance against the technical ML verdict direction.
+  const mlStance =
+    prediction?.direction === "UP"
+      ? "bullish"
+      : prediction?.direction === "DOWN"
+      ? "bearish"
+      : "neutral";
+  let agreement: "confirms" | "diverges" | "mixed" = "mixed";
+  if (stance && stance !== "neutral" && mlStance !== "neutral") {
+    agreement = stance === mlStance ? "confirms" : "diverges";
+  }
+
+  const stanceClass =
+    stance === "bullish"
+      ? "text-bergt-green"
+      : stance === "bearish"
+      ? "text-red-400"
+      : "text-slate-300";
+  const agreeClass =
+    agreement === "confirms"
+      ? "border-bergt-green/40 bg-bergt-green/10 text-bergt-green"
+      : agreement === "diverges"
+      ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+      : "border-slate-700 bg-slate-900 text-slate-300";
+  const recLabel = recommendation
+    ? t(`analysis.analyst.rec.${recommendation}`, { defaultValue: recommendation })
+    : null;
+  const cur = currency || "USD";
+
+  return (
+    <section className="card">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          {t("analysis.analyst.title")}
+        </h2>
+        {source ? (
+          <span className="text-xs text-slate-500">{t("analysis.analyst.source", { source })}</span>
+        ) : null}
+      </header>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        {recLabel ? <span className={`font-semibold ${stanceClass}`}>{recLabel}</span> : null}
+        {recommendationMean != null ? (
+          <span className="text-slate-400">
+            {t("analysis.analyst.mean", { mean: recommendationMean.toFixed(1) })}
+          </span>
+        ) : null}
+        {analystCount != null ? (
+          <span className="text-slate-500">{t("analysis.analyst.analysts", { n: analystCount })}</span>
+        ) : null}
+        {targetMean != null ? (
+          <span className="text-slate-300">
+            {t("analysis.analyst.priceTarget")}:{" "}
+            <span className="tabular-nums">
+              {targetMean.toFixed(2)} {cur}
+            </span>
+            {targetUpsidePct != null ? (
+              <span className={targetUpsidePct >= 0 ? "text-bergt-green" : "text-red-400"}>
+                {" "}
+                ({targetUpsidePct >= 0 ? "+" : ""}
+                {targetUpsidePct.toFixed(1)}%)
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </div>
+      {prediction?.direction ? (
+        <div className={`mt-2 inline-block rounded-md border px-2 py-1 text-xs ${agreeClass}`}>
+          {t(`analysis.analyst.${agreement}`)}
+        </div>
+      ) : null}
     </section>
   );
 }

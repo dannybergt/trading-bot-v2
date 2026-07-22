@@ -231,6 +231,25 @@
     }
   },
   "analysis": {
+    "analyst": {
+      "title": "Analyst consensus",
+      "source": "Source: {{source}}",
+      "mean": "avg {{mean}}/5",
+      "analysts": "{{n}} analysts",
+      "priceTarget": "Price target (avg)",
+      "confirms": "Analysts confirm the technical signal",
+      "diverges": "Analysts contradict the technical signal",
+      "mixed": "Analysts: no clear confirmation",
+      "rec": {
+        "strong_buy": "Strong Buy",
+        "buy": "Buy",
+        "hold": "Hold",
+        "sell": "Sell",
+        "strong_sell": "Strong Sell",
+        "outperform": "Outperform",
+        "underperform": "Underperform"
+      }
+    },
     "synthetic": {
       "title": "No real market data — placeholder values",
       "body": "No data provider returned prices for this symbol. The chart, indicators and patterns are based on synthetic placeholder values. No buy/sell recommendation is given on purpose. Configure a suitable provider API key (e.g. Alpaca, Alpha Vantage) to see real data."

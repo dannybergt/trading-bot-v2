@@ -3,7 +3,11 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.services import MarketDataService, fundamentals_detail_from_ticker_info
+from app.services import (
+    MarketDataService,
+    analyst_consensus_from_ticker_info,
+    fundamentals_detail_from_ticker_info,
+)
 
 
 class _FakePredictor:
@@ -319,6 +323,31 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertNotIn("dividendYieldTtm", detail)   # no price -> no fabricated yield
         self.assertEqual(detail["annualDividend"], 2.0)
         self.assertEqual(detail["peRatioTtm"], 10.0)
+
+    def test_analyst_consensus_from_recommendation_key_and_target(self):
+        info = {
+            "recommendationKey": "buy",
+            "recommendationMean": 1.9,
+            "numberOfAnalystOpinions": 34,
+            "targetMeanPrice": 210.0,
+            "targetHighPrice": 260.0,
+            "targetLowPrice": 170.0,
+            "currentPrice": 188.0,
+        }
+        c = analyst_consensus_from_ticker_info(info)
+        self.assertEqual(c["stance"], "bullish")
+        self.assertEqual(c["recommendation"], "buy")
+        self.assertEqual(c["analystCount"], 34)
+        self.assertEqual(c["targetMean"], 210.0)
+        self.assertAlmostEqual(c["targetUpsidePct"], 11.7, places=1)  # (210-188)/188
+        self.assertEqual(c["source"], "yfinance")
+
+    def test_analyst_consensus_falls_back_to_mean_when_no_key(self):
+        # No recommendationKey -> stance derived from the 1..5 mean (4.2 -> bearish)
+        c = analyst_consensus_from_ticker_info({"recommendationMean": 4.2})
+        self.assertEqual(c["stance"], "bearish")
+        self.assertNotIn("targetUpsidePct", c)   # no target/price -> no fabricated upside
+        self.assertEqual(analyst_consensus_from_ticker_info({}), {})
 
     def test_get_stock_data_uses_alpha_vantage_history_for_etf(self):
         alpha_vantage = _FakeAlphaVantage()
