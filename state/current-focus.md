@@ -30,7 +30,16 @@ Trifft eine fremde Session schon einen Default-Port, eigene Skripte mit Env-Vars
 
 Niemals `docker rm -f` oder `docker compose --force-recreate` auf scheinbar verwaiste Container loslassen — kann fremde Sessions kappen. Voller Hintergrund: `~/.claude/projects/-root/memory/feedback_trading_bot_v2_ports.md`.
 
-## Naechster Einstieg 2026-07-22: Backlog #1 erledigt (Mock-Daten-Ehrlichkeit) — auf Branch, Merge-Gate offen
+## Naechster Einstieg 2026-07-22: Backlog #1 + Gratis-Daten-Fallbacks erledigt — auf Branch, Merge-Gate offen
+
+**Zusatz diese Session (gleicher Branch `fix/synthetic-data-honesty`, NICHT gepusht):** Nach Rueckfrage des Users (woher echte Daten? Konto/Kosten? fehlende Fundamentaldaten/KPIs) zwei Gratis-Luecken geschlossen — beide mit **yfinance, kein Account/Key noetig**:
+- **Aktien-Chart-Historie**: neue `get_yfinance_history_df` (daily/weekly), in `get_stock_data` vor dem synthetischen Fallback fuer `stock` + `1d/1wk` eingehaengt. Aktien-Charts sind jetzt ohne Alpaca-Key echt (Intraday braucht weiter Alpaca → ehrlich synthetisch mit Banner).
+- **Fundamentals-KPIs** (KGV/KUV/KBV/EPS/Umsatz/Gewinn/ROE/Verschuldung/Dividende): neue reine Funktion `fundamentals_detail_from_ticker_info(info)`; im Research-Endpoint Fallback wenn FMP unkonfiguriert/leer. FMP bleibt Primaer (ISIN/WKN + datierte Income). Einheiten korrekt normalisiert (debtToEquity /100; Dividendenrendite aus `dividendRate/price` statt dem mehrdeutigen yf-Feld). Quelle-Label im UI dynamisch (`Quelle: FMP` / `Quelle: yfinance`).
+- Tests: +3 (History-Fallback, KPI-Mapper-Einheiten, Yield-ohne-Preis). Suite **255 gruen**; `tsc` gruen.
+
+**Datenlage kompakt (fuer den User):** Aktien = komplett gratis ohne Account (yfinance). ETF/Krypto-Historie = kostenloser Alpha-Vantage-Key. FMP/Twelve Data/FRED = optionale Gratis-Keys fuer mehr Tiefe. Alpaca = kostenloser Account fuer offiziellen Aktien-Feed (verdraengt yfinance-Fallback). Kein Provider ist kostenpflichtig noetig.
+
+## Vorheriger Einstiegspunkt 2026-07-22: Backlog #1 (Mock-Daten-Ehrlichkeit)
 
 **Erledigt diese Session (Branch `fix/synthetic-data-honesty`, NICHT gepusht):** Backlog-Punkt #1 aus dem Audit umgesetzt — synthetische Random-Walk-Daten werden jetzt gekennzeichnet und die Empfehlung unterdrueckt statt still ins ML zu fliessen. Aenderungen:
 - `services.py`: `get_stock_data` fuehrt `used_synthetic`, gibt `synthetic: bool` zurueck; bei synthetisch → Prognose neutralisiert auf `HOLD/confidence 0.0/synthetic=True` (blockt Auto-Execution [nur UP/DOWN + conf>=0.6] und Push [conf>=0.80] automatisch).

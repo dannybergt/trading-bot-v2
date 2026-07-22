@@ -59,7 +59,7 @@ from app.models import (
 )
 from app import paper_trading
 from app.push_service import PushService
-from app.services import MarketDataService
+from app.services import MarketDataService, fundamentals_detail_from_ticker_info
 from app.watchlist_alerts import (
     build_provider_context,
     build_watchlist_alert,
@@ -2091,6 +2091,12 @@ def get_symbol_research(
         if service.fmp.configured and not asset_profile.get("isCrypto")
         else {}
     )
+    # Free fallback: without an FMP key the KPI grid (KGV/EPS/Umsatz/Gewinn/...)
+    # would stay empty. yfinance already answered for `ticker_info`, so derive
+    # the same detail contract from it — FMP stays primary (adds ISIN/WKN and
+    # dated income lines) but is no longer required to see the core KPIs.
+    if not fundamentals_detail and not asset_profile.get("isCrypto"):
+        fundamentals_detail = fundamentals_detail_from_ticker_info(ticker_info)
 
     research_signals = (
         service.fmp.normalized_research_signals(asset_profile["symbol"])

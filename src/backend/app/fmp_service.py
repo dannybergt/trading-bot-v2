@@ -378,6 +378,7 @@ class FmpService:
             ),
             "debtToEquityTtm": _safe_float(metrics_ttm.get("debtToEquityTTM")),
             "returnOnEquityTtm": _safe_float(metrics_ttm.get("roeTTM")),
+            "source": "FMP",
         }
         # Strip None values so the UI's null-checks don't show every row as
         # "—" when only one provider line is missing.

@@ -237,7 +237,7 @@
     },
     "fundamentalsDetail": {
       "title": "Fundamentals-Detail",
-      "source": "Quelle: FMP",
+      "source": "Quelle: {{source}}",
       "identifiers": "Kennungen",
       "valuation": "Bewertung",
       "earnings": "Gewinn & Bilanz",

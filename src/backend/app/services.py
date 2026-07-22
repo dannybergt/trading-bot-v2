@@ -20,6 +20,65 @@ TICKER_INFO_TTL_SECONDS = 5 * 60
 NEWS_CACHE_TTL_SECONDS = 60
 PREDICTOR_MEMORY_TTL_SECONDS = 60 * 60
 
+
+def fundamentals_detail_from_ticker_info(info: dict) -> dict:
+    """Map a yfinance ``.info`` dict onto the ``fundamentalsDetail`` contract
+    the AnalysisPage KPI grid consumes — a free (no-key) fallback for when FMP
+    is not configured, so KGV/EPS/Umsatz/Gewinn etc. still fill in.
+
+    Unit normalisation is the delicate part; the frontend renders the ratio
+    fields raw and the percentage fields via ``*100``:
+    - yfinance reports ``debtToEquity`` as a percentage (e.g. 154.5 == 1.545x),
+      so we divide by 100 to match FMP's ratio convention.
+    - ``dividendYield``'s unit has flipped between yfinance releases, so rather
+      than trust it we derive the yield from the unambiguous ``dividendRate``
+      (annual currency/share) over the current price — always a clean fraction.
+    ISIN/WKN/CUSIP stay FMP-only; yfinance does not expose them reliably.
+    """
+    if not isinstance(info, dict) or not info:
+        return {}
+
+    def _num(*keys):
+        for key in keys:
+            value = info.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+        return None
+
+    price = _num("currentPrice", "regularMarketPrice", "previousClose")
+    dividend_rate = _num("dividendRate")
+    dividend_yield = (
+        dividend_rate / price
+        if dividend_rate is not None and price and price > 0
+        else None
+    )
+    debt_to_equity = _num("debtToEquity")
+    if debt_to_equity is not None:
+        debt_to_equity = debt_to_equity / 100.0
+    market_cap = _num("marketCap")
+
+    detail = {
+        "exchange": info.get("exchange"),
+        "currency": info.get("currency"),
+        "beta": _num("beta"),
+        "marketCap": int(market_cap) if market_cap is not None else None,
+        "peRatioTtm": _num("trailingPE"),
+        "forwardPe": _num("forwardPE"),
+        "priceToBookTtm": _num("priceToBook"),
+        "priceToSalesTtm": _num("priceToSalesTrailing12Months"),
+        "epsTtm": _num("trailingEps"),
+        "revenue": _num("totalRevenue"),
+        "netIncome": _num("netIncomeToCommon"),
+        "returnOnEquityTtm": _num("returnOnEquity"),
+        "debtToEquityTtm": debt_to_equity,
+        "dividendYieldTtm": dividend_yield,
+        "annualDividend": dividend_rate,
+        "payoutRatioTtm": _num("payoutRatio"),
+        "source": "yfinance",
+    }
+    return {key: value for key, value in detail.items() if value is not None}
+
+
 class MarketDataService:
     def __init__(
         self,
@@ -108,6 +167,34 @@ class MarketDataService:
         if asset_class not in {"etf", "crypto"}:
             return pd.DataFrame()
         return self.alpha_vantage.get_history_df(profile["symbol"], asset_class, limit=limit)
+
+    def get_yfinance_history_df(
+        self, symbol: str, *, period: str = "6mo", interval: str = "1d"
+    ) -> pd.DataFrame:
+        """Free (no-key) stock OHLCV history via yfinance, used as a fallback
+        when no Alpaca key is configured. Best-effort: yfinance is unofficial
+        and rate-limited, so an empty frame just means the caller falls through
+        to the synthetic placeholder. Daily/weekly only — intraday needs Alpaca.
+        """
+        if not acquire_rate_limit("yfinance", timeout=4.0):
+            logger.warning("stock_history_yfinance_rate_limit_skip symbol=%s", symbol)
+            return pd.DataFrame()
+        yf_period = {
+            "1d": "5d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
+            "6mo": "6mo", "1y": "1y", "max": "max",
+        }.get(period, "6mo")
+        try:
+            hist = yf.Ticker(to_yfinance_symbol(symbol)).history(
+                period=yf_period, interval=interval
+            )
+        except Exception:
+            logger.exception("stock_history_yfinance_failed symbol=%s", symbol)
+            return pd.DataFrame()
+        if hist is None or hist.empty:
+            return pd.DataFrame()
+        columns = ["Open", "High", "Low", "Close", "Volume"]
+        available = [c for c in columns if c in hist.columns]
+        return hist[available].dropna()
 
     def _get_or_train_predictor(
         self, symbol: str, df: pd.DataFrame
@@ -326,6 +413,13 @@ class MarketDataService:
 
         if df.empty:
             df = self.get_provider_history_df(symbol, asset_profile=asset_profile, limit=limit)
+
+        # Free stock-history fallback: without an Alpaca key, stock bars would
+        # otherwise go straight to the synthetic placeholder. yfinance covers
+        # daily/weekly stock OHLCV for free (no account); intraday still needs
+        # Alpaca and falls through to the placeholder.
+        if df.empty and asset_profile.get("assetClass") == "stock" and interval in ("1d", "1wk"):
+            df = self.get_yfinance_history_df(symbol, period=period, interval=interval)
 
         if df.empty:
             logger.warning("market_data_empty_using_mock symbol=%s period=%s interval=%s", symbol, period, interval)

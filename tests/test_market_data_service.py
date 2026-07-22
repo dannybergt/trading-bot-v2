@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.services import MarketDataService
+from app.services import MarketDataService, fundamentals_detail_from_ticker_info
 
 
 class _FakePredictor:
@@ -241,6 +241,84 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertTrue(prediction["synthetic"])
         self.assertEqual(prediction["direction"], "HOLD")
         self.assertEqual(prediction["confidence"], 0.0)
+
+    def test_get_stock_data_uses_yfinance_stock_history_before_synthetic(self):
+        # Without an Alpaca key, stock bars used to fall straight to the
+        # synthetic placeholder. The free yfinance history fallback must fill
+        # them first, so the payload is NOT flagged synthetic.
+        idx = pd.date_range("2026-01-01", periods=120, freq="D")
+        hist = pd.DataFrame(
+            {
+                "Open": [100 + i * 0.1 for i in range(120)],
+                "High": [101 + i * 0.1 for i in range(120)],
+                "Low": [99 + i * 0.1 for i in range(120)],
+                "Close": [100 + i * 0.1 for i in range(120)],
+                "Volume": [1_000_000] * 120,
+            },
+            index=idx,
+        )
+
+        class _FakeYfTicker:
+            def __init__(self, sym):
+                pass
+
+            def history(self, period=None, interval=None):
+                return hist
+
+        service = MarketDataService()  # no Alpaca configured
+        _seed_fake_predictor(service, "AAPL")
+
+        with patch("app.services.yf.Ticker", _FakeYfTicker), patch(
+            "app.services.acquire_rate_limit", return_value=True
+        ), patch.object(
+            service,
+            "get_market_news",
+            return_value={"items": [], "aggregate_score": 0.0, "aggregate_label": "neutral", "provider": None},
+        ), patch.object(service, "get_ticker_info", return_value={}):
+            payload = service.get_stock_data("AAPL", period="6mo", interval="1d")
+
+        self.assertFalse(payload["synthetic"])
+        self.assertGreater(len(payload["data"].index), 30)
+
+    def test_fundamentals_detail_from_ticker_info_maps_and_normalises_units(self):
+        info = {
+            "exchange": "NMS",
+            "currency": "USD",
+            "beta": 1.29,
+            "marketCap": 3_000_000_000_000,
+            "trailingPE": 32.5,
+            "forwardPE": 28.1,
+            "priceToBook": 47.2,
+            "priceToSalesTrailing12Months": 8.3,
+            "trailingEps": 6.13,
+            "totalRevenue": 391_000_000_000,
+            "netIncomeToCommon": 93_700_000_000,
+            "returnOnEquity": 1.47,       # already a fraction (147%)
+            "debtToEquity": 154.49,       # yfinance percent -> 1.5449 ratio
+            "dividendRate": 1.00,
+            "currentPrice": 200.0,        # -> yield 0.005 (0.5%)
+            "payoutRatio": 0.15,
+        }
+        detail = fundamentals_detail_from_ticker_info(info)
+        self.assertEqual(detail["source"], "yfinance")
+        self.assertEqual(detail["peRatioTtm"], 32.5)
+        self.assertEqual(detail["marketCap"], 3_000_000_000_000)
+        self.assertEqual(detail["epsTtm"], 6.13)
+        self.assertEqual(detail["revenue"], 391_000_000_000)
+        # Unit normalisation: debtToEquity percent -> ratio
+        self.assertAlmostEqual(detail["debtToEquityTtm"], 1.5449, places=4)
+        # Dividend yield derived from rate/price, not the ambiguous yf field
+        self.assertAlmostEqual(detail["dividendYieldTtm"], 0.005, places=6)
+        self.assertEqual(detail["annualDividend"], 1.00)
+        self.assertEqual(detail["returnOnEquityTtm"], 1.47)
+        self.assertEqual(detail["payoutRatioTtm"], 0.15)
+
+    def test_fundamentals_detail_from_ticker_info_omits_yield_without_price(self):
+        self.assertEqual(fundamentals_detail_from_ticker_info({}), {})
+        detail = fundamentals_detail_from_ticker_info({"dividendRate": 2.0, "trailingPE": 10.0})
+        self.assertNotIn("dividendYieldTtm", detail)   # no price -> no fabricated yield
+        self.assertEqual(detail["annualDividend"], 2.0)
+        self.assertEqual(detail["peRatioTtm"], 10.0)
 
     def test_get_stock_data_uses_alpha_vantage_history_for_etf(self):
         alpha_vantage = _FakeAlphaVantage()

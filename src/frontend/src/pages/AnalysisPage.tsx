@@ -373,6 +373,7 @@ type FundamentalsDetail = {
   payoutRatioTtm?: number | null;
   debtToEquityTtm?: number | null;
   returnOnEquityTtm?: number | null;
+  source?: string | null;
 };
 
 type ResearchPayload = {
@@ -1311,7 +1312,9 @@ function FundamentalsDetailSection({
     <section className="card" data-testid="analysis-fundamentals-detail">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">{t("analysis.fundamentalsDetail.title")}</h2>
-        <span className="text-xs text-slate-500">{t("analysis.fundamentalsDetail.source")}</span>
+        <span className="text-xs text-slate-500">
+          {t("analysis.fundamentalsDetail.source", { source: detail.source || "FMP" })}
+        </span>
       </header>
       {identifiers.length > 0 ? (
         <div>

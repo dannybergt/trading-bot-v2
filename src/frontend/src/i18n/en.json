@@ -237,7 +237,7 @@
     },
     "fundamentalsDetail": {
       "title": "Fundamentals detail",
-      "source": "Source: FMP",
+      "source": "Source: {{source}}",
       "identifiers": "Identifiers",
       "valuation": "Valuation",
       "earnings": "Earnings & balance sheet",
