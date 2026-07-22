@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 from app.analysis import calculate_indicators, detect_patterns
 from app.alpha_vantage_service import AlphaVantageService
+from app.composite_score import compute_composite
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
 from app.fmp_service import FmpService
 from app.net_timeout import call_with_timeout
@@ -615,6 +616,20 @@ class MarketDataService:
                 ),
             }
 
+        # Composite decision score: combine ML (technical) + analyst +
+        # fundamentals + news into one transparent weighted verdict. Computed
+        # after the prediction is finalised; suppressed on synthetic data (no
+        # real technical signal). Augments the ML prediction, does not replace
+        # it, and is not yet wired into auto-execution.
+        composite = None
+        if not used_synthetic:
+            composite = compute_composite(
+                prediction=prediction,
+                analyst=analyst,
+                fundamentals_info=tickerInfo,
+                news_sentiment=sentiment_score,
+            )
+
         # Get Info (Enriched with YFinance)
         info = {
             'symbol': symbol,
@@ -647,6 +662,7 @@ class MarketDataService:
             'provider': provider_snapshot,
             'synthetic': used_synthetic,
             'analyst': analyst,
+            'composite': composite,
         }
 
     def _generate_mock_data(self, symbol, period, interval):

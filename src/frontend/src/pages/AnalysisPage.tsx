@@ -62,6 +62,21 @@ type AnalystConsensus = {
   source?: string | null;
 };
 
+type CompositeAxis = {
+  axis: string;
+  weight: number;
+  value: number | null;
+  contribution: number | null;
+  available: boolean;
+};
+
+type CompositeScore = {
+  score: number;
+  verdict: "BUY" | "HOLD" | "SELL";
+  confidence: number;
+  breakdown: CompositeAxis[];
+};
+
 type BacktestReliability = {
   bucket: string;
   predictedMid: number;
@@ -133,6 +148,7 @@ type StockResponse = {
   prediction: Prediction | null;
   synthetic?: boolean;
   analyst?: AnalystConsensus | null;
+  composite?: CompositeScore | null;
   volume_profile?: VolumeProfilePayload | null;
   support_resistance?: ChartLevel[] | null;
 };
@@ -668,6 +684,7 @@ export function AnalysisPage() {
       <ErrorBoundary variant="section" scope="analysis-data-quality">
         <DataQualitySection report={dataQualityQuery.data} />
       </ErrorBoundary>
+      <CompositeVerdictCard composite={stock?.composite} />
       <PredictionCard
         prediction={stock?.prediction}
         symbol={decoded}
@@ -1180,6 +1197,79 @@ function PatternsCard({ patterns }: { patterns: ChartPattern[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null }) {
+  const { t } = useTranslation();
+  if (!composite || !composite.breakdown?.length) return null;
+  const { verdict, score, confidence, breakdown } = composite;
+
+  const verdictClass =
+    verdict === "BUY"
+      ? "border-bergt-green/50 bg-bergt-green/10 text-bergt-green"
+      : verdict === "SELL"
+      ? "border-red-500/50 bg-red-500/10 text-red-300"
+      : "border-slate-600 bg-slate-800/60 text-slate-200";
+
+  const barMax = 0.4; // widest expected single-axis contribution, for bar scaling
+
+  return (
+    <section className="card">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          {t("analysis.composite.title")}
+        </h2>
+        <span className="text-xs text-slate-500">{t("analysis.composite.subtitle")}</span>
+      </header>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <span className={`rounded-md border px-3 py-1 text-lg font-semibold ${verdictClass}`}>
+          {t(`analysis.composite.verdict.${verdict}`)}
+        </span>
+        <span className="text-sm text-slate-400">
+          {t("analysis.composite.score")}: <span className="tabular-nums">{score >= 0 ? "+" : ""}{score.toFixed(2)}</span>
+          {" · "}
+          {t("analysis.composite.confidence")}: <span className="tabular-nums">{(confidence * 100).toFixed(0)}%</span>
+        </span>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {breakdown.map((b) => {
+          const contrib = b.contribution ?? 0;
+          const widthPct = Math.min(100, (Math.abs(contrib) / barMax) * 100);
+          return (
+            <div key={b.axis} className="flex items-center gap-2 text-xs">
+              <span className="w-24 shrink-0 text-slate-400">
+                {t(`analysis.composite.axis.${b.axis}`)}
+              </span>
+              <span className="w-10 shrink-0 text-right text-slate-600">
+                {Math.round(b.weight * 100)}%
+              </span>
+              <div className="relative h-3 flex-1 rounded bg-slate-800">
+                {b.available ? (
+                  <div
+                    className={`absolute top-0 h-3 rounded ${
+                      contrib >= 0 ? "left-1/2 bg-bergt-green/60" : "right-1/2 bg-red-500/60"
+                    }`}
+                    style={{ width: `${widthPct / 2}%` }}
+                  />
+                ) : null}
+                <div className="absolute left-1/2 top-0 h-3 w-px bg-slate-600" />
+              </div>
+              <span className="w-14 shrink-0 text-right tabular-nums">
+                {b.available ? (
+                  <span className={contrib >= 0 ? "text-bergt-green" : "text-red-400"}>
+                    {contrib >= 0 ? "+" : ""}
+                    {contrib.toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="text-slate-600">{t("analysis.composite.na")}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

@@ -231,6 +231,20 @@
     }
   },
   "analysis": {
+    "composite": {
+      "title": "Overall verdict",
+      "subtitle": "all sources weighted",
+      "score": "Score",
+      "confidence": "Conviction",
+      "na": "n/a",
+      "verdict": { "BUY": "Buy", "HOLD": "Hold", "SELL": "Sell" },
+      "axis": {
+        "technical": "Technical",
+        "analyst": "Analysts",
+        "fundamentals": "Fundamentals",
+        "news": "News"
+      }
+    },
     "analyst": {
       "title": "Analyst consensus",
       "source": "Source: {{source}}",
