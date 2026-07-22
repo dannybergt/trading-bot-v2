@@ -20,13 +20,26 @@ if [[ -d "${PROJECT_ROOT}/.git" && -d "${PROJECT_ROOT}/.githooks" ]]; then
   fi
 fi
 
+# Version metadata baked into both images (ENV + OCI labels). Derived from git
+# so CI and local builds carry the exact commit; overridable via env.
+GIT_SHA="${GIT_SHA:-$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)}"
+BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+APP_VERSION="${APP_VERSION:-$(git -C "${PROJECT_ROOT}" describe --tags --always 2>/dev/null || echo dev)}"
+echo "Build version: ${APP_VERSION} (${GIT_SHA}) @ ${BUILD_TIME}"
+
 docker build \
   -f "${PROJECT_ROOT}/ops/docker/backend.Dockerfile" \
+  --build-arg GIT_SHA="${GIT_SHA}" \
+  --build-arg BUILD_TIME="${BUILD_TIME}" \
+  --build-arg APP_VERSION="${APP_VERSION}" \
   -t trading-bot-v2-backend:local \
   "${PROJECT_ROOT}"
 
 docker build \
   -f "${PROJECT_ROOT}/ops/docker/frontend.Dockerfile" \
+  --build-arg GIT_SHA="${GIT_SHA}" \
+  --build-arg BUILD_TIME="${BUILD_TIME}" \
+  --build-arg APP_VERSION="${APP_VERSION}" \
   -t trading-bot-v2-frontend:local \
   "${PROJECT_ROOT}"
 

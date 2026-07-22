@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HelpDrawer } from "./HelpDrawer";
 import { LanguageToggle } from "./LanguageToggle";
+import { VersionBadge } from "./VersionBadge";
 
 type NavLinkSpec = {
   to: string;
@@ -88,6 +89,9 @@ export function Layout() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      <footer className="mx-auto max-w-6xl px-4 pb-4 text-right">
+        <VersionBadge />
+      </footer>
     </div>
   );
 }

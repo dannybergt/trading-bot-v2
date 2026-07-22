@@ -1504,9 +1504,34 @@ def get_doc_topic(slug: str, lang: str | None = None):
     return topic
 
 
+# Build/version metadata baked into the image by build.sh (ARG -> ENV). Lets
+# you confirm exactly which commit is running — via /api/version, the enriched
+# /api/health, and the app footer — instead of guessing from the mutable
+# `latest` tag.
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+APP_GIT_SHA = os.getenv("APP_GIT_SHA", "unknown")
+APP_BUILD_TIME = os.getenv("APP_BUILD_TIME", "unknown")
+
+
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "service": "trading-bot-backend"}
+    return {
+        "status": "healthy",
+        "service": "trading-bot-backend",
+        "version": APP_VERSION,
+        "commit": APP_GIT_SHA,
+    }
+
+
+@app.get("/api/version")
+def version_info():
+    """Public build/version info — the reliable 'what is actually running' check."""
+    return {
+        "version": APP_VERSION,
+        "commit": APP_GIT_SHA,
+        "builtAt": APP_BUILD_TIME,
+        "service": "trading-bot-backend",
+    }
 
 # --- WATCHLIST ENDPOINTS ---
 

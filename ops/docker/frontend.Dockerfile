@@ -18,5 +18,14 @@ RUN npm run build
 
 FROM nginx:1.29-alpine
 
+# Version metadata for nexainer/`docker inspect` visibility (the UI itself
+# reads the running version from the backend's /api/version).
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG APP_VERSION=dev
+LABEL org.opencontainers.image.revision=$GIT_SHA \
+      org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.created=$BUILD_TIME
+
 COPY ops/docker/frontend.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/ /usr/share/nginx/html/

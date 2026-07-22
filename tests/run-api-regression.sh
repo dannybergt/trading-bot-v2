@@ -150,8 +150,16 @@ password = "${ADMIN_PASSWORD}"
 
 health = requests.get(f"{base}/api/health", timeout=30)
 health.raise_for_status()
-assert health.json()["status"] == "healthy"
+health_payload = health.json()
+assert health_payload["status"] == "healthy"
+assert "version" in health_payload and "commit" in health_payload
 print("health ok")
+
+version = requests.get(f"{base}/api/version", timeout=30)
+version.raise_for_status()
+version_payload = version.json()
+assert {"version", "commit", "builtAt"} <= set(version_payload)
+print("version ok")
 
 login = requests.post(
     f"{base}/api/auth/login",

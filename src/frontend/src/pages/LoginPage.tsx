@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { LanguageToggle } from "../components/LanguageToggle";
+import { VersionBadge } from "../components/VersionBadge";
 
 type LocationState = { from?: { pathname?: string } };
 
@@ -122,6 +123,9 @@ export function LoginPage() {
           </Link>
         </p>
       </form>
+      <div className="mt-4 text-center">
+        <VersionBadge />
+      </div>
     </div>
   );
 }
