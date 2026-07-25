@@ -1,5 +1,11 @@
 # Current Focus
 
+## 2026-07-25: Composite Stufe 2c gebaut (Branch `feature/decouple-ml-broadcast-features`, Merge-Gate laeuft)
+
+Stufe 2c (vom User gewaehlt) umgesetzt: die kosmetischen konstanten ML-Broadcast-Features (News_Sentiment/PE/FwdPE/PB) sind aus dem ML-Feature-Vektor entfernt — das Ensemble ist jetzt ehrlich REIN TECHNISCH (15 Indikatoren), News/Fundamentals zaehlen ausschliesslich im Composite (der sie ohnehin schon roh aus `tickerInfo`/`sentiment_score` liest, nicht aus dem df). Kernpunkte: neue Single-Source-of-Truth `MODEL_FEATURE_COLS` (Training+Inferenz, killt Duplikat-Drift), `df_analyzed[...]`-Broadcasts raus (Skalare bleiben fuer Composite+Payload-info), `FEATURE_CATEGORIES` getrimmt, totes `feature_padding` in `backtest_service` weg, und ein **selbstheilender Feature-Kontrakt-Gate** (`ml_persistence.features_compatible` + `PricePredictor.EXPECTED_FEATURES`): Pre-2c-Artefakte auf BC-KI01 gelten als inkompatibel → sofort Neu-Training statt Shape-Mismatch, kein manuelles Loeschen noetig. ADR 2026-07-25 geschrieben.
+**Verifikation:** Build gruen, Unit **276 gruen** (skipped=1, +4 neue features_compatible/MODEL_FEATURE_COLS-Tests), API-Regression **passed**. UI-Regression laeuft (kein Frontend-Change, aber Payload-`data`-Serialisierung geprueft). Danach ff-only nach `main` → publish/nexainer deployt auf BC-KI01.
+**Naechster Schritt:** Stufe **2d** (Backtest-Report zur Gewichts-Kalibrierung) als Voraussetzung fuer **2b** (Auto-Execution an Composite haengen) — 2b erst NACH 2d, sonst Auto-Trading auf ungetesteten Gewichten. Beide nicht-trivial, je eigener PR, mit User abstimmen.
+
 ## 2026-07-25: STATE-Sync gepusht + .env.example-Footgun behoben @ 56bcbd4
 
 Session-Resume: ausstehender STATE-Commit (`f41248c`) nach `origin/main` gepusht (publish/ci getriggert, Code identisch — nur Revision-Label). Danach den in der Vorsession markierten Footgun gefixt: `.env.example` pinnte noch `IMAGE_TAG=2026.05.07-1`, ein frischer Clone haette gegen ein altes Image deployt → Default jetzt `latest` (passt zum kontinuierlichen nexainer/watchtower-Deploy), expliziter Tag bleibt fuer Release-Deploys dokumentiert (`56bcbd4`). Reines Template, kein Image-/Code-Impact.
