@@ -1,5 +1,10 @@
 # Current Focus
 
+## 2026-07-25: STATE-Sync gepusht + .env.example-Footgun behoben @ 56bcbd4
+
+Session-Resume: ausstehender STATE-Commit (`f41248c`) nach `origin/main` gepusht (publish/ci getriggert, Code identisch — nur Revision-Label). Danach den in der Vorsession markierten Footgun gefixt: `.env.example` pinnte noch `IMAGE_TAG=2026.05.07-1`, ein frischer Clone haette gegen ein altes Image deployt → Default jetzt `latest` (passt zum kontinuierlichen nexainer/watchtower-Deploy), expliziter Tag bleibt fuer Release-Deploys dokumentiert (`56bcbd4`). Reines Template, kein Image-/Code-Impact.
+**Offen/naechster Schritt (mit User abzustimmen):** Composite-Roadmap Stufe **2c** (kosmetische ML-Broadcast-Features loesen) oder **2d** (Backtest-Kalibrierung der Gewichte, entsperrt 2b Auto-Execution). Beide nicht-trivial (2c = ML-Feature-Vektor-Aenderung/Retraining-Risiko; 2d = >2h + haengt Auto-Trading an, §13) → je eigener PR, einzeln reviewen. Auf User-Entscheidung wartend.
+
 ## Resume Codeword
 
 Wenn der Nutzer nur dies schreibt:
