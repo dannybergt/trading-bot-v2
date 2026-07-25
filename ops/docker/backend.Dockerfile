@@ -38,7 +38,8 @@ ENV APP_GIT_SHA=$GIT_SHA \
     APP_VERSION=$APP_VERSION
 LABEL org.opencontainers.image.revision=$GIT_SHA \
       org.opencontainers.image.version=$APP_VERSION \
-      org.opencontainers.image.created=$BUILD_TIME
+      org.opencontainers.image.created=$BUILD_TIME \
+      org.opencontainers.image.source=https://github.com/dannybergt/trading-bot-v2
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/api/health || exit 1

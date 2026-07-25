@@ -25,7 +25,8 @@ ARG BUILD_TIME=unknown
 ARG APP_VERSION=dev
 LABEL org.opencontainers.image.revision=$GIT_SHA \
       org.opencontainers.image.version=$APP_VERSION \
-      org.opencontainers.image.created=$BUILD_TIME
+      org.opencontainers.image.created=$BUILD_TIME \
+      org.opencontainers.image.source=https://github.com/dannybergt/trading-bot-v2
 
 COPY ops/docker/frontend.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/ /usr/share/nginx/html/
