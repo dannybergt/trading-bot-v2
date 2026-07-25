@@ -1098,7 +1098,16 @@ async def ml_retrain_task():
                     except Exception:
                         loaded = None
                     metadata = loaded[1] if loaded else None
-                    if metadata is not None and not ml_persistence.is_stale(metadata):
+                    ml_models_mod = __import__(
+                        "app.ml_models", fromlist=["MODEL_FEATURE_COLS"]
+                    )
+                    if (
+                        metadata is not None
+                        and not ml_persistence.is_stale(metadata)
+                        and ml_persistence.features_compatible(
+                            metadata, ml_models_mod.MODEL_FEATURE_COLS
+                        )
+                    ):
                         continue
                     try:
                         stock = service.get_stock_data(

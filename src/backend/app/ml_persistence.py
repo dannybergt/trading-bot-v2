@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -212,6 +213,32 @@ def is_stale(metadata: dict[str, Any] | None, *, ttl_hours: float | None = None)
     ttl = float(ttl_hours) if ttl_hours is not None else MODEL_TTL_HOURS
     age_hours = (datetime.now(timezone.utc) - trained_at).total_seconds() / 3600.0
     return age_hours >= ttl
+
+
+def features_compatible(
+    metadata: dict[str, Any] | None, expected_features: Iterable[str]
+) -> bool:
+    """False when a persisted model was trained on a feature the current code
+    no longer produces.
+
+    Such an artifact would shape-mismatch at inference — the loaded booster
+    expects N columns but the request now builds fewer — so the caller must
+    retrain instead of loading it. This makes a feature-set change (e.g.
+    decoupling the sentiment/fundamentals broadcast columns) a clean,
+    self-healing cutover without hand-clearing model files on the host.
+
+    Returns True for missing/edgeless metadata; the time-based `is_stale`
+    check owns those cases. Only a *superset* trips this guard, so a current
+    model legitimately trained on a subset of features (short history) is
+    still considered compatible.
+    """
+    if not metadata:
+        return True
+    stored = metadata.get("features")
+    if not isinstance(stored, list):
+        return True
+    expected = set(expected_features or ())
+    return all(feature in expected for feature in stored)
 
 
 def list_models() -> list[dict[str, Any]]:

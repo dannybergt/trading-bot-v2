@@ -284,7 +284,9 @@ class MarketDataService:
         loaded = ml_persistence.load_predictor(symbol, PricePredictor)
         if loaded is not None:
             predictor, metadata = loaded
-            if not ml_persistence.is_stale(metadata):
+            if not ml_persistence.is_stale(metadata) and ml_persistence.features_compatible(
+                metadata, PricePredictor.EXPECTED_FEATURES
+            ):
                 self._predictor_cache[symbol] = {
                     "predictor": predictor,
                     "metadata": metadata,
@@ -544,10 +546,13 @@ class MarketDataService:
             else {}
         )
 
-        df_analyzed['News_Sentiment'] = sentiment_score
-        df_analyzed['PE_Ratio'] = pe_ratio
-        df_analyzed['Forward_PE'] = forward_pe
-        df_analyzed['Price_To_Book'] = price_to_book
+        # News sentiment and fundamentals are intentionally NOT broadcast into
+        # the ML feature frame anymore. As constant per-request columns they
+        # contributed ~0 signal to the sequence model and only muddied
+        # explainability; they now count as first-class weighted axes in the
+        # composite decision score below (compute_composite: news_sentiment=...,
+        # fundamentals_info=tickerInfo). The extracted scalars are still used
+        # there and in the API payload's `info` block.
 
         # Generate Prediction. The predictor is now persisted per symbol
         # under `state/runtime/ml_models/<SYMBOL>.json` and only refreshed

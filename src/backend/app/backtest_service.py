@@ -31,16 +31,13 @@ def run_backtest(
     *,
     train_window: int = 180,
     step: int = 10,
-    feature_padding: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Walk-forward predictions over `df` (must already include indicators).
 
     `train_window` is the number of rows the predictor sees before each
     prediction. `step` advances the window between retrains; predictions
     are emitted for every row regardless of `step` so accuracy stays
-    measurable. `feature_padding` lets the caller supply default values
-    for sentiment/fundamental features that the indicator frame doesn't
-    populate (we'd otherwise drop every row at `prepare_features`).
+    measurable.
 
     Returns an empty payload (everything `None`/`0`) when there isn't
     enough data to even fit one window — the UI degrades gracefully.
@@ -50,17 +47,6 @@ def run_backtest(
         return empty
 
     work = df.copy()
-    padding = {
-        "News_Sentiment": 0.0,
-        "PE_Ratio": 0.0,
-        "Forward_PE": 0.0,
-        "Price_To_Book": 0.0,
-    }
-    padding.update(feature_padding or {})
-    for col, default in padding.items():
-        if col not in work.columns:
-            work[col] = default
-
     if "Close" not in work.columns:
         return empty
     work = work.dropna(subset=["Close"])

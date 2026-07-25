@@ -113,6 +113,56 @@ class MLPersistenceTests(unittest.TestCase):
         self.assertTrue(self.ml_persistence.is_stale(None))
         self.assertTrue(self.ml_persistence.is_stale({}))
 
+    def test_features_compatible_accepts_current_and_subset_models(self):
+        from app.ml_models import MODEL_FEATURE_COLS
+
+        # Full current vector and a legitimate subset (short history) both pass.
+        self.assertTrue(
+            self.ml_persistence.features_compatible(
+                {"features": list(MODEL_FEATURE_COLS)}, MODEL_FEATURE_COLS
+            )
+        )
+        self.assertTrue(
+            self.ml_persistence.features_compatible(
+                {"features": ["RSI", "Volume"]}, MODEL_FEATURE_COLS
+            )
+        )
+
+    def test_features_compatible_rejects_removed_broadcast_features(self):
+        from app.ml_models import MODEL_FEATURE_COLS
+
+        # A pre-2c artifact carries the decoupled sentiment/fundamentals
+        # columns; loading it would shape-mismatch the booster.
+        legacy = list(MODEL_FEATURE_COLS) + [
+            "News_Sentiment",
+            "PE_Ratio",
+            "Forward_PE",
+            "Price_To_Book",
+        ]
+        self.assertFalse(
+            self.ml_persistence.features_compatible(
+                {"features": legacy}, MODEL_FEATURE_COLS
+            )
+        )
+
+    def test_features_compatible_true_for_edgeless_metadata(self):
+        from app.ml_models import MODEL_FEATURE_COLS
+
+        # is_stale owns the missing-metadata path; compat must not veto here.
+        self.assertTrue(self.ml_persistence.features_compatible(None, MODEL_FEATURE_COLS))
+        self.assertTrue(self.ml_persistence.features_compatible({}, MODEL_FEATURE_COLS))
+        self.assertTrue(
+            self.ml_persistence.features_compatible(
+                {"features": "not-a-list"}, MODEL_FEATURE_COLS
+            )
+        )
+
+    def test_model_feature_cols_excludes_sentiment_and_fundamentals(self):
+        from app.ml_models import MODEL_FEATURE_COLS
+
+        for removed in ("News_Sentiment", "PE_Ratio", "Forward_PE", "Price_To_Book"):
+            self.assertNotIn(removed, MODEL_FEATURE_COLS)
+
     def test_unsafe_symbol_is_rejected(self):
         from app.ml_models import PricePredictor
 

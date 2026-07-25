@@ -14,6 +14,21 @@ except ImportError:
     ML_AVAILABLE = False
     logger.warning("ml_dependencies_missing prediction_disabled=true")
 
+# Single source of truth for the ML feature vector. News sentiment and the
+# fundamentals ratios (P/E, forward P/E, price-to-book) used to be broadcast
+# into this vector as constant, time-invariant columns; they carried ~0 signal
+# for the sequence model and now live exclusively as independent, weighted
+# axes in the composite decision score (see app/composite_score.py). The ML
+# ensemble is therefore purely technical. Training (`prepare_features`) and
+# inference (`predict_next_movement`) must both read this one list so they can
+# never drift apart.
+MODEL_FEATURE_COLS: list[str] = [
+    "RSI", "SMA_20", "SMA_50", "EMA_12", "EMA_26",
+    "BBL_20_2.0", "BBM_20_2.0", "BBU_20_2.0",  # Bollinger Bands
+    "MACD_12_26_9", "MACDh_12_26_9", "MACDs_12_26_9",  # MACD
+    "Volume", "ATR", "STOCH_K", "STOCH_D",  # Momentum & Volatility
+]
+
 FEATURE_CATEGORIES: dict[str, str] = {
     # Trend (moving averages)
     "SMA_20": "trend",
@@ -33,12 +48,6 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "STOCH_D": "technical",
     # Volume
     "Volume": "volume",
-    # News sentiment
-    "News_Sentiment": "news",
-    # Fundamentals
-    "PE_Ratio": "fundamentals",
-    "Forward_PE": "fundamentals",
-    "Price_To_Book": "fundamentals",
 }
 
 CATEGORY_LABELS = {
@@ -65,6 +74,11 @@ class PricePredictor:
     SHAP-style explanations). The other two are trained alongside it and
     used only at predict-time.
     """
+
+    # Feature contract for persisted artifacts: a model trained on a feature
+    # this list no longer contains would shape-mismatch at inference, so the
+    # persistence layer refuses to load it (ml_persistence.features_compatible).
+    EXPECTED_FEATURES: list[str] = MODEL_FEATURE_COLS
 
     def __init__(self):
         self.is_trained = False
@@ -105,16 +119,9 @@ class PricePredictor:
         # Drop NaN values created by indicators and shift
         df = df.dropna()
         
-        feature_cols = [
-            'RSI', 'SMA_20', 'SMA_50', 'EMA_12', 'EMA_26', 
-            'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', # Bollinger Bands
-            'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9', # MACD
-            'Volume', 'ATR', 'STOCH_K', 'STOCH_D', # Momentum & Volatility
-            'News_Sentiment', 'PE_Ratio', 'Forward_PE', 'Price_To_Book' # Fundamentals & Sentiment
-        ]
-        
-        # Filter only existing columns
-        feature_cols = [c for c in feature_cols if c in df.columns]
+        # Purely technical feature vector (see MODEL_FEATURE_COLS). Filter to
+        # the columns actually present so short histories can still train.
+        feature_cols = [c for c in MODEL_FEATURE_COLS if c in df.columns]
         
         return df, feature_cols
 
@@ -219,14 +226,7 @@ class PricePredictor:
             # We need the latest row with all indicators calculated
             latest = current_data_df.iloc[[-1]].copy()
 
-            feature_cols = [
-                'RSI', 'SMA_20', 'SMA_50', 'EMA_12', 'EMA_26',
-                'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0',
-                'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9',
-                'Volume', 'ATR', 'STOCH_K', 'STOCH_D',
-                'News_Sentiment', 'PE_Ratio', 'Forward_PE', 'Price_To_Book'
-            ]
-            feature_cols = [c for c in feature_cols if c in latest.columns]
+            feature_cols = [c for c in MODEL_FEATURE_COLS if c in latest.columns]
 
             if not feature_cols:
                 return None
