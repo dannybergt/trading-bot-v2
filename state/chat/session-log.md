@@ -1,6 +1,16 @@
 # Sitzungslog
 
 - Datum: 2026-07-25
+  Kontext: Fortsetzung gleiche Session ("ja" = weiter mit Slice C, letzte 2d-Stufe). User waehlte Kalibrier-Methode: Grid-Search auf Trefferquote (statt logistischer Regression / nur-Report).
+  Erledigt (Branch `feature/composite-calibration`): Interims-Teilkalibrierung (2d-2).
+  (1) `composite_calibration.py`: Grid-Search ueber Achsen-Gewichte gegen realisierte Trefferquote auf gelabelten `composite_snapshot`-Daten. `_score` (Renormalisierung ueber vorhandene Achsen, spiegelt compute_composite), `_verdict` (Schwellen aus composite_score), `_hit_rate` (aktionable BUY/SELL, HOLD abstains), `calibrate(db, apply, updated_by)`. Ehrlichkeit: nur Achsen mit >=50% Coverage getunt, Rest fixiert auf aktuell/Policy (analyst/news bleiben policy bis Forward-Collection reift; volle 4-Achsen-Kalibrierung schaltet per Daten frei). Guards: >=30 Labels, >=20% aktionable, schreibt nur bei STRIKTER Verbesserung ggue. aktuellem Hit-Rate. Grid 0.1 (bzw. 0.2 bei 4 Achsen).
+  (2) `main.py`: `POST /api/admin/composite-calibrate` (apply-Flag; commit+audit+invalidate nur wenn applied).
+  (3) `AdminPage`: "Run calibration"-Button + Report-Anzeige (applied/reason, current->best Hit-Rate, calibrated axes) in der CompositeWeightsSection.
+  (4) Tests: +4 in `test_composite_calibration.py` (insufficient-data-Guard; Grid down-weightet irrefuehrende Fundamentals-Achse von 0% auf hohe Trefferquote + schreibt; apply=false schreibt nie; _score/_verdict-Helfer). Test-Iteration deckte den (korrekten) Unique-Constraint (symbol, snapshot_date) auf — Fixture nutzt jetzt distinct Datum je Row; und der set_weights-caller-committed-Pattern (Test committet nach calibrate wie der Endpoint).
+  Verifikation (Gates ohne Rehearsal — keine Migration): `build.sh` gruen, Unit **300 gruen** (skipped=1) inkl. Drift-Gate (unveraendert), `tsc` gruen, `SKIP_BUILD=1 run-api-regression.sh` **passed**, `SKIP_BUILD=1 run-ui-regression.sh` **passed** (`ui_admin ok`).
+  **==> 2d KOMPLETT (A+B+C).** Offen/naechster Roadmap-Schritt: **2b** (Auto-Execution an Composite) — separat, mit User abstimmen; darf nur auf kalibrierten/technical-Achsen gaten (2d-Befund). ADR 2026-07-25 (Slice C) geschrieben, current-focus aktualisiert.
+
+- Datum: 2026-07-25
   Kontext: Fortsetzung gleiche Session ("ja" = weiter mit Slice B). Composite-Roadmap 2d Slice B (Forward-Collection, 2d-3) gebaut — das Tracking, das die sonst nicht-backtestbaren analyst/news-Achsen je kalibrierbar macht.
   Erledigt (Branch `feature/composite-forward-collection`):
   (1) `models.py` + Alembic `0012_add_composite_snapshot` (Head `b2c3d4e5f6a7`): Tabelle `composite_snapshot`, eine Zeile pro (symbol, UTC-Tag), Close + axis_technical/analyst/fundamentals/news (nullable) + score/verdict/horizon_days + Outcome-Felder (forward_close/forward_return_pct/realized_up/labeled_at), Unique(symbol, snapshot_date), Indizes id+symbol.

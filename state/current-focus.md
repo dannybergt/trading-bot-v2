@@ -1,5 +1,14 @@
 # Current Focus
 
+## 2026-07-25: Composite Stufe 2d KOMPLETT — Slice C (Kalibrierung) gebaut (Branch `feature/composite-calibration`, alle Gates gruen)
+
+**Slice C (2d-2, fertig):** Interims-Teilkalibrierung per **Grid-Search auf Trefferquote** (User-Wahl). Modul `composite_calibration.py` + Admin `POST /api/admin/composite-calibrate`: grid-sucht Achsen-Gewichte gegen die realisierte Trefferquote auf gelabelten `composite_snapshot`-Daten; tunt nur Achsen mit >=50% Coverage (analyst/news bleiben policy-gesetzt bis Forward-Collection reift — volle 4-Achsen-Kalibrierung schaltet sich per DATEN frei), Guards (>=30 Labels, >=20% aktionable), schreibt in den Slice-A-Speicher NUR bei strikter Verbesserung (macht Live-Gewichte nie schlechter), admin-getriggert + auditiert. AdminPage: "Run calibration"-Button + Report. KEINE Migration.
+**Verifikation:** Build gruen, Unit **300 gruen** (+4 Kalibrier-Tests), `tsc` gruen, api-regression **passed**, ui-regression **passed** (`ui_admin ok`). ADR 2026-07-25 (Slice C) geschrieben.
+
+**==> 2d ist damit KOMPLETT:** A (Gewichte konfigurierbar) + B (Forward-Collection) + C (Grid-Kalibrierung). Die Empfehlung nutzt jetzt konfigurierbare, datenkalibrierbare Achsen-Gewichte; das System sammelt vorwaerts und kalibriert sich ehrlich, sobald genug gelabelte Daten da sind.
+
+**Naechster Roadmap-Schritt: 2b** (Auto-Execution an den Composite-Score haengen statt nur ML-confidence) — SEPARAT und mit User abzustimmen (§13, Auto-Trading-Verhalten). Laut 2d-Befund darf 2b nur auf den kalibrierten/technical-Achsen gaten, nicht auf ungetesteten analyst/news-Gewichten. Alternativ offen: UI-Probelauf der 2c/2d-Kette auf BC-KI01 durch den User.
+
 ## 2026-07-25: Composite Stufe 2d Slice B gebaut (Forward-Collection, Branch `feature/composite-forward-collection`, alle 5 Gates gruen)
 
 **Slice B (2d-3, fertig):** Forward-Collection fuer die Kalibrierung. Neue Tabelle `composite_snapshot` (Alembic 0012, Head `b2c3d4e5f6a7`): eine Zeile pro (symbol, UTC-Tag) mit Close + 4 Achsen-Rohwerten + Score/Verdict + Horizon + nachtraeglich befuellten Outcome-Feldern. Modul `composite_snapshots.py`: `write_snapshot` (Dedup/Completeness-Upsert, Labeled-Schutz), `record_snapshot` (best-effort im Request-Pfad), `label_due_snapshots` (Forward-Return via yfinance, gebunden, im `ml_retrain_task`), `readiness`. `get_stock_data` schreibt Snapshots bei nicht-synthetischen Empfehlungen; Admin `GET /api/admin/composite-readiness` + AdminPage-Anzeige ("N/M full-axis labeled").
