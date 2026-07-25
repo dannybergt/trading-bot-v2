@@ -60,6 +60,7 @@ ACTION_ADMIN_USER_TOGGLE_ACTIVE = "admin.user_toggle_active"
 
 ACTION_PLATFORM_CONFIG_UPDATE = "platform_config.update"
 ACTION_PLATFORM_CONFIG_DELETE = "platform_config.delete"
+ACTION_COMPOSITE_WEIGHTS_UPDATE = "composite_weights.update"
 
 
 def _fingerprint(value: str | None) -> str | None:

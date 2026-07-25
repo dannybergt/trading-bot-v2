@@ -43,6 +43,9 @@ export function AdminPage() {
       <ErrorBoundary variant="section" scope="admin-data-sources">
         <DataSourcesSection />
       </ErrorBoundary>
+      <ErrorBoundary variant="section" scope="admin-composite-weights">
+        <CompositeWeightsSection />
+      </ErrorBoundary>
       <ErrorBoundary variant="section" scope="admin-backups">
         <BackupsSection />
       </ErrorBoundary>
@@ -64,6 +67,152 @@ type DataSourceCatalogueEntry = {
   envFlag: string | null;
   configured: boolean;
 };
+
+type CompositeWeights = {
+  technical: number;
+  analyst: number;
+  fundamentals: number;
+  news: number;
+};
+
+const COMPOSITE_AXES: (keyof CompositeWeights)[] = [
+  "technical",
+  "analyst",
+  "fundamentals",
+  "news",
+];
+
+const COMPOSITE_AXIS_LABEL: Record<keyof CompositeWeights, string> = {
+  technical: "Technical (ML)",
+  analyst: "Analyst consensus",
+  fundamentals: "Fundamentals",
+  news: "News sentiment",
+};
+
+// Operator control over the composite decision-score weights. The backend
+// normalises whatever is entered to sum 1.0; here we present each axis as a
+// percentage of the current total so admins see the effective split live.
+function CompositeWeightsSection() {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["admin-composite-weights"],
+    queryFn: () =>
+      apiFetch<{ weights: CompositeWeights; default: CompositeWeights; isCustom: boolean }>(
+        "/api/admin/composite-weights",
+      ),
+  });
+  const [draft, setDraft] = useState<Record<keyof CompositeWeights, string> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const effective = query.data?.weights;
+  const values: Record<keyof CompositeWeights, string> =
+    draft ??
+    (effective
+      ? {
+          technical: String(Math.round(effective.technical * 100)),
+          analyst: String(Math.round(effective.analyst * 100)),
+          fundamentals: String(Math.round(effective.fundamentals * 100)),
+          news: String(Math.round(effective.news * 100)),
+        }
+      : { technical: "", analyst: "", fundamentals: "", news: "" });
+
+  const total = COMPOSITE_AXES.reduce((acc, axis) => {
+    const n = Number(values[axis]);
+    return acc + (Number.isFinite(n) && n >= 0 ? n : 0);
+  }, 0);
+
+  const invalid =
+    total <= 0 ||
+    COMPOSITE_AXES.some((axis) => {
+      const n = Number(values[axis]);
+      return values[axis] === "" || !Number.isFinite(n) || n < 0;
+    });
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      apiFetch("/api/admin/composite-weights", {
+        method: "PUT",
+        body: {
+          technical: Number(values.technical),
+          analyst: Number(values.analyst),
+          fundamentals: Number(values.fundamentals),
+          news: Number(values.news),
+        },
+      }),
+    onSuccess: () => {
+      setDraft(null);
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-composite-weights"] });
+    },
+    onError: (err) =>
+      setError(err instanceof ApiError ? err.message : "save failed"),
+  });
+
+  return (
+    <section className="space-y-3" data-testid="admin-composite-weights-section">
+      <header>
+        <h2 className="text-lg font-medium">Composite decision weights</h2>
+        <p className="text-sm text-slate-400">
+          Relative weight of each source in the composite BUY/HOLD/SELL verdict.
+          Values are normalised to 100%.{" "}
+          {query.data?.isCustom ? "Custom override active." : "Using defaults."}
+        </p>
+      </header>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {COMPOSITE_AXES.map((axis) => {
+          const n = Number(values[axis]);
+          const pct =
+            total > 0 && Number.isFinite(n) && n >= 0
+              ? Math.round((n / total) * 100)
+              : 0;
+          return (
+            <label key={axis} className="flex flex-col gap-1 text-sm">
+              <span className="text-slate-300">{COMPOSITE_AXIS_LABEL[axis]}</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={values[axis]}
+                  onChange={(event) =>
+                    setDraft({ ...values, [axis]: event.target.value })
+                  }
+                  className="w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1"
+                  data-testid={`composite-weight-${axis}`}
+                />
+                <span className="text-xs text-slate-400">→ {pct}%</span>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={invalid || saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+          data-testid="composite-weights-save"
+        >
+          {saveMutation.isPending ? "Saving…" : "Save weights"}
+        </button>
+        {draft ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(null);
+              setError(null);
+            }}
+            className="text-sm text-slate-400"
+          >
+            Reset
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 type PlatformConfigItem = {
   key: string;

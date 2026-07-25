@@ -306,3 +306,20 @@ class PlatformConfiguration(Base):
     encrypted_value = Column(Text, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class CompositeWeightConfiguration(Base):
+    """Operator override of the composite decision-score axis weights.
+
+    Singleton row (id=1) holding a small JSON object of the four axis weights.
+    Unlike `PlatformConfiguration` these are plain numbers, not secrets, so the
+    value is stored in clear text. Absent/invalid → code falls back to the
+    in-code DEFAULT_WEIGHTS (see app/composite_weights.py).
+    """
+
+    __tablename__ = "composite_weight_configuration"
+
+    id = Column(Integer, primary_key=True, index=True)
+    weights_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

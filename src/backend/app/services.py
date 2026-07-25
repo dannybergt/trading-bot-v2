@@ -7,6 +7,7 @@ import yfinance as yf
 from app.analysis import calculate_indicators, detect_patterns
 from app.alpha_vantage_service import AlphaVantageService
 from app.composite_score import compute_composite
+from app import composite_weights
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
 from app.fmp_service import FmpService
 from app.net_timeout import call_with_timeout
@@ -633,6 +634,7 @@ class MarketDataService:
                 analyst=analyst,
                 fundamentals_info=tickerInfo,
                 news_sentiment=sentiment_score,
+                weights=composite_weights.get_weights(),
             )
 
         # Get Info (Enriched with YFinance)

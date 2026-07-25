@@ -2286,6 +2286,13 @@ class PlatformConfigValueRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
 
+class CompositeWeightsRequest(BaseModel):
+    technical: float = Field(..., ge=0)
+    analyst: float = Field(..., ge=0)
+    fundamentals: float = Field(..., ge=0)
+    news: float = Field(..., ge=0)
+
+
 @app.get("/api/admin/platform-config")
 def list_platform_config(
     admin: User = Depends(get_current_admin_user),
@@ -2425,6 +2432,59 @@ def test_platform_config(
     except Exception as exc:  # noqa: BLE001
         logger.exception("platform_config_test_failed key=%s", key)
         return {"ok": False, "detail": f"probe raised: {type(exc).__name__}"}
+
+
+@app.get("/api/admin/composite-weights")
+def get_composite_weights_config(
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Current composite axis weights plus the in-code default.
+
+    `isCustom` tells the UI whether an operator override is in effect; when it
+    is absent the effective weights equal the default.
+    """
+    from app import composite_weights
+    from app.composite_score import DEFAULT_WEIGHTS
+
+    stored = composite_weights.get_stored(db)
+    return {
+        "weights": stored or dict(DEFAULT_WEIGHTS),
+        "default": dict(DEFAULT_WEIGHTS),
+        "isCustom": stored is not None,
+    }
+
+
+@app.put("/api/admin/composite-weights")
+def set_composite_weights_config(
+    payload: CompositeWeightsRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Persist an operator override of the composite axis weights.
+
+    Weights are normalised to sum 1.0; a set of all-zero weights is rejected.
+    Takes effect on the next recommendation (cache invalidated after commit).
+    """
+    from app import composite_weights
+
+    try:
+        normalized = composite_weights.set_weights(
+            db, payload.model_dump(), updated_by_user_id=admin.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    composite_weights.invalidate()
+    audit_service.log_event(
+        db,
+        user_id=admin.id,
+        action=audit_service.ACTION_COMPOSITE_WEIGHTS_UPDATE,
+        resource_type="composite_weights",
+        resource_id="composite_weights",
+        details={"weights": normalized},
+    )
+    return {"status": "updated", "weights": normalized}
 
 
 @app.get("/api/backtest/{symbol:path}")
