@@ -117,6 +117,7 @@ function CompositeWeightsSection() {
   });
   const [draft, setDraft] = useState<Record<keyof CompositeWeights, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [calibReport, setCalibReport] = useState<CompositeCalibrationReport | null>(null);
 
   const effective = query.data?.weights;
   const values: Record<keyof CompositeWeights, string> =
@@ -160,6 +161,21 @@ function CompositeWeightsSection() {
     },
     onError: (err) =>
       setError(err instanceof ApiError ? err.message : "save failed"),
+  });
+
+  const calibrateMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<CompositeCalibrationReport>("/api/admin/composite-calibrate", {
+        method: "POST",
+        body: { apply: true },
+      }),
+    onSuccess: (data) => {
+      setCalibReport(data);
+      queryClient.invalidateQueries({ queryKey: ["admin-composite-weights"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-composite-readiness"] });
+    },
+    onError: (err) =>
+      setError(err instanceof ApiError ? err.message : "calibration failed"),
   });
 
   return (
@@ -241,11 +257,49 @@ function CompositeWeightsSection() {
               ? "Full 4-axis calibration is available."
               : "Still collecting — analyst/news axes calibrate only once enough labeled data accrues; until then those weights stay policy-set."}
           </p>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              disabled={calibrateMutation.isPending}
+              onClick={() => calibrateMutation.mutate()}
+              className="rounded border border-slate-600 px-3 py-1.5 text-sm disabled:opacity-50"
+              data-testid="composite-calibrate"
+            >
+              {calibrateMutation.isPending ? "Calibrating…" : "Run calibration"}
+            </button>
+            <span className="text-xs text-slate-500">
+              Writes weights only when it beats the current hit-rate.
+            </span>
+          </div>
+          {calibReport ? (
+            <p className="mt-2 text-xs text-slate-400" data-testid="composite-calibrate-report">
+              {calibReport.applied
+                ? `Applied: ${calibReport.calibratedAxes?.join(", ")} recalibrated — hit-rate ${(
+                    (calibReport.currentHitRate ?? 0) * 100
+                  ).toFixed(1)}% → ${((calibReport.bestHitRate ?? 0) * 100).toFixed(1)}% on ${
+                    calibReport.labeled
+                  } labeled samples.`
+                : `Not applied (${
+                    calibReport.reason ??
+                    (calibReport.improved === false ? "no improvement over current weights" : "—")
+                  }). ${calibReport.labeled ?? 0} labeled samples.`}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
   );
 }
+
+type CompositeCalibrationReport = {
+  applied: boolean;
+  labeled?: number;
+  reason?: string;
+  improved?: boolean;
+  calibratedAxes?: string[];
+  currentHitRate?: number;
+  bestHitRate?: number;
+};
 
 type PlatformConfigItem = {
   key: string;

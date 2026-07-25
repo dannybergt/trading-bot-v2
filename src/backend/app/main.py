@@ -2512,6 +2512,42 @@ def get_composite_readiness(
     return composite_snapshots.readiness(db)
 
 
+class CompositeCalibrateRequest(BaseModel):
+    apply: bool = False
+
+
+@app.post("/api/admin/composite-calibrate")
+def run_composite_calibration(
+    payload: CompositeCalibrateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Interim partial calibration (2d-2): grid-search axis weights against the
+    realised hit-rate on labeled snapshots. With ``apply`` it writes the result
+    only when it strictly beats the current weights (never makes them worse)."""
+    from app import composite_calibration
+
+    report = composite_calibration.calibrate(
+        db, apply=payload.apply, updated_by_user_id=admin.id
+    )
+    if report.get("applied"):
+        db.commit()
+        composite_weights.invalidate()
+        audit_service.log_event(
+            db,
+            user_id=admin.id,
+            action=audit_service.ACTION_COMPOSITE_WEIGHTS_UPDATE,
+            resource_type="composite_weights",
+            resource_id="composite_calibration",
+            details={
+                "weights": report.get("bestWeights"),
+                "hitRate": report.get("bestHitRate"),
+                "calibratedAxes": report.get("calibratedAxes"),
+            },
+        )
+    return report
+
+
 @app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,
