@@ -101,6 +101,20 @@ function CompositeWeightsSection() {
         "/api/admin/composite-weights",
       ),
   });
+  const readinessQuery = useQuery({
+    queryKey: ["admin-composite-readiness"],
+    queryFn: () =>
+      apiFetch<{
+        total: number;
+        labeled: number;
+        fullAxisLabeled: number;
+        threshold: number;
+        ready: boolean;
+        earliestSnapshot: string | null;
+        latestSnapshot: string | null;
+        horizonDays: number;
+      }>("/api/admin/composite-readiness"),
+  });
   const [draft, setDraft] = useState<Record<keyof CompositeWeights, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,6 +224,25 @@ function CompositeWeightsSection() {
           </button>
         ) : null}
       </div>
+      {readinessQuery.data ? (
+        <div
+          className="rounded border border-slate-700 bg-slate-900/40 p-3 text-sm"
+          data-testid="composite-readiness"
+        >
+          <p className="font-medium text-slate-200">
+            Backtest calibration readiness (forward-collection)
+          </p>
+          <p className="text-slate-400">
+            {readinessQuery.data.fullAxisLabeled} / {readinessQuery.data.threshold}{" "}
+            full-axis labeled samples ({readinessQuery.data.labeled} labeled of{" "}
+            {readinessQuery.data.total} collected, {readinessQuery.data.horizonDays}
+            -day horizon).{" "}
+            {readinessQuery.data.ready
+              ? "Full 4-axis calibration is available."
+              : "Still collecting — analyst/news axes calibrate only once enough labeled data accrues; until then those weights stay policy-set."}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

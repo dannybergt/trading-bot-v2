@@ -1,7 +1,18 @@
 """
 Database models for user management.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Float, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -323,3 +334,38 @@ class CompositeWeightConfiguration(Base):
     weights_json = Column(Text, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class CompositeSnapshot(Base):
+    """Forward-collection log for composite-score calibration (roadmap 2d-3).
+
+    One row per (symbol, UTC date) capturing the composite verdict plus each
+    axis's raw value at recommendation time and the close price. A later
+    labeling pass fills the realised forward return once the horizon matures.
+    This is the only path to ever calibrate the analyst/news axes, which have
+    no historical/as-of-date source (see the 2d ADR).
+    """
+
+    __tablename__ = "composite_snapshot"
+    __table_args__ = (
+        UniqueConstraint("symbol", "snapshot_date", name="uq_composite_snapshot_symbol_date"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(32), index=True, nullable=False)
+    snapshot_date = Column(Date, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    close = Column(Float, nullable=False)
+    axis_technical = Column(Float, nullable=True)
+    axis_analyst = Column(Float, nullable=True)
+    axis_fundamentals = Column(Float, nullable=True)
+    axis_news = Column(Float, nullable=True)
+    score = Column(Float, nullable=False)
+    verdict = Column(String(8), nullable=False)
+    horizon_days = Column(Integer, nullable=False)
+    # Outcome — filled by the labeling pass once the horizon has matured.
+    forward_close = Column(Float, nullable=True)
+    forward_return_pct = Column(Float, nullable=True)
+    realized_up = Column(Boolean, nullable=True)
+    labeled_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

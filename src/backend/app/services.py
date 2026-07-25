@@ -8,6 +8,7 @@ from app.analysis import calculate_indicators, detect_patterns
 from app.alpha_vantage_service import AlphaVantageService
 from app.composite_score import compute_composite
 from app import composite_weights
+from app import composite_snapshots
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, to_yfinance_symbol
 from app.fmp_service import FmpService
 from app.net_timeout import call_with_timeout
@@ -636,6 +637,16 @@ class MarketDataService:
                 news_sentiment=sentiment_score,
                 weights=composite_weights.get_weights(),
             )
+            # Forward-collection for calibration (2d-3): record the verdict +
+            # per-axis values now so the realised outcome can be joined later.
+            # Best-effort — never breaks the recommendation.
+            if composite is not None:
+                try:
+                    last_close = float(df_analyzed["Close"].iloc[-1])
+                except (KeyError, IndexError, ValueError, TypeError):
+                    last_close = None
+                if last_close:
+                    composite_snapshots.record_snapshot(symbol, last_close, composite)
 
         # Get Info (Enriched with YFinance)
         info = {

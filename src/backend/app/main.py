@@ -1135,6 +1135,19 @@ async def ml_retrain_task():
                         "ml_retrain_task_cycle_completed",
                         extra={"refreshed_symbols": refreshed, "total_candidates": len(candidates)},
                     )
+                # Forward-collection labeling (2d-3): fill realised outcomes for
+                # matured composite snapshots. Bounded per cycle (rate limits).
+                try:
+                    from app import composite_snapshots
+
+                    labeled = composite_snapshots.label_due_snapshots(db, service, limit=15)
+                    if labeled:
+                        logger.info(
+                            "composite_snapshot_labeling_cycle",
+                            extra={"labeled": labeled},
+                        )
+                except Exception:
+                    logger.exception("composite_snapshot_labeling_failed")
             finally:
                 db.close()
         except Exception:
@@ -2485,6 +2498,18 @@ def set_composite_weights_config(
         details={"weights": normalized},
     )
     return {"status": "updated", "weights": normalized}
+
+
+@app.get("/api/admin/composite-readiness")
+def get_composite_readiness(
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Forward-collection progress (2d-3): how many composite snapshots have a
+    realised outcome, and whether the full 4-axis calibration is usable yet."""
+    from app import composite_snapshots
+
+    return composite_snapshots.readiness(db)
 
 
 @app.get("/api/backtest/{symbol:path}")
