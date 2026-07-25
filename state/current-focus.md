@@ -1,5 +1,11 @@
 # Current Focus
 
+## 2026-07-25: Composite Stufe 2d Slice B gebaut (Forward-Collection, Branch `feature/composite-forward-collection`, alle 5 Gates gruen)
+
+**Slice B (2d-3, fertig):** Forward-Collection fuer die Kalibrierung. Neue Tabelle `composite_snapshot` (Alembic 0012, Head `b2c3d4e5f6a7`): eine Zeile pro (symbol, UTC-Tag) mit Close + 4 Achsen-Rohwerten + Score/Verdict + Horizon + nachtraeglich befuellten Outcome-Feldern. Modul `composite_snapshots.py`: `write_snapshot` (Dedup/Completeness-Upsert, Labeled-Schutz), `record_snapshot` (best-effort im Request-Pfad), `label_due_snapshots` (Forward-Return via yfinance, gebunden, im `ml_retrain_task`), `readiness`. `get_stock_data` schreibt Snapshots bei nicht-synthetischen Empfehlungen; Admin `GET /api/admin/composite-readiness` + AdminPage-Anzeige ("N/M full-axis labeled").
+**Verifikation (alle 5 Gates):** Build gruen, Unit **296 gruen** (+10 Tests), Drift-Gate 0012 gruen, `tsc` gruen, api-regression **passed**, ui-regression **passed** (`ui_admin ok`), **upgrade-rehearsal passed** (0012 forward + Backup/Restore). ADR 2026-07-25 (Slice B) geschrieben.
+**Naechster Schritt:** **Slice C** (2d-2 Interims-Teilkalibrierung): Backtest ueber die rekonstruierbaren Achsen → schreibt kalibrierte Gewichte in den Slice-A-Speicher (`composite_weights`), transparent gelabelt; nutzt die `composite_snapshot`-Daten sobald `readiness.ready` (full-axis labeled >= Threshold) fuer die volle 4-Achsen-Kalibrierung. Danach ist 2d komplett → dann erst 2b (Auto-Execution an Composite, mit User abstimmen).
+
 ## 2026-07-25: Composite Stufe 2d Slice A gebaut (Branch `feature/configurable-composite-weights`, alle 5 Gates gruen)
 
 **2d-Befund (verbindlich, praegt auch 2b):** Nur die `technical`-Achse ist historisch backtestbar; `analyst`/`news` sind data-blocked (nur Live-Snapshot, kein Archiv), `fundamentals` nur mit Umbau teilweise. Keine Prognose-Outcome-Persistenz. Ehrlicher 4-Achsen-Backtest heute NICHT machbar. **User-Entscheidung:** kombinierter Weg — 2d-2 (Teil-Backtest) als Interim, parallel 2d-3 (Forward-Collection) selbst tracken, Readiness anzeigen ab wann volle Kalibrierung greift. Drei Slices, je eigener PR: **A = Gewichte konfigurierbar (DIESER, fertig)**, B = Forward-Collection (2d-3), C = Interims-Teilkalibrierung (2d-2).

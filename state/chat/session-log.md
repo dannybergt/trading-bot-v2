@@ -1,6 +1,18 @@
 # Sitzungslog
 
 - Datum: 2026-07-25
+  Kontext: Fortsetzung gleiche Session ("ja" = weiter mit Slice B). Composite-Roadmap 2d Slice B (Forward-Collection, 2d-3) gebaut — das Tracking, das die sonst nicht-backtestbaren analyst/news-Achsen je kalibrierbar macht.
+  Erledigt (Branch `feature/composite-forward-collection`):
+  (1) `models.py` + Alembic `0012_add_composite_snapshot` (Head `b2c3d4e5f6a7`): Tabelle `composite_snapshot`, eine Zeile pro (symbol, UTC-Tag), Close + axis_technical/analyst/fundamentals/news (nullable) + score/verdict/horizon_days + Outcome-Felder (forward_close/forward_return_pct/realized_up/labeled_at), Unique(symbol, snapshot_date), Indizes id+symbol.
+  (2) `composite_snapshots.py`: `write_snapshot(db,…)` (testbarer Upsert-Kern, Dedup pro Symbol/Tag, behaelt axis-vollstaendigste Variante, laesst gelabelte Zeilen in Ruhe), `record_snapshot` (best-effort-Wrapper mit eigener Session, wirft nie), `_forward_close`/`label_due_snapshots` (Forward-Return am ersten Handelstag >= snapshot_date+Horizon via `get_yfinance_history_df`, gebunden pro Zyklus), `readiness` (total/labeled/fullAxisLabeled/ready, Threshold 200, Horizon 7 Tage).
+  (3) `services.get_stock_data`: `record_snapshot(symbol, last_close, composite)` nach dem Composite, nur nicht-synthetisch.
+  (4) `main.py` `ml_retrain_task`: Labeling-Pass `label_due_snapshots(db, service, limit=15)` an die stuendliche Schleife angehaengt.
+  (5) `main.py`: Admin `GET /api/admin/composite-readiness`; `AdminPage` zeigt die Readiness-Zeile in der CompositeWeightsSection.
+  (6) Tests: +10 in `test_composite_snapshots.py` (Insert/Achsen-Capture, Dedup, Completeness-Overwrite + Nicht-Clobber, Labeled-Schutz, Bad-Input, Labeling up/down/immature/no-bar, Readiness).
+  Verifikation (alle 5 Gates, Docker-Host): `build.sh` gruen, Unit **296 gruen** (skipped=1) inkl. Drift-Gate (Model⇄0012 inkl. Unique-Constraint), `tsc` gruen (exit 0), `SKIP_BUILD=1 run-api-regression.sh` **passed**, `SKIP_BUILD=1 run-ui-regression.sh` **passed** (`ui_admin ok`), `IMAGE_TAG=local SKIP_PULL=1 …:local run-upgrade-rehearsal.sh` **passed** (0012 forward auf echtem Postgres + Backup/Restore).
+  Offen: nach ff-only-Merge deployt publish/nexainer auf BC-KI01 (0012 additiv, laeuft beim Boot; Sammlung startet dort ab dem ersten Request/Retrain-Zyklus). **Naechster Schritt: Slice C** (2d-2 Interims-Teilkalibrierung → schreibt Gewichte in composite_weights, nutzt composite_snapshot sobald readiness.ready). Bewusst NICHT: composite_snapshot im Backup (Sammel-/Kalibrierungsdaten, regenerierbar); dedizierter Voll-Fetch-Sweep (Yahoo-429). ADR 2026-07-25 (Slice B) geschrieben, current-focus aktualisiert.
+
+- Datum: 2026-07-25
   Kontext: Fortsetzung gleiche Session ("ja" = 2d angehen, planen). Explorer-Kartierung der 2d-Datenverfuegbarkeit ergab: nur `technical` historisch backtestbar, `analyst`/`news` data-blocked, `fundamentals` nur mit Umbau teilweise, keine Outcome-Persistenz → ehrlicher 4-Achsen-Backtest heute nicht machbar. Dem User als blockierenden Befund berichtet + 3-Slice-Plan vorgeschlagen. **User-Entscheidung:** kombinierter Weg (2d-2 Interim nutzen + 2d-3 selbst tracken + Readiness anzeigen). Slice A (Gewichte konfigurierbar) als Fundament gebaut.
   Erledigt (Branch `feature/configurable-composite-weights`): Operator-konfigurierbare Composite-Achsen-Gewichte.
   (1) `models.py` + Alembic `0011_add_composite_weight_configuration`: neue Tabelle `composite_weight_configuration` (Singleton-Row, `weights_json` Text, **unverschluesselt** — keine Secrets; bewusst NICHT die Fernet-`platform_configuration` missbraucht). Head jetzt `a1b2c3d4e5f6`.
