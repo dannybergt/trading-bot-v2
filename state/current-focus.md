@@ -1,5 +1,20 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-07-25 (UTC): Composite-Roadmap komplett + In-App-Hilfe, alles deployed
+
+**Diese Session ausgeliefert (alle ff-only nach `main`, CI+publish gruen, via nexainer auf BC-KI01):**
+- `.env.example` Footgun-Fix (`IMAGE_TAG=latest`, `56bcbd4`)
+- **2c** ML ehrlich rein technisch + selbstheilender Artefakt-Kontrakt (`b2131a3`)
+- **2d-A** Achsen-Gewichte konfigurierbar (`8df58db`)
+- **2d-B** Forward-Collection (`composite_snapshot` + Labeling + Readiness, `2d1b910`)
+- **2d-C** Grid-Search-Teilkalibrierung (`a515794`)
+- **2b** Auto-Execution-Composite-Gate (additiv/veto-only, pro User konfigurierbar, `0263cef`)
+- **In-App-Hilfe** Hover-Tooltips + Bruecke zur bestehenden Voll-Doku (`821584d`)
+
+**Stand:** Composite-Decision-Roadmap (2a+2c+2d+2b) komplett. Migrationen 0011/0012/0013 additiv deployed. Unit 262→**307 gruen**. Working tree clean, `main` == `origin/main` (Stand vor diesem STATE-Commit).
+**Offen (wartet auf User):** UI-Probelauf der Composite-/Hilfe-Kette auf BC-KI01; danach (1) Tooltip-Folge-Sweep uebrige Seiten, (2) Default-Schwellen-Feintuning nach ersten Forward-Collection-Daten (Readiness), (3) offene PRs #11 (oci-source-label) + #1-5 (Dependabot) reviewen. Naechster autonomer Bau nur auf Ansage (Probelauf-Modus).
+**Allokierte Ports/Ressourcen:** aktuell KEINE belegt (kein Devstack aktiv). Reservierte Baender: Devstack 18090/18094, API-Reg 18150/18154, UI-Reg (PRIMARY) 18150/18154, Restore-Rehearsal 18160/18164. Docker-Daemon geteilt — fremde Container nie killen.
+
 ## 2026-07-25: In-App-Hilfe — Hover-Tooltips + Bruecke zur Voll-Doku (Branch `feature/help-tooltips`, Gates gruen)
 
 User-Wunsch: Mouse-over-Kurzerklaerungen an den Punkten der aktuellen Ansicht + weiterfuehrend die ganze Webapp-Hilfe. Befund: die **volle Hilfe existiert schon** (`/api/docs`, `/docs`-Seite, globaler `HelpDrawer` "?"-Button im Header, 13 Themen DE/EN unter `docs/inapp/`) — es fehlte nur die feingranulare Tooltip-Ebene.
