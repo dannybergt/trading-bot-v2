@@ -1277,6 +1277,7 @@ def _run_auto_execution_paper_for_user(
             if not stock_payload:
                 continue
             prediction = stock_payload.get("prediction") or {}
+            composite = stock_payload.get("composite")
             asset_profile = stock_payload.get("asset") or {}
             asset_class = asset_profile.get("assetClass")
             sector = (stock_payload.get("info") or {}).get("sector")
@@ -1306,6 +1307,7 @@ def _run_auto_execution_paper_for_user(
                 sector=sector,
                 prediction=prediction,
                 latest_close=latest_close,
+                composite=composite,
                 sec_filings=sec_filings,
                 fred_calendar=fred_calendar,
                 sector_context=sector_context,

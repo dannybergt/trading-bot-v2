@@ -288,6 +288,7 @@ class AutoExecutionTests(unittest.TestCase):
             sector="Technology",
             prediction=prediction,
             latest_close=100.0,
+            composite={"verdict": "BUY", "confidence": 0.5},
         )
         self.assertTrue(decision.allowed, decision.reasons)
         self.assertIsNotNone(proposal)
@@ -329,6 +330,64 @@ class AutoExecutionTests(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertIn("prediction_not_actionable", decision.reasons)
         self.assertIsNone(proposal)
+
+    def _actionable_prediction(self):
+        return {"direction": "UP", "confidence": 0.75, "zones": {"entry": 100.0, "target": 110.0}}
+
+    def _from_prediction(self, *, composite):
+        return auto_execution.evaluate_proposal_from_prediction(
+            self.db, self.user, symbol="AAPL", asset_class="stock", sector="Technology",
+            prediction=self._actionable_prediction(), latest_close=100.0, composite=composite,
+        )
+
+    def test_composite_gate_blocks_when_unavailable(self):
+        self._enable_with_defaults()  # gate on by default
+        decision, proposal = self._from_prediction(composite=None)
+        self.assertFalse(decision.allowed)
+        self.assertIn("composite_unavailable", decision.reasons)
+        self.assertIsNone(proposal)
+
+    def test_composite_gate_blocks_on_verdict_mismatch(self):
+        self._enable_with_defaults()
+        # ML says UP but the composite verdict is SELL -> conflict.
+        decision, _ = self._from_prediction(composite={"verdict": "SELL", "confidence": 0.9})
+        self.assertFalse(decision.allowed)
+        self.assertIn("composite_verdict_mismatch", decision.reasons)
+
+    def test_composite_gate_blocks_on_hold_verdict(self):
+        self._enable_with_defaults()
+        decision, _ = self._from_prediction(composite={"verdict": "HOLD", "confidence": 0.9})
+        self.assertFalse(decision.allowed)
+        self.assertIn("composite_verdict_mismatch", decision.reasons)
+
+    def test_composite_gate_blocks_on_low_composite_confidence(self):
+        self._enable_with_defaults(minCompositeConfidence=0.2)
+        decision, _ = self._from_prediction(composite={"verdict": "BUY", "confidence": 0.1})
+        self.assertFalse(decision.allowed)
+        self.assertIn("composite_confidence_below_threshold", decision.reasons)
+
+    def test_composite_gate_agrees_and_clears_threshold_passes(self):
+        self._enable_with_defaults(minCompositeConfidence=0.2)
+        decision, proposal = self._from_prediction(composite={"verdict": "BUY", "confidence": 0.5})
+        self.assertTrue(decision.allowed, decision.reasons)
+        self.assertIsNotNone(proposal)
+
+    def test_composite_gate_disabled_ignores_missing_composite(self):
+        self._enable_with_defaults(compositeGateEnabled=False)
+        decision, proposal = self._from_prediction(composite=None)
+        self.assertTrue(decision.allowed, decision.reasons)
+        self.assertIsNotNone(proposal)
+
+    def test_update_limits_composite_gate_fields_and_clamp(self):
+        row = auto_execution.update_limits(
+            self.db, self.user,
+            {"compositeGateEnabled": False, "minCompositeConfidence": 5.0},
+        )
+        self.assertFalse(row.composite_gate_enabled)
+        self.assertEqual(row.min_composite_confidence, 1.0)  # clamped to [0,1]
+        serialized = auto_execution.serialize_limits(row)
+        self.assertFalse(serialized["compositeGateEnabled"])
+        self.assertEqual(serialized["minCompositeConfidence"], 1.0)
 
     def test_list_events_returns_newest_first(self):
         self._enable_with_defaults()

@@ -14,6 +14,8 @@ type Limits = {
   maxPortfolioBeta: number;
   allowedAssetClasses: string[];
   perStrategyBudgetPct: Record<string, number>;
+  compositeGateEnabled: boolean;
+  minCompositeConfidence: number;
   updatedAt?: string | null;
 };
 
@@ -151,6 +153,8 @@ export function AutoExecutionPage() {
       maxOpenPositions: draft.maxOpenPositions,
       maxPortfolioBeta: draft.maxPortfolioBeta,
       allowedAssetClasses: draft.allowedAssetClasses,
+      compositeGateEnabled: draft.compositeGateEnabled,
+      minCompositeConfidence: draft.minCompositeConfidence,
     });
   };
 
@@ -328,6 +332,37 @@ export function AutoExecutionPage() {
               </label>
             ))}
           </div>
+        </div>
+        <div className="space-y-2 rounded border border-slate-700 p-3" data-testid="auto-execution-composite-gate">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.compositeGateEnabled}
+              onChange={(e) =>
+                setDraft({ ...draft, compositeGateEnabled: e.target.checked })
+              }
+            />
+            <span>{t("autoExecution.limits.compositeGate")}</span>
+          </label>
+          <p className="text-xs text-slate-500">{t("autoExecution.limits.compositeGateHelp")}</p>
+          {draft.compositeGateEnabled ? (
+            <label className="space-y-1 text-xs">
+              <span className="text-slate-400">
+                {t("autoExecution.limits.minCompositeConfidence")}
+              </span>
+              <input
+                type="number"
+                className="input"
+                min={0}
+                max={1}
+                step={0.05}
+                value={draft.minCompositeConfidence}
+                onChange={(e) =>
+                  setDraft({ ...draft, minCompositeConfidence: Number(e.target.value) })
+                }
+              />
+            </label>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           <button

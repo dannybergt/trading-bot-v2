@@ -470,7 +470,10 @@
       "maxDailyLoss": "Max daily loss (USD)",
       "maxOpenPositions": "Max open positions",
       "maxPortfolioBeta": "Max symbol beta vs SPY",
-      "allowedAssetClasses": "Allowed asset classes"
+      "allowedAssetClasses": "Allowed asset classes",
+      "compositeGate": "Require composite agreement",
+      "compositeGateHelp": "Only auto-trade when the composite decision score agrees with the ML direction and clears the confidence bar below. Can only block trades, never trigger new ones.",
+      "minCompositeConfidence": "Min composite confidence (0–1)"
     },
     "events": {
       "title": "Recent automation events",

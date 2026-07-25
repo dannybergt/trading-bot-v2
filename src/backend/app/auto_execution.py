@@ -56,6 +56,8 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "max_portfolio_beta": 2.0,
     "allowed_asset_classes": "",
     "per_strategy_budget_pct": "{}",
+    "composite_gate_enabled": True,
+    "min_composite_confidence": 0.15,
 }
 
 VALID_ASSET_CLASSES = {"stock", "etf", "crypto"}
@@ -145,6 +147,8 @@ def serialize_limits(row: AutoExecutionLimits) -> dict[str, Any]:
         "maxPortfolioBeta": float(row.max_portfolio_beta or 0),
         "allowedAssetClasses": classes,
         "perStrategyBudgetPct": per_strategy,
+        "compositeGateEnabled": bool(row.composite_gate_enabled),
+        "minCompositeConfidence": float(row.min_composite_confidence or 0),
         "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
     }
 
@@ -201,6 +205,10 @@ def update_limits(db: Session, user: User, payload: dict[str, Any]) -> AutoExecu
         else:
             cleaned = {}
         row.per_strategy_budget_pct = json.dumps(cleaned)
+    if "compositeGateEnabled" in payload:
+        row.composite_gate_enabled = bool(payload["compositeGateEnabled"])
+    if "minCompositeConfidence" in payload:
+        row.min_composite_confidence = min(1.0, max(0.0, float(payload["minCompositeConfidence"] or 0)))
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
@@ -480,6 +488,7 @@ def evaluate_proposal_from_prediction(
     sector: str | None,
     prediction: dict[str, Any],
     latest_close: float | None,
+    composite: dict[str, Any] | None = None,
     sec_filings: dict[str, Any] | None = None,
     fred_calendar: dict[str, Any] | None = None,
     sector_context: dict[str, Any] | None = None,
@@ -510,6 +519,28 @@ def evaluate_proposal_from_prediction(
         return RiskDecision(allowed=False, reasons=["entry_price_unavailable"]), None
 
     limits = get_limits(db, user)
+
+    # Composite decision-score gate (roadmap 2b). Purely additive: it can only
+    # block a trade the ML gate already wants, never enable one. When enabled,
+    # the composite verdict must AGREE with the ML direction and clear the
+    # per-user confidence bar. A missing composite (synthetic data / no axis)
+    # blocks explicitly, so the gate never depends on an implicit upstream
+    # neutralisation. Per the 2d finding, analyst/news axes stay policy-weighted
+    # until forward-collection calibrates them — this gate can therefore only
+    # make the automation MORE conservative, which is the safe direction.
+    if bool(limits.composite_gate_enabled):
+        if not composite:
+            return RiskDecision(allowed=False, reasons=["composite_unavailable"]), None
+        expected_verdict = "BUY" if direction == "UP" else "SELL"
+        if str(composite.get("verdict") or "").upper() != expected_verdict:
+            return RiskDecision(allowed=False, reasons=["composite_verdict_mismatch"]), None
+        composite_confidence = float(composite.get("confidence") or 0)
+        if composite_confidence < float(limits.min_composite_confidence or 0):
+            return (
+                RiskDecision(allowed=False, reasons=["composite_confidence_below_threshold"]),
+                None,
+            )
+
     max_position_usd = float(limits.max_position_size_usd or 0)
     if max_position_usd <= 0 or entry_price <= 0:
         qty = 0.0

@@ -289,6 +289,12 @@ class AutoExecutionLimits(Base):
     allowed_asset_classes = Column(String, nullable=False, default="")
     # JSON map: {"trend_following": 50, "mean_reversion": 50}.
     per_strategy_budget_pct = Column(Text, nullable=False, default="{}")
+    # Composite decision-score gate (roadmap 2b): when enabled, an auto-trade
+    # additionally requires the composite verdict to AGREE with the ML direction
+    # and the composite confidence to reach `min_composite_confidence`. Purely
+    # additive — it can only block, never enable a trade the ML gate rejected.
+    composite_gate_enabled = Column(Boolean, nullable=False, default=True)
+    min_composite_confidence = Column(Float, nullable=False, default=0.15)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

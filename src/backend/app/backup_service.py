@@ -240,6 +240,8 @@ class BackupService:
                         "max_portfolio_beta": float(row.max_portfolio_beta or 0),
                         "allowed_asset_classes": row.allowed_asset_classes or "",
                         "per_strategy_budget_pct": row.per_strategy_budget_pct or "{}",
+                        "composite_gate_enabled": bool(row.composite_gate_enabled),
+                        "min_composite_confidence": float(row.min_composite_confidence or 0),
                         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
                     }
                     for row in auto_execution_limits
@@ -566,6 +568,12 @@ class BackupService:
                     max_portfolio_beta=float(record.get("max_portfolio_beta") or 0),
                     allowed_asset_classes=record.get("allowed_asset_classes") or "",
                     per_strategy_budget_pct=record.get("per_strategy_budget_pct") or "{}",
+                    # Older backups predate the composite gate — default it on
+                    # (conservative) so a restore never silently relaxes the gate.
+                    composite_gate_enabled=bool(record.get("composite_gate_enabled", True)),
+                    min_composite_confidence=float(
+                        record.get("min_composite_confidence", 0.15) or 0
+                    ),
                     updated_at=(
                         datetime.fromisoformat(record["updated_at"])
                         if record.get("updated_at")
