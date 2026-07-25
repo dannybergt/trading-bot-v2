@@ -1,6 +1,18 @@
 # Sitzungslog
 
 - Datum: 2026-07-25
+  Kontext: Fortsetzung gleiche Session (Option 1 = 2b angehen). Explorer kartierte den Auto-Execution-Pfad (composite liegt an der Aufrufstelle vor, nur verworfen). User-Methodik-Wahl: konfigurierbare Schwelle (Composite muss zustimmen + confidence>=X) + pro User schaltbar (Default an).
+  Erledigt (Branch `feature/auto-execution-composite-gate`): Additives, veto-only Composite-Gate in der Auto-Execution.
+  (1) `models.py` + Alembic `0013_add_auto_execution_composite_gate` (Head `c3d4e5f6a7b8`): `AutoExecutionLimits.composite_gate_enabled` (Bool, Default True) + `min_composite_confidence` (Float, Default 0.15), server_default-Backfill (Drift-Gate vergleicht server_default nicht).
+  (2) `auto_execution.py`: DEFAULT_LIMITS + serialize_limits (compositeGateEnabled/minCompositeConfidence) + update_limits (Clamp [0,1]); `evaluate_proposal_from_prediction` bekommt `composite`-Param + Gate nach get_limits: composite None→`composite_unavailable`, verdict != erwartetem (UP→BUY/DOWN→SELL)→`composite_verdict_mismatch`, confidence<min→`composite_confidence_below_threshold`. Additiv — ML-Gate + alle harten Gates unveraendert.
+  (3) `main.py` `_run_auto_execution_paper_for_user`: `composite = stock_payload.get("composite")` gelesen + durchgereicht (kein neuer Fetch).
+  (4) `backup_service.py`: Export + Import der zwei Felder (alte Backups → Default an).
+  (5) Frontend `AutoExecutionPage.tsx`: Toggle + Confidence-Input; i18n DE/EN (`autoExecution.limits.compositeGate*`).
+  (6) Tests: +7 in `test_auto_execution.py` (unavailable/mismatch/hold/low-confidence blocken, agree+threshold passt, disabled ignoriert fehlenden Composite, update+clamp); bestehender `actionable_passes` um zustimmenden Composite ergaenzt (Gate ist jetzt default-an). Test-Iteration: Fixture-Constraint (symbol,date) + set_weights-caller-commit + ein Leftover-assert bereinigt.
+  Verifikation (alle 5 Gates, Docker-Host): `build.sh` gruen, Unit **307 gruen** (skipped=1) inkl. Drift-Gate (Model⇄0013), `tsc` gruen, `SKIP_BUILD=1 run-api-regression.sh` **passed** (inkl. Backup-Import neue Felder), `SKIP_BUILD=1 run-ui-regression.sh` **passed**, `IMAGE_TAG=local SKIP_PULL=1 …:local run-upgrade-rehearsal.sh` **passed** (0013 forward + Backup/Restore).
+  ==> **Composite-Roadmap komplett (2a+2c+2d A/B/C+2b).** Offen: nach ff-Merge deployt publish/nexainer auf BC-KI01 (0013 additiv). Naechster Schritt: UI-Probelauf der ganzen Kette durch den User; Probelauf-Modus (kein autonomer Neubau). ADR 2026-07-25 (2b) geschrieben, current-focus aktualisiert.
+
+- Datum: 2026-07-25
   Kontext: Fortsetzung gleiche Session ("ja" = weiter mit Slice C, letzte 2d-Stufe). User waehlte Kalibrier-Methode: Grid-Search auf Trefferquote (statt logistischer Regression / nur-Report).
   Erledigt (Branch `feature/composite-calibration`): Interims-Teilkalibrierung (2d-2).
   (1) `composite_calibration.py`: Grid-Search ueber Achsen-Gewichte gegen realisierte Trefferquote auf gelabelten `composite_snapshot`-Daten. `_score` (Renormalisierung ueber vorhandene Achsen, spiegelt compute_composite), `_verdict` (Schwellen aus composite_score), `_hit_rate` (aktionable BUY/SELL, HOLD abstains), `calibrate(db, apply, updated_by)`. Ehrlichkeit: nur Achsen mit >=50% Coverage getunt, Rest fixiert auf aktuell/Policy (analyst/news bleiben policy bis Forward-Collection reift; volle 4-Achsen-Kalibrierung schaltet per Daten frei). Guards: >=30 Labels, >=20% aktionable, schreibt nur bei STRIKTER Verbesserung ggue. aktuellem Hit-Rate. Grid 0.1 (bzw. 0.2 bei 4 Achsen).

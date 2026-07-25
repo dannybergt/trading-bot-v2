@@ -1,5 +1,13 @@
 # Current Focus
 
+## 2026-07-25: Stufe 2b gebaut — Auto-Execution an Composite gehaengt (Branch `feature/auto-execution-composite-gate`, alle 5 Gates gruen)
+
+**2b (fertig):** Additives Composite-Gate in der Auto-Execution — kann nur BLOCKEN, nie einen Trade ausloesen. Neue `AutoExecutionLimits`-Felder `composite_gate_enabled` (Default an) + `min_composite_confidence` (Default 0.15), Alembic 0013. Bei aktivem Gate: `composite=None`→block, Composite-verdict muss ML-direction zustimmen (UP→BUY/DOWN→SELL), `composite.confidence>=min`. `composite` wird an der Aufrufstelle nur durchgereicht (kein neuer Fetch). Konfigurierbar+schaltbar pro User (User-Wahl: konfigurierbare Schwelle + pro User schaltbar) ueber `/api/auto-execution/limits` + AutoExecutionPage-Toggle/Input (i18n DE/EN), Backup-Roundtrip erweitert. Veto-only = 2d-konform (handelt nie AUF BASIS un-kalibrierter analyst/news, wird nur vorsichtiger).
+**Verifikation (alle 5 Gates):** Build gruen, Unit **307 gruen** (+7 Tests), Drift-Gate 0013 gruen, `tsc` gruen, api-regression **passed**, ui-regression **passed**, **upgrade-rehearsal passed** (0013 forward + Backup/Restore). ADR 2026-07-25 (2b) geschrieben.
+
+**==> Composite-Roadmap KOMPLETT:** 2a (Anzeige) + 2c (ML ehrlich) + 2d A/B/C (Gewichte konfigurierbar/Forward-Collection/Grid-Kalibrierung) + 2b (Auto-Execution-Gate). Die Empfehlung nutzt jetzt einen transparenten, konfigurier- und kalibrierbaren Composite; die Auto-Execution handelt konservativ nur bei ML+Composite-Uebereinstimmung.
+**Naechster Schritt:** UI-Probelauf der gesamten Kette (2c/2d/2b) auf BC-KI01 durch den User — Composite-Karte, Admin-Gewichte/Readiness/Kalibrier-Button, Auto-Execution-Composite-Gate im Settings. Danach ggf. Default-Schwellen-Feintuning nach ersten Forward-Collection-Daten. Kein neuer autonomer Bau ohne User-Input (Probelauf-Modus).
+
 ## 2026-07-25: Composite Stufe 2d KOMPLETT — Slice C (Kalibrierung) gebaut (Branch `feature/composite-calibration`, alle Gates gruen)
 
 **Slice C (2d-2, fertig):** Interims-Teilkalibrierung per **Grid-Search auf Trefferquote** (User-Wahl). Modul `composite_calibration.py` + Admin `POST /api/admin/composite-calibrate`: grid-sucht Achsen-Gewichte gegen die realisierte Trefferquote auf gelabelten `composite_snapshot`-Daten; tunt nur Achsen mit >=50% Coverage (analyst/news bleiben policy-gesetzt bis Forward-Collection reift — volle 4-Achsen-Kalibrierung schaltet sich per DATEN frei), Guards (>=30 Labels, >=20% aktionable), schreibt in den Slice-A-Speicher NUR bei strikter Verbesserung (macht Live-Gewichte nie schlechter), admin-getriggert + auditiert. AdminPage: "Run calibration"-Button + Report. KEINE Migration.
