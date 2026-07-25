@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ACCESS_TOKEN_KEY, ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 type AdminUser = {
   id: number;
@@ -93,6 +95,7 @@ const COMPOSITE_AXIS_LABEL: Record<keyof CompositeWeights, string> = {
 // normalises whatever is entered to sum 1.0; here we present each axis as a
 // percentage of the current total so admins see the effective split live.
 function CompositeWeightsSection() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["admin-composite-weights"],
@@ -181,7 +184,14 @@ function CompositeWeightsSection() {
   return (
     <section className="space-y-3" data-testid="admin-composite-weights-section">
       <header>
-        <h2 className="text-lg font-medium">Composite decision weights</h2>
+        <h2 className="flex items-center gap-1.5 text-lg font-medium">
+          Composite decision weights
+          <InfoTooltip
+            text={t("tooltips.admin.weights")}
+            topic="admin"
+            testId="tip-composite-weights"
+          />
+        </h2>
         <p className="text-sm text-slate-400">
           Relative weight of each source in the composite BUY/HOLD/SELL verdict.
           Values are normalised to 100%.{" "}
@@ -245,8 +255,13 @@ function CompositeWeightsSection() {
           className="rounded border border-slate-700 bg-slate-900/40 p-3 text-sm"
           data-testid="composite-readiness"
         >
-          <p className="font-medium text-slate-200">
+          <p className="flex items-center gap-1.5 font-medium text-slate-200">
             Backtest calibration readiness (forward-collection)
+            <InfoTooltip
+              text={t("tooltips.admin.readiness")}
+              topic="admin"
+              testId="tip-composite-readiness"
+            />
           </p>
           <p className="text-slate-400">
             {readinessQuery.data.fullAxisLabeled} / {readinessQuery.data.threshold}{" "}
@@ -267,8 +282,13 @@ function CompositeWeightsSection() {
             >
               {calibrateMutation.isPending ? "Calibrating…" : "Run calibration"}
             </button>
-            <span className="text-xs text-slate-500">
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
               Writes weights only when it beats the current hit-rate.
+              <InfoTooltip
+                text={t("tooltips.admin.calibrate")}
+                topic="admin"
+                testId="tip-composite-calibrate"
+              />
             </span>
           </div>
           {calibReport ? (

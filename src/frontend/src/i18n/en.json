@@ -507,5 +507,35 @@
     "spread": "10Y-2Y spread",
     "inverted": "Inverted",
     "daysUntil": "in {{days}}d"
+  },
+  "tooltips": {
+    "ariaLabel": "More info",
+    "more": "Full help →",
+    "composite": {
+      "verdict": "The overall BUY/HOLD/SELL call, combining every source with visible weights — not a guarantee. See each axis's contribution below.",
+      "score": "Weighted mean of the available axes, from -1 (bearish) to +1 (bullish). Its magnitude is the confidence.",
+      "technical": "The ML model's price-direction signal from chart indicators — today the only historically back-tested axis.",
+      "analyst": "Analyst consensus stance and price-target upside. Policy-weighted until enough forward data calibrates it.",
+      "fundamentals": "Valuation health (P/E, ROE, debt). Policy-weighted until enough forward data calibrates it.",
+      "news": "Aggregated news-sentiment freshness. Policy-weighted until enough forward data calibrates it."
+    },
+    "prediction": {
+      "probabilityUp": "The ML ensemble's estimated probability that the price rises over the next bar. 50% means no edge.",
+      "netYield": "Expected return AFTER broker fees and capital-gains tax. Only a positive net yield counts as actionable.",
+      "zones": "Suggested entry, stop-loss and target levels derived from volatility (ATR) and support/resistance."
+    },
+    "autoExecution": {
+      "compositeGate": "When on, an auto-trade also needs the composite verdict to agree with the ML direction and clear the confidence bar below. It can only block trades, never start new ones.",
+      "minCompositeConfidence": "Minimum composite confidence (|score|, 0–1) required before an auto-trade fires.",
+      "maxPositionSize": "Largest USD amount a single automated order may use.",
+      "maxDailyLoss": "Automation stops for the day once realised losses reach this amount.",
+      "maxOpenPositions": "Automation won't open more than this many positions at once.",
+      "maxBeta": "Skip symbols more volatile than this beta versus SPY."
+    },
+    "admin": {
+      "weights": "Relative weight of each source in the composite verdict. Normalised to 100%.",
+      "readiness": "How much labeled forward-collected data exists. The full 4-axis calibration turns on once enough accrues.",
+      "calibrate": "Grid-searches the weights against the realised hit-rate on collected data. Writes new weights only when they beat the current ones."
+    }
   }
 }

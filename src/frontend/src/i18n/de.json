@@ -507,5 +507,35 @@
     "spread": "10J-2J-Spread",
     "inverted": "Invertiert",
     "daysUntil": "in {{days}}T"
+  },
+  "tooltips": {
+    "ariaLabel": "Mehr Infos",
+    "more": "Zur vollständigen Hilfe →",
+    "composite": {
+      "verdict": "Das Gesamt-Verdict BUY/HOLD/SELL — kombiniert alle Quellen mit sichtbaren Gewichten, keine Garantie. Die Beiträge je Achse stehen darunter.",
+      "score": "Gewichteter Mittelwert der verfügbaren Achsen, von -1 (bärisch) bis +1 (bullisch). Der Betrag ist die Confidence.",
+      "technical": "Das Kursrichtungs-Signal des ML-Modells aus Chart-Indikatoren — heute die einzige historisch backgetestete Achse.",
+      "analyst": "Analystenkonsens und Kursziel-Upside. Policy-gewichtet, bis genug Forward-Daten es kalibrieren.",
+      "fundamentals": "Bewertungs-Gesundheit (KGV, ROE, Verschuldung). Policy-gewichtet, bis genug Forward-Daten es kalibrieren.",
+      "news": "Aggregierte News-Sentiment-Frische. Policy-gewichtet, bis genug Forward-Daten es kalibrieren."
+    },
+    "prediction": {
+      "probabilityUp": "Die vom ML-Ensemble geschätzte Wahrscheinlichkeit, dass der Kurs im nächsten Bar steigt. 50% = kein Vorteil.",
+      "netYield": "Erwartete Rendite NACH Brokergebühren und Kapitalertragssteuer. Nur eine positive Netto-Rendite gilt als handelbar.",
+      "zones": "Vorgeschlagene Entry-, Stop-Loss- und Ziel-Level, abgeleitet aus Volatilität (ATR) und Unterstützung/Widerstand."
+    },
+    "autoExecution": {
+      "compositeGate": "Wenn aktiv, braucht ein Auto-Trade zusätzlich, dass der Composite-Verdict der ML-Richtung zustimmt und die Confidence-Schwelle unten erreicht. Kann Trades nur blocken, nie neue auslösen.",
+      "minCompositeConfidence": "Mindest-Composite-Confidence (|score|, 0–1), bevor ein Auto-Trade auslöst.",
+      "maxPositionSize": "Größter USD-Betrag, den eine einzelne automatische Order nutzen darf.",
+      "maxDailyLoss": "Die Automation stoppt für den Tag, sobald die realisierten Verluste diesen Betrag erreichen.",
+      "maxOpenPositions": "Die Automation öffnet nicht mehr als so viele Positionen gleichzeitig.",
+      "maxBeta": "Symbole überspringen, die volatiler als dieses Beta gegenüber SPY sind."
+    },
+    "admin": {
+      "weights": "Relatives Gewicht jeder Quelle im Composite-Verdict. Auf 100% normalisiert.",
+      "readiness": "Wie viele gelabelte Forward-Daten vorliegen. Die volle 4-Achsen-Kalibrierung schaltet sich frei, sobald genug aufgelaufen sind.",
+      "calibrate": "Grid-Search der Gewichte gegen die realisierte Trefferquote auf den gesammelten Daten. Schreibt neue Gewichte nur, wenn sie die aktuellen schlagen."
+    }
   }
 }

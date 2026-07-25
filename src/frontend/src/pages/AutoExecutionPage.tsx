@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 type Limits = {
   enabled: boolean;
@@ -266,7 +267,10 @@ export function AutoExecutionPage() {
         </h2>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">{t("autoExecution.limits.maxPositionSize")}</span>
+            <span className="flex items-center gap-1.5 text-slate-400">
+              {t("autoExecution.limits.maxPositionSize")}
+              <InfoTooltip text={t("tooltips.autoExecution.maxPositionSize")} topic="auto-execution" testId="tip-max-position" />
+            </span>
             <input
               type="number"
               className="input"
@@ -279,7 +283,10 @@ export function AutoExecutionPage() {
             />
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">{t("autoExecution.limits.maxDailyLoss")}</span>
+            <span className="flex items-center gap-1.5 text-slate-400">
+              {t("autoExecution.limits.maxDailyLoss")}
+              <InfoTooltip text={t("tooltips.autoExecution.maxDailyLoss")} topic="auto-execution" testId="tip-max-daily-loss" />
+            </span>
             <input
               type="number"
               className="input"
@@ -290,7 +297,10 @@ export function AutoExecutionPage() {
             />
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">{t("autoExecution.limits.maxOpenPositions")}</span>
+            <span className="flex items-center gap-1.5 text-slate-400">
+              {t("autoExecution.limits.maxOpenPositions")}
+              <InfoTooltip text={t("tooltips.autoExecution.maxOpenPositions")} topic="auto-execution" testId="tip-max-open" />
+            </span>
             <input
               type="number"
               className="input"
@@ -303,7 +313,10 @@ export function AutoExecutionPage() {
             />
           </label>
           <label className="space-y-1 text-xs">
-            <span className="text-slate-400">{t("autoExecution.limits.maxPortfolioBeta")}</span>
+            <span className="flex items-center gap-1.5 text-slate-400">
+              {t("autoExecution.limits.maxPortfolioBeta")}
+              <InfoTooltip text={t("tooltips.autoExecution.maxBeta")} topic="auto-execution" testId="tip-max-beta" />
+            </span>
             <input
               type="number"
               className="input"
@@ -342,13 +355,17 @@ export function AutoExecutionPage() {
                 setDraft({ ...draft, compositeGateEnabled: e.target.checked })
               }
             />
-            <span>{t("autoExecution.limits.compositeGate")}</span>
+            <span className="flex items-center gap-1.5">
+              {t("autoExecution.limits.compositeGate")}
+              <InfoTooltip text={t("tooltips.autoExecution.compositeGate")} topic="auto-execution" testId="tip-composite-gate" />
+            </span>
           </label>
           <p className="text-xs text-slate-500">{t("autoExecution.limits.compositeGateHelp")}</p>
           {draft.compositeGateEnabled ? (
             <label className="space-y-1 text-xs">
-              <span className="text-slate-400">
+              <span className="flex items-center gap-1.5 text-slate-400">
                 {t("autoExecution.limits.minCompositeConfidence")}
+                <InfoTooltip text={t("tooltips.autoExecution.minCompositeConfidence")} topic="auto-execution" testId="tip-min-composite-conf" />
               </span>
               <input
                 type="number"

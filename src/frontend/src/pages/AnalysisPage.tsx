@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { InfoTooltip } from "../components/InfoTooltip";
 import {
   StockChart,
   type ChartCandle,
@@ -1011,13 +1012,21 @@ function ProbabilityBars({
   probabilityUp: number;
   probabilityDown: number;
 }) {
+  const { t } = useTranslation();
   const upPct = Math.max(0, Math.min(100, probabilityUp * 100));
   const downPct = Math.max(0, Math.min(100, probabilityDown * 100));
   return (
     <div className="mt-3 space-y-2 text-xs">
       <div>
         <div className="flex items-baseline justify-between">
-          <span className="text-bergt-green">P(UP)</span>
+          <span className="flex items-center gap-1.5 text-bergt-green">
+            P(UP)
+            <InfoTooltip
+              text={t("tooltips.prediction.probabilityUp")}
+              topic="analysis"
+              testId="tip-probability-up"
+            />
+          </span>
           <span className="tabular-nums">{upPct.toFixed(1)}%</span>
         </div>
         <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800/80">
@@ -1069,6 +1078,7 @@ function CategoryBar({ contribution }: { contribution: number }) {
 }
 
 function YieldBreakdown({ zones }: { zones: ChartZones }) {
+  const { t } = useTranslation();
   const gross = zones.grossTargetPct;
   const fee = zones.feeRoundTripPct;
   const tax = zones.taxDragPct;
@@ -1080,8 +1090,13 @@ function YieldBreakdown({ zones }: { zones: ChartZones }) {
   return (
     <div className="mt-3 rounded-md border border-slate-700/40 bg-slate-950/40 p-3 text-xs">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-wide opacity-70">
+        <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide opacity-70">
           Net-yield projection
+          <InfoTooltip
+            text={t("tooltips.prediction.netYield")}
+            topic="analysis"
+            testId="tip-net-yield"
+          />
         </p>
         {meets === true ? (
           <span className="rounded-full border border-bergt-green/40 bg-bergt-green/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-bergt-green">
@@ -1218,8 +1233,13 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
   return (
     <section className="card">
       <header className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-slate-400">
           {t("analysis.composite.title")}
+          <InfoTooltip
+            text={t("tooltips.composite.verdict")}
+            topic="analysis"
+            testId="tip-composite-verdict"
+          />
         </h2>
         <span className="text-xs text-slate-500">{t("analysis.composite.subtitle")}</span>
       </header>
