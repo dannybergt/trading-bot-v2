@@ -1,6 +1,15 @@
 # Sitzungslog
 
 - Datum: 2026-07-25
+  Kontext: User-Wunsch nach durchgaengiger Hilfe (Hover-Kurzerklaerung an den Punkten der aktuellen Ansicht + weiterfuehrend die ganze Webapp-Hilfe). Explorer-Kartierung: volle Hilfe existiert schon (docs_service.py + /api/docs + DocsPage + HelpDrawer "?"-Header-Button + docs/inapp 13 Themen DE/EN); nur eine wiederverwendbare Tooltip-Komponente fehlte.
+  Erledigt (Branch `feature/help-tooltips`, Frontend-only):
+  (1) `components/InfoTooltip.tsx`: "i"-Icon, Tooltip bei Hover+Keyboard-Fokus (a11y `aria-describedby`/`role=tooltip`, fokussierbarer Button), touch-tauglich, `data-testid`; optionaler `topic`-Prop → "mehr →"-`Link` auf `/docs/<topic>` als Bruecke Kurzerklaerung→Voll-Doku.
+  (2) i18n `tooltips.*` (DE/EN): ariaLabel/more + composite.{verdict,score,4 Achsen} + prediction.{probabilityUp,netYield,zones} + autoExecution.{compositeGate,minCompositeConfidence,4 Limits} + admin.{weights,readiness,calibrate}.
+  (3) Angewandt: AnalysisPage (CompositeVerdictCard-Titel, ProbabilityBars P(UP), YieldBreakdown Net-Yield), AutoExecutionPage (Composite-Gate, min-Confidence, maxPosition/maxDailyLoss/maxOpen/maxBeta), AdminPage (Composite-Gewichte-Header, Readiness, Kalibrier-Hinweis) — je mit topic-Link analysis/auto-execution/admin. AdminPage bekam `useTranslation` fuer die Tooltip-Texte (Seite sonst EN-hardcoded).
+  Verifikation: i18n-JSON valide, `tsc` gruen (exit 0), `build.sh` gruen, `SKIP_BUILD=1 run-api-regression.sh` **passed** (unberuehrt), `SKIP_BUILD=1 run-ui-regression.sh` **passed** (`ui_analysis`/`ui_admin`/`ui_settings` ok — additive Trigger brechen keine Text-Asserts). Kein Backend/Schema/Secret, kein Rehearsal.
+  Offen: nach ff-Merge deployt publish/nexainer auf BC-KI01. Naechster Schritt: Tooltip-Sweep uebrige Seiten + native `title=` vereinheitlichen + ui-regression-Asserts fuer Tooltips/HelpDrawer (nach User-Abnahme, Probelauf-Modus). ADR 2026-07-25 (In-App-Hilfe) geschrieben, current-focus aktualisiert.
+
+- Datum: 2026-07-25
   Kontext: Fortsetzung gleiche Session (Option 1 = 2b angehen). Explorer kartierte den Auto-Execution-Pfad (composite liegt an der Aufrufstelle vor, nur verworfen). User-Methodik-Wahl: konfigurierbare Schwelle (Composite muss zustimmen + confidence>=X) + pro User schaltbar (Default an).
   Erledigt (Branch `feature/auto-execution-composite-gate`): Additives, veto-only Composite-Gate in der Auto-Execution.
   (1) `models.py` + Alembic `0013_add_auto_execution_composite_gate` (Head `c3d4e5f6a7b8`): `AutoExecutionLimits.composite_gate_enabled` (Bool, Default True) + `min_composite_confidence` (Float, Default 0.15), server_default-Backfill (Drift-Gate vergleicht server_default nicht).

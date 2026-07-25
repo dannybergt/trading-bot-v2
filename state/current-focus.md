@@ -1,5 +1,12 @@
 # Current Focus
 
+## 2026-07-25: In-App-Hilfe — Hover-Tooltips + Bruecke zur Voll-Doku (Branch `feature/help-tooltips`, Gates gruen)
+
+User-Wunsch: Mouse-over-Kurzerklaerungen an den Punkten der aktuellen Ansicht + weiterfuehrend die ganze Webapp-Hilfe. Befund: die **volle Hilfe existiert schon** (`/api/docs`, `/docs`-Seite, globaler `HelpDrawer` "?"-Button im Header, 13 Themen DE/EN unter `docs/inapp/`) — es fehlte nur die feingranulare Tooltip-Ebene.
+**Gebaut (Frontend-only):** neue `components/InfoTooltip.tsx` (a11y-Hover/Fokus-Tooltip, "i"-Icon, `data-testid`, optionaler "mehr →"-Link auf `/docs/<topic>` = Bruecke Kurz→Voll-Hilfe) + i18n-Namespace `tooltips.*` (DE/EN). Angewandt auf die entscheidungskritischen Punkte: AnalysisPage (Composite-Verdict, P(UP), Net-Yield), AutoExecutionPage (Composite-Gate, min-Confidence, 4 Limits), AdminPage (Gewichte, Readiness, Kalibrierung).
+**Verifikation:** `tsc` gruen, Build gruen, api-regression **passed**, ui-regression **passed**. ADR 2026-07-25 (In-App-Hilfe) geschrieben.
+**Naechster Schritt:** nach User-Abnahme Tooltip-Sweep ueber die uebrigen Seiten (Dashboard-Karten, Scanner, Watchlists, Alerts, News/Discover, PaperTrading, Settings) + die 8 verstreuten nativen `title=` auf InfoTooltip vereinheitlichen + ui-regression um Tooltip/HelpDrawer-`data-testid`-Asserts erweitern. Probelauf-Modus: kein autonomer Sweep ohne Abnahme.
+
 ## 2026-07-25: Stufe 2b gebaut — Auto-Execution an Composite gehaengt (Branch `feature/auto-execution-composite-gate`, alle 5 Gates gruen)
 
 **2b (fertig):** Additives Composite-Gate in der Auto-Execution — kann nur BLOCKEN, nie einen Trade ausloesen. Neue `AutoExecutionLimits`-Felder `composite_gate_enabled` (Default an) + `min_composite_confidence` (Default 0.15), Alembic 0013. Bei aktivem Gate: `composite=None`→block, Composite-verdict muss ML-direction zustimmen (UP→BUY/DOWN→SELL), `composite.confidence>=min`. `composite` wird an der Aufrufstelle nur durchgereicht (kein neuer Fetch). Konfigurierbar+schaltbar pro User (User-Wahl: konfigurierbare Schwelle + pro User schaltbar) ueber `/api/auto-execution/limits` + AutoExecutionPage-Toggle/Input (i18n DE/EN), Backup-Roundtrip erweitert. Veto-only = 2d-konform (handelt nie AUF BASIS un-kalibrierter analyst/news, wird nur vorsichtiger).
