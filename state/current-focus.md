@@ -1,5 +1,20 @@
 # Current Focus
 
+## 2026-07-26: i18n-Luecke geschlossen — sieben Seiten uebersetzt (Branch `feature/i18n-sweep-remaining-pages`, Gates gruen)
+
+**User-Befund (Screenshot AlertsPage bei Sprache=Deutsch): "noch immer nicht eingedeutscht".** Kartierung ergab: kein Alerts-Einzelfall, sondern **sieben Seiten ohne jeden `t()`-Aufruf** — Alerts, Watchlists, Scanner, Settings, Register, ForgotPassword, ResetPassword. Bei den drei Auth-Seiten war es reine Verdrahtung: die `auth.*`-Keys lagen in DE **und** EN schon vollstaendig vor und wurden nur nie benutzt. Neu dazu: Namespaces `alerts.*`, `watchlists.*`, `scanner.*`, `settings.*` + `auth.forgotFailed`/`resetFailed`. Bundle jetzt **618 Keys, DE/EN strukturgleich** (per Assert geprueft).
+
+**Warum das so lange unbemerkt blieb (und was dagegen jetzt greift):** die ui-regression prueft ausschliesslich **englische** Strings — eine Seite, die `t()` nie aufruft, laeuft dort gruen durch. Neuer Schritt **`ui_i18n_german`** stellt `localStorage.language='de'` und prueft die uebersetzten Ueberschriften auf Alerts/Watchlists/Settings/Scanner.
+
+**Verifikation (4 Gates):** Build gruen, Unit **311 gruen** (unberuehrt), `tsc -b` gruen, api-regression **passed**, ui-regression **passed** inkl. `ui_i18n_german ok`. Kein Backend-/Schema-Change. ADR 2026-07-26 (i18n-Sweep) geschrieben.
+
+**Bewusst nicht uebersetzt:** AdminPage (laut ADR 2026-07-25 bewusst Klartext-Englisch, Operator-Oberflaeche), AnalysisPage-Fachlabels (VADER/AUC/Brier/P(UP) — bewusst international), `placeholder="priority"` in der Alerts-Regel (Tag-Wert, keine UI-Copy).
+
+## 2026-07-26: Sechs offene PRs abgeraeumt
+
+PR **#11** (`image.source`-OCI-Label) rebased gemergt — Label vorher lokal per `docker inspect` in beiden Images verifiziert. Die fuenf Dependabot-PRs **#1-#5** fassten alle dieselben zwei Workflow-Dateien an (einzeln gemergt: Konflikte + 5x CI + 5x identischer Docker-Hub-Push) → gebuendelt als **PR #12** (`chore/bump-workflow-actions`): checkout v5→v6, setup-node v4→v6, upload-artifact v4→v7, setup-chrome v1→v2, login-action v3→v4. Action-Versionen sind nur im Runner pruefbar, deshalb lief die volle `ci.yml`-Kette auf der PR (inkl. ui-regression mit `CHROME_BIN` aus `setup-chrome@v2`) — **gruen**, dann ff-only nach `main` (`202e28c`).
+**Beobachtung fuer spaeter (nicht gefixt):** `/api/version` liefert als `version` nur den Commit statt des `git describe`-Strings — CI checkt vermutlich shallow ohne Tags, damit faellt `APP_VERSION` in build.sh auf den SHA zurueck. Kandidat: `fetch-depth: 0` im Checkout-Step.
+
 ## 2026-07-26: Probelauf-Befunde gefixt — dynamische Seiten-Shell + Watchlist-Delete (Branch `fix/responsive-shell-and-watchlist-delete`, Gates gruen)
 
 **Zwei User-Befunde aus dem laufenden Probelauf, beide root-cause-gefixt, je eigener Commit:**
