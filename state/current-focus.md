@@ -1,5 +1,17 @@
 # Current Focus
 
+## 2026-07-26: Probelauf-Befunde gefixt — dynamische Seiten-Shell + Watchlist-Delete (Branch `fix/responsive-shell-and-watchlist-delete`, Gates gruen)
+
+**Zwei User-Befunde aus dem laufenden Probelauf, beide root-cause-gefixt, je eigener Commit:**
+
+**(1) Seiten-Shell nicht dynamisch (`880e940`)** — User-Screenshot (1920er Fenster): Content klebt in einer schmalen Spalte, rechts tot, horizontaler Scrollbalken, "Abmelden" abgeschnitten. Ursache: Header/`main`/Footer hingen alle an `max-w-6xl` (**hart 1152px**), und der Header (12 Nav-Links + Logo + Mail + Logout) passte nicht in diesen Container → Overflow statt Umbruch. Fix: gemeinsame `SHELL`-Konstante in `Layout.tsx`, fluid bis 1920px mit skalierenden Gutters (`px-4 sm:px-6 lg:px-8`), Header + Nav brechen um (`flex-wrap`), User-Block `shrink-0`, Mail erst ab `xl` und truncated. `max-w-6xl` kam nur an diesen drei Stellen vor.
+
+**(2) Watchlist nicht loeschbar (Backlog #2, offen seit 2026-07-22) (`7e0fe33`)** — DREI verschraenkte Ursachen, alle belegt: (a) der **Lese**-Pfad `GET /api/watchlists` seedete via `get_user_watchlist_records` bei JEDEM Abruf die Start-Listen nach → geloeschte Listen kamen beim naechsten Laden zurueck; (b) `delete_watchlist` lehnte `is_default`-Listen mit **HTTP 400** ab; (c) das Response-Model lieferte `is_default` **nie** aus → das UI zeigte den Delete-Button auch fuer Start-Listen (und das "default"-Badge nie), der Klick lief in das 400, und die Delete-Mutation hatte **kein `onError`** → still geschluckt, sichtbar passierte nichts. Fix: Seeding raus aus dem Lese-Pfad in neues Modul `app/watchlist_seed.py`, aufgerufen nur noch bei Account-Anlage (register / Admin-User-Anlage / Bootstrap-Admin); `is_default`-Loeschsperre entfaellt (User-Entscheidung: Start-Listen sind Startbefuellung, kein Systemobjekt); `is_default` wird serialisiert; Delete-Mutation zeigt Fehler an.
+
+**Verifikation (4 Gates, dieser Docker-Host):** Build gruen, Unit **311 gruen** (307 +4 `test_watchlist_seed`), `tsc` gruen, api-regression **passed** (+2 Schritte: `watchlist delete incl default ok`, `watchlist create does not reseed defaults ok`), ui-regression **passed** (+`ui_responsive_shell ok`). **Negativ-Kontrolle gefahren:** mit dem alten Layout faellt der neue Guard rot (`no horizontal overflow at 1280px`) — der Bug ist reproduziert, nicht nur behauptet. Kein Schema-/Migrations-Change → upgrade-rehearsal nicht getriggert. ADR 2026-07-26 geschrieben.
+
+**Naechster Schritt:** User setzt den Probelauf fort. Bewusst offen (kein autonomer Sweep): Burger-/Dropdown-Nav fuer schmale Viewports (heute bricht die Nav nur um), Tooltip-Sweep uebrige Seiten, Default-Schwellen-Feintuning nach Forward-Collection-Daten, offene PRs #11 + #1-5.
+
 ## SESSION-ABSCHLUSS 2026-07-25 (UTC): Composite-Roadmap komplett + In-App-Hilfe, alles deployed
 
 **Diese Session ausgeliefert (alle ff-only nach `main`, CI+publish gruen, via nexainer auf BC-KI01):**
