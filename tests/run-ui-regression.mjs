@@ -320,6 +320,46 @@ async function run() {
     );
     console.log("ui_dashboard ok");
 
+    // 5b. The page shell must follow the window instead of clipping. The header
+    // (12 nav links + user block) used to overflow a hard 1152px container,
+    // which produced a horizontal scrollbar and cut off the logout button.
+    for (const viewportWidth of [1280, 1920]) {
+      await client.send("Emulation.setDeviceMetricsOverride", {
+        width: viewportWidth,
+        height: 1000,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForCondition(
+        client,
+        `no horizontal overflow at ${viewportWidth}px`,
+        "(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)()",
+        10000,
+      );
+      const logoutVisible = await client.evaluate(`
+        (() => {
+          const buttons = Array.from(document.querySelectorAll("header button"));
+          const logout = buttons[buttons.length - 1];
+          if (!logout) return false;
+          const box = logout.getBoundingClientRect();
+          return box.right <= document.documentElement.clientWidth + 1;
+        })()
+      `);
+      if (!logoutVisible) {
+        throw new Error(`header action clipped at ${viewportWidth}px viewport`);
+      }
+    }
+    const mainWidth = await client.evaluate(
+      "(() => document.querySelector('main')?.getBoundingClientRect().width || 0)()",
+    );
+    if (mainWidth < 1400) {
+      throw new Error(
+        `content still capped at ${mainWidth}px on a 1920px viewport`,
+      );
+    }
+    await client.send("Emulation.clearDeviceMetricsOverride");
+    console.log("ui_responsive_shell ok");
+
     // 6. Watchlists page CRUD surface
     await navigate(client, `${FRONTEND_URL}/watchlists`);
     await waitForCondition(

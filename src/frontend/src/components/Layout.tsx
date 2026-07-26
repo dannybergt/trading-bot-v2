@@ -14,6 +14,11 @@ type NavLinkSpec = {
   adminOnly?: boolean;
 };
 
+// Shared page shell: fluid up to a generous cap so wide monitors are actually
+// used, instead of the previous hard 1152px (max-w-6xl) column. Padding scales
+// with the breakpoint so narrow screens keep their comfortable gutters.
+const SHELL = "mx-auto w-full max-w-[120rem] px-4 sm:px-6 lg:px-8";
+
 const NAV_LINKS: NavLinkSpec[] = [
   { to: "/", labelKey: "nav.dashboard", end: true },
   { to: "/watchlists", labelKey: "nav.watchlists" },
@@ -40,12 +45,14 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/70 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+        <div
+          className={`${SHELL} flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2`}
+        >
           <Link to="/" className="flex items-center gap-2 font-semibold">
             <span className="inline-block h-2 w-2 rounded-full bg-bergt-green" />
             <span>{t("app.title")}</span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex min-w-0 flex-wrap items-center gap-1">
             {visibleLinks.map((link) => (
               <NavLink
                 key={link.to}
@@ -63,12 +70,14 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
-          <div className="flex items-center gap-3 text-sm text-slate-400">
+          <div className="flex shrink-0 items-center gap-3 text-sm text-slate-400">
             <HelpDrawer />
             <LanguageToggle compact />
             {user ? (
               <>
-                <span className="hidden sm:inline">{user.email}</span>
+                <span className="hidden max-w-[16rem] truncate xl:inline">
+                  {user.email}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -84,12 +93,12 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className={`${SHELL} py-6`}>
         <ErrorBoundary scope="layout-outlet">
           <Outlet />
         </ErrorBoundary>
       </main>
-      <footer className="mx-auto max-w-6xl px-4 pb-4 text-right">
+      <footer className={`${SHELL} pb-4 text-right`}>
         <VersionBadge />
       </footer>
     </div>
