@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 
 export function RegisterPage() {
+  const { t } = useTranslation();
   const { user, register, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -27,7 +29,7 @@ export function RegisterPage() {
     event.preventDefault();
     setError(null);
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError(t("auth.passwordsMismatch"));
       return;
     }
     setSubmitting(true);
@@ -40,7 +42,7 @@ export function RegisterPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("Registration failed. Try again.");
+        setError(t("auth.registerFailed"));
       }
     } finally {
       setSubmitting(false);
@@ -55,13 +57,13 @@ export function RegisterPage() {
         aria-label="register form"
       >
         <div>
-          <h1 className="text-xl font-semibold">Create account</h1>
+          <h1 className="text-xl font-semibold">{t("auth.registerTitle")}</h1>
           <p className="text-sm text-slate-400">
-            First registered user becomes admin.
+            {t("auth.registerSubtitle")}
           </p>
         </div>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Email</span>
+          <span className="mb-1 block text-slate-300">{t("auth.email")}</span>
           <input
             type="email"
             autoComplete="email"
@@ -72,7 +74,7 @@ export function RegisterPage() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Password</span>
+          <span className="mb-1 block text-slate-300">{t("auth.password")}</span>
           <input
             type="password"
             autoComplete="new-password"
@@ -84,7 +86,7 @@ export function RegisterPage() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Confirm password</span>
+          <span className="mb-1 block text-slate-300">{t("auth.confirmPassword")}</span>
           <input
             type="password"
             autoComplete="new-password"
@@ -100,12 +102,12 @@ export function RegisterPage() {
           </p>
         ) : null}
         <button type="submit" className="btn btn-primary w-full" disabled={submitting}>
-          {submitting ? "Creating..." : "Register"}
+          {submitting ? t("auth.registering") : t("auth.register")}
         </button>
         <p className="text-center text-sm text-slate-400">
-          Already have an account?{" "}
+          {t("auth.haveAccount")}{" "}
           <Link to="/login" className="text-bergt-green hover:underline">
-            Sign in
+            {t("auth.signIn")}
           </Link>
         </p>
       </form>

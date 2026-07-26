@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 
@@ -58,6 +59,7 @@ const RULE_TYPES: AlertRule["ruleType"][] = [
 ];
 
 export function AlertsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
@@ -130,15 +132,15 @@ export function AlertsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Alert rules and events</h1>
+        <h1 className="text-2xl font-semibold">{t("alerts.title")}</h1>
         <p className="text-sm text-slate-400">
-          Granular per-symbol rules. Open events stay until acknowledged.
+          {t("alerts.subtitle")}
         </p>
       </header>
 
       <form onSubmit={handleCreate} className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Watchlist</span>
+          <span className="mb-1 block text-slate-300">{t("alerts.form.watchlist")}</span>
           <select
             className="input"
             value={watchlistId}
@@ -148,7 +150,7 @@ export function AlertsPage() {
             }}
             required
           >
-            <option value="">Select a watchlist…</option>
+            <option value="">{t("alerts.form.selectWatchlist")}</option>
             {watchlists.map((wl) => (
               <option key={wl.id} value={wl.id}>
                 {wl.name}
@@ -157,7 +159,7 @@ export function AlertsPage() {
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Symbol</span>
+          <span className="mb-1 block text-slate-300">{t("alerts.form.symbol")}</span>
           <select
             className="input"
             value={symbol}
@@ -165,7 +167,7 @@ export function AlertsPage() {
             disabled={!watchlistId}
             required
           >
-            <option value="">Select a symbol…</option>
+            <option value="">{t("alerts.form.selectSymbol")}</option>
             {symbolsForWatchlist.map((item) => (
               <option key={item.symbol} value={item.symbol}>
                 {item.symbol}
@@ -174,7 +176,7 @@ export function AlertsPage() {
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Rule type</span>
+          <span className="mb-1 block text-slate-300">{t("alerts.form.ruleType")}</span>
           <select
             className="input"
             value={ruleType}
@@ -184,14 +186,14 @@ export function AlertsPage() {
           >
             {RULE_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type.replace("_", " ")}
+                {t(`alerts.ruleTypes.${type}`)}
               </option>
             ))}
           </select>
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-slate-300">
-            Threshold {thresholdHint(ruleType)}
+            {t("alerts.form.threshold")} {t(`alerts.thresholdHint.${ruleType}`)}
           </span>
           <input
             type="number"
@@ -204,18 +206,18 @@ export function AlertsPage() {
         </label>
         {(ruleType === "signal_direction" || ruleType === "news_sentiment") && (
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Direction</span>
+            <span className="mb-1 block text-slate-300">{t("alerts.form.direction")}</span>
             <input
               className="input"
               value={direction}
               onChange={(event) => setDirection(event.target.value)}
-              placeholder={directionPlaceholder(ruleType)}
+              placeholder={t(`alerts.directionPlaceholder.${ruleType}`)}
             />
           </label>
         )}
         {ruleType === "tag_priority" && (
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Tag</span>
+            <span className="mb-1 block text-slate-300">{t("alerts.form.tag")}</span>
             <input
               className="input"
               value={tag}
@@ -225,7 +227,7 @@ export function AlertsPage() {
           </label>
         )}
         <label className="block text-sm sm:col-span-2 lg:col-span-3">
-          <span className="mb-1 block text-slate-300">Name (optional)</span>
+          <span className="mb-1 block text-slate-300">{t("alerts.form.name")}</span>
           <input
             className="input"
             value={name}
@@ -239,7 +241,7 @@ export function AlertsPage() {
             className="btn btn-primary"
             disabled={!watchlistId || !symbol || createRule.isPending}
           >
-            {createRule.isPending ? "Creating…" : "Add rule"}
+            {createRule.isPending ? t("alerts.form.adding") : t("alerts.form.add")}
           </button>
           {createRule.error ? (
             <span className="ml-3 text-sm text-red-300">
@@ -250,12 +252,12 @@ export function AlertsPage() {
       </form>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Rules</h2>
+        <h2 className="mb-2 text-lg font-semibold">{t("alerts.rules.title")}</h2>
         {alertsQuery.isLoading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <p className="text-sm text-slate-400">{t("alerts.loading")}</p>
         ) : null}
         {alertsQuery.data && alertsQuery.data.rules.length === 0 ? (
-          <p className="text-sm text-slate-500">No rules yet.</p>
+          <p className="text-sm text-slate-500">{t("alerts.rules.empty")}</p>
         ) : null}
         <ul className="space-y-2">
           {(alertsQuery.data?.rules ?? []).map((rule) => (
@@ -263,14 +265,16 @@ export function AlertsPage() {
               <div>
                 <p className="font-medium">{rule.name}</p>
                 <p className="text-xs text-slate-400">
-                  {rule.symbol} · {rule.ruleType.replace("_", " ")}
+                  {rule.symbol} · {t(`alerts.ruleTypes.${rule.ruleType}`)}
                   {rule.threshold !== null ? ` · ≥ ${rule.threshold}` : ""}
                   {rule.direction ? ` · ${rule.direction}` : ""}
                   {rule.tag ? ` · #${rule.tag}` : ""}
                 </p>
                 {rule.lastTriggeredAt ? (
                   <p className="text-xs text-slate-500">
-                    last triggered {new Date(rule.lastTriggeredAt).toLocaleString()}
+                    {t("alerts.rules.lastTriggered", {
+                      when: new Date(rule.lastTriggeredAt).toLocaleString(),
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -280,7 +284,7 @@ export function AlertsPage() {
                 onClick={() => deleteRule.mutate(rule.id)}
                 disabled={deleteRule.isPending}
               >
-                Delete
+                {t("alerts.rules.delete")}
               </button>
             </li>
           ))}
@@ -288,9 +292,9 @@ export function AlertsPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Open events</h2>
+        <h2 className="mb-2 text-lg font-semibold">{t("alerts.events.title")}</h2>
         {alertsQuery.data && alertsQuery.data.events.length === 0 ? (
-          <p className="text-sm text-slate-500">No open events.</p>
+          <p className="text-sm text-slate-500">{t("alerts.events.empty")}</p>
         ) : null}
         <ul className="space-y-2">
           {(alertsQuery.data?.events ?? []).map((event) => (
@@ -302,14 +306,18 @@ export function AlertsPage() {
                       event.severity,
                     )}`}
                   >
-                    {event.severity}
+                    {t(`alerts.severity.${event.severity}`, {
+                      defaultValue: event.severity,
+                    })}
                   </span>
                   {event.title}
                 </p>
                 <p className="text-sm text-slate-300">{event.message}</p>
                 {event.triggeredAt ? (
                   <p className="text-xs text-slate-500">
-                    triggered {new Date(event.triggeredAt).toLocaleString()}
+                    {t("alerts.events.triggered", {
+                      when: new Date(event.triggeredAt).toLocaleString(),
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -319,7 +327,7 @@ export function AlertsPage() {
                 onClick={() => ackEvent.mutate(event.id)}
                 disabled={ackEvent.isPending}
               >
-                Acknowledge
+                {t("alerts.events.acknowledge")}
               </button>
             </li>
           ))}
@@ -329,18 +337,6 @@ export function AlertsPage() {
   );
 }
 
-function thresholdHint(ruleType: AlertRule["ruleType"]): string {
-  switch (ruleType) {
-    case "provider_move":
-      return "(% change)";
-    case "news_sentiment":
-      return "(0–1)";
-    case "signal_direction":
-      return "(confidence 0–1)";
-    case "tag_priority":
-      return "(0–100)";
-  }
-}
 
 function thresholdPlaceholder(ruleType: AlertRule["ruleType"]): string {
   switch (ruleType) {
@@ -355,11 +351,6 @@ function thresholdPlaceholder(ruleType: AlertRule["ruleType"]): string {
   }
 }
 
-function directionPlaceholder(ruleType: AlertRule["ruleType"]): string {
-  if (ruleType === "signal_direction") return "UP, DOWN, or HOLD";
-  if (ruleType === "news_sentiment") return "bullish, bearish, or neutral";
-  return "";
-}
 
 function severityClass(severity: string): string {
   switch (severity) {

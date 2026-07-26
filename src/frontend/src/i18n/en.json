@@ -66,7 +66,9 @@
     "resetSubmit": "Reset password",
     "resetting": "Resetting…",
     "resetSuccess": "Password reset.",
-    "backToLogin": "Back to login"
+    "backToLogin": "Back to login",
+    "forgotFailed": "Request failed.",
+    "resetFailed": "Reset failed."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -237,7 +239,11 @@
       "score": "Score",
       "confidence": "Conviction",
       "na": "n/a",
-      "verdict": { "BUY": "Buy", "HOLD": "Hold", "SELL": "Sell" },
+      "verdict": {
+        "BUY": "Buy",
+        "HOLD": "Hold",
+        "SELL": "Sell"
+      },
       "axis": {
         "technical": "Technical",
         "analyst": "Analysts",
@@ -536,6 +542,161 @@
       "weights": "Relative weight of each source in the composite verdict. Normalised to 100%.",
       "readiness": "How much labeled forward-collected data exists. The full 4-axis calibration turns on once enough accrues.",
       "calibrate": "Grid-searches the weights against the realised hit-rate on collected data. Writes new weights only when they beat the current ones."
+    }
+  },
+  "alerts": {
+    "title": "Alert rules and events",
+    "subtitle": "Granular per-symbol rules. Open events stay until acknowledged.",
+    "loading": "Loading…",
+    "form": {
+      "watchlist": "Watchlist",
+      "selectWatchlist": "Select a watchlist…",
+      "symbol": "Symbol",
+      "selectSymbol": "Select a symbol…",
+      "ruleType": "Rule type",
+      "threshold": "Threshold",
+      "direction": "Direction",
+      "tag": "Tag",
+      "name": "Name (optional)",
+      "add": "Add rule",
+      "adding": "Creating…"
+    },
+    "ruleTypes": {
+      "provider_move": "price move",
+      "news_sentiment": "news sentiment",
+      "signal_direction": "signal direction",
+      "tag_priority": "tag priority"
+    },
+    "thresholdHint": {
+      "provider_move": "(% change)",
+      "news_sentiment": "(0–1)",
+      "signal_direction": "(confidence 0–1)",
+      "tag_priority": "(0–100)"
+    },
+    "directionPlaceholder": {
+      "provider_move": "",
+      "news_sentiment": "bullish, bearish, or neutral",
+      "signal_direction": "UP, DOWN, or HOLD",
+      "tag_priority": ""
+    },
+    "severity": {
+      "high": "high",
+      "medium": "medium",
+      "low": "low"
+    },
+    "rules": {
+      "title": "Rules",
+      "empty": "No rules yet.",
+      "lastTriggered": "last triggered {{when}}",
+      "delete": "Delete"
+    },
+    "events": {
+      "title": "Open events",
+      "empty": "No open events.",
+      "triggered": "triggered {{when}}",
+      "acknowledge": "Acknowledge"
+    }
+  },
+  "watchlists": {
+    "title": "Watchlists",
+    "subtitle": "Lists are stored per user. Starter lists are seeded when the account is created.",
+    "newPlaceholder": "Add a new watchlist…",
+    "create": "Create",
+    "creating": "Creating…",
+    "createFailed": "Could not create watchlist.",
+    "deleteFailed": "Failed to delete watchlist: {{message}}",
+    "deleteFailedGeneric": "Could not delete watchlist.",
+    "loading": "Loading watchlists…",
+    "loadFailed": "Failed to load watchlists: {{message}}",
+    "confirmDelete": "Delete watchlist \"{{name}}\" and all its symbols?",
+    "defaultBadge": "default",
+    "delete": "Delete",
+    "symbolCount_one": "{{count}} symbol",
+    "symbolCount_other": "{{count}} symbols",
+    "symbolPlaceholder": "Symbol (e.g. AAPL or BTC/USD)",
+    "namePlaceholder": "Name (optional)",
+    "tagsPlaceholder": "tags, comma separated",
+    "addSymbol": "Add symbol",
+    "adding": "Adding…",
+    "emptyItems": "No symbols yet.",
+    "openAnalysis": "Open analysis for {{symbol}}",
+    "confirmRemove": "Remove {{symbol}}?",
+    "remove": "Remove"
+  },
+  "scanner": {
+    "title": "Scanner",
+    "subtitle": "Latest snapshot for the selected watchlist. Refreshes every 60 s.",
+    "watchlist": "Watchlist",
+    "defaultOption": "(default)",
+    "loading": "Loading scanner snapshot…",
+    "loadFailed": "Failed to load scanner: {{message}}",
+    "empty": "No symbols in this watchlist. Add some on the Watchlists page.",
+    "columns": {
+      "symbol": "Symbol",
+      "asset": "Asset",
+      "price": "Price",
+      "change": "Change",
+      "changePercent": "% change",
+      "provider": "Provider"
+    },
+    "providerStatus": {
+      "live": "live",
+      "partial": "partial",
+      "unavailable": "unavailable",
+      "unknown": "n/a"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure account, broker, portfolio defaults, and multi-factor authentication.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "profile": {
+      "title": "Profile",
+      "role": "Role",
+      "roleAdmin": "Admin",
+      "roleMember": "Member",
+      "mfa": "MFA",
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "alpaca": {
+      "title": "Alpaca broker",
+      "subtitle": "Used for portfolio reads and (later) order placement. Secret key is encrypted at rest and never returned in plaintext after save.",
+      "apiKey": "API key",
+      "secretKey": "Secret key",
+      "secretPlaceholder": "enter to replace; *** keeps the existing one",
+      "paperEndpoint": "Paper-trading endpoint"
+    },
+    "portfolio": {
+      "title": "Portfolio defaults & taxes",
+      "subtitle": "Used to project net yield. The system only flags a trade as actionable when the projected net return (after broker fees and capital-gains tax) clears your minimum.",
+      "feeAbsolute": "Fee absolute / trade",
+      "feePercent": "Fee percent",
+      "minYield": "Min net yield (%)",
+      "capitalGains": "Capital-gains tax (%)",
+      "capitalGainsPlaceholder": "e.g. 26.375 (DE Abgeltungssteuer)",
+      "incomeTax": "Income tax fallback (%)",
+      "incomeTaxPlaceholder": "0 if not applicable",
+      "displayCurrency": "Display currency",
+      "taxHint": "Capital-gains rate dominates if both are set; income-tax fallback is only used when the broker treats short-term gains as ordinary income."
+    },
+    "mfa": {
+      "title": "Multi-factor authentication",
+      "enabledHint": "MFA is enabled. Disabling requires a valid code.",
+      "currentCode": "Current code",
+      "disable": "Disable MFA",
+      "setupHint": "Add this account to your authenticator app, then enter a generated code to confirm.",
+      "secret": "Secret",
+      "provisioningUri": "Provisioning URI",
+      "confirmationCode": "Confirmation code",
+      "enable": "Enable MFA",
+      "notEnabled": "MFA is not enabled.",
+      "setup": "Set up MFA",
+      "setupFailed": "Setup failed.",
+      "enableFailed": "Enable failed.",
+      "disableFailed": "Disable failed."
     }
   }
 }

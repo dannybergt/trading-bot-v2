@@ -416,6 +416,28 @@ async function run() {
     );
     console.log("ui_alerts ok");
 
+    // 9b. German rendering. The rest of this run asserts English strings, so a
+    // page that never calls t() would still pass everything above — that is how
+    // Alerts/Watchlists/Scanner/Settings stayed English for months. Switch the
+    // stored language and assert the translated headings really appear.
+    await client.evaluate("window.localStorage.setItem('language', 'de')");
+    for (const [path, needle] of [
+      ["/alerts", "Alert-Regeln und Ereignisse"],
+      ["/watchlists", "Listen werden pro Nutzer gespeichert"],
+      ["/settings", "Zwei-Faktor-Authentifizierung"],
+      ["/scanner", "Aktueller Stand der gewaehlten Watchlist"],
+    ]) {
+      await navigate(client, `${FRONTEND_URL}${path}`);
+      await waitForCondition(
+        client,
+        `german copy on ${path}`,
+        `(document.body.innerText || document.body.textContent || '').includes(${JSON.stringify(needle)})`,
+        15000,
+      );
+    }
+    await client.evaluate("window.localStorage.setItem('language', 'en')");
+    console.log("ui_i18n_german ok");
+
     // 10. Settings page sections (Profile, Alpaca, Portfolio defaults, MFA)
     await navigate(client, `${FRONTEND_URL}/settings`);
     await waitForCondition(

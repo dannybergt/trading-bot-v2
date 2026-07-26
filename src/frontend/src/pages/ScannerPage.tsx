@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 
@@ -26,6 +27,7 @@ type ScannerRow = {
 };
 
 export function ScannerPage() {
+  const { t } = useTranslation();
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
     queryFn: () => apiFetch<Watchlist[]>("/api/watchlists"),
@@ -57,19 +59,19 @@ export function ScannerPage() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Scanner</h1>
+          <h1 className="text-2xl font-semibold">{t("scanner.title")}</h1>
           <p className="text-sm text-slate-400">
-            Latest snapshot for the selected watchlist. Refreshes every 60 s.
+            {t("scanner.subtitle")}
           </p>
         </div>
         <label className="text-sm">
-          <span className="mr-2 text-slate-400">Watchlist</span>
+          <span className="mr-2 text-slate-400">{t("scanner.watchlist")}</span>
           <select
             className="input inline-block w-auto"
             value={watchlistId}
             onChange={(event) => setWatchlistId(event.target.value)}
           >
-            <option value="">(default)</option>
+            <option value="">{t("scanner.defaultOption")}</option>
             {watchlists.map((wl) => (
               <option key={wl.id} value={wl.id}>
                 {wl.name}
@@ -81,16 +83,18 @@ export function ScannerPage() {
 
       {scannerQuery.error ? (
         <p className="text-sm text-red-300">
-          Failed to load scanner: {(scannerQuery.error as ApiError).message}
+          {t("scanner.loadFailed", {
+            message: (scannerQuery.error as ApiError).message,
+          })}
         </p>
       ) : null}
       {scannerQuery.isLoading ? (
-        <p className="text-sm text-slate-400">Loading scanner snapshot…</p>
+        <p className="text-sm text-slate-400">{t("scanner.loading")}</p>
       ) : null}
 
       {sorted.length === 0 && !scannerQuery.isLoading ? (
         <p className="text-sm text-slate-500">
-          No symbols in this watchlist. Add some on the Watchlists page.
+          {t("scanner.empty")}
         </p>
       ) : null}
 
@@ -98,12 +102,12 @@ export function ScannerPage() {
         <table className="min-w-full divide-y divide-slate-800 text-sm">
           <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
             <tr>
-              <th className="px-3 py-2 text-left">Symbol</th>
-              <th className="px-3 py-2 text-left">Asset</th>
-              <th className="px-3 py-2 text-right">Price</th>
-              <th className="px-3 py-2 text-right">Change</th>
-              <th className="px-3 py-2 text-right">% change</th>
-              <th className="px-3 py-2 text-left">Provider</th>
+              <th className="px-3 py-2 text-left">{t("scanner.columns.symbol")}</th>
+              <th className="px-3 py-2 text-left">{t("scanner.columns.asset")}</th>
+              <th className="px-3 py-2 text-right">{t("scanner.columns.price")}</th>
+              <th className="px-3 py-2 text-right">{t("scanner.columns.change")}</th>
+              <th className="px-3 py-2 text-right">{t("scanner.columns.changePercent")}</th>
+              <th className="px-3 py-2 text-left">{t("scanner.columns.provider")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -138,7 +142,11 @@ export function ScannerPage() {
                     <span
                       className={`rounded-full border px-2 py-0.5 text-xs ${providerClass(row.provider.status)}`}
                     >
-                      {row.provider.status ?? "n/a"}
+                      {row.provider.status
+                        ? t(`scanner.providerStatus.${row.provider.status}`, {
+                            defaultValue: row.provider.status,
+                          })
+                        : t("scanner.providerStatus.unknown")}
                       {row.provider.source ? ` · ${row.provider.source}` : ""}
                     </span>
                   ) : (

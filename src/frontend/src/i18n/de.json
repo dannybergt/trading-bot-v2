@@ -66,7 +66,9 @@
     "resetSubmit": "Passwort zurücksetzen",
     "resetting": "Wird gesetzt…",
     "resetSuccess": "Passwort wurde zurückgesetzt.",
-    "backToLogin": "Zurück zum Login"
+    "backToLogin": "Zurück zum Login",
+    "forgotFailed": "Anfrage fehlgeschlagen.",
+    "resetFailed": "Zuruecksetzen fehlgeschlagen."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -237,7 +239,11 @@
       "score": "Score",
       "confidence": "Ueberzeugung",
       "na": "n/a",
-      "verdict": { "BUY": "Kaufen", "HOLD": "Halten", "SELL": "Verkaufen" },
+      "verdict": {
+        "BUY": "Kaufen",
+        "HOLD": "Halten",
+        "SELL": "Verkaufen"
+      },
       "axis": {
         "technical": "Technik",
         "analyst": "Analysten",
@@ -536,6 +542,161 @@
       "weights": "Relatives Gewicht jeder Quelle im Composite-Verdict. Auf 100% normalisiert.",
       "readiness": "Wie viele gelabelte Forward-Daten vorliegen. Die volle 4-Achsen-Kalibrierung schaltet sich frei, sobald genug aufgelaufen sind.",
       "calibrate": "Grid-Search der Gewichte gegen die realisierte Trefferquote auf den gesammelten Daten. Schreibt neue Gewichte nur, wenn sie die aktuellen schlagen."
+    }
+  },
+  "alerts": {
+    "title": "Alert-Regeln und Ereignisse",
+    "subtitle": "Feingranulare Regeln je Symbol. Offene Ereignisse bleiben stehen, bis sie bestaetigt sind.",
+    "loading": "Laedt…",
+    "form": {
+      "watchlist": "Watchlist",
+      "selectWatchlist": "Watchlist waehlen…",
+      "symbol": "Symbol",
+      "selectSymbol": "Symbol waehlen…",
+      "ruleType": "Regeltyp",
+      "threshold": "Schwelle",
+      "direction": "Richtung",
+      "tag": "Tag",
+      "name": "Name (optional)",
+      "add": "Regel hinzufuegen",
+      "adding": "Wird angelegt…"
+    },
+    "ruleTypes": {
+      "provider_move": "Kursbewegung",
+      "news_sentiment": "News-Stimmung",
+      "signal_direction": "Signal-Richtung",
+      "tag_priority": "Tag-Prioritaet"
+    },
+    "thresholdHint": {
+      "provider_move": "(% Veraenderung)",
+      "news_sentiment": "(0–1)",
+      "signal_direction": "(Konfidenz 0–1)",
+      "tag_priority": "(0–100)"
+    },
+    "directionPlaceholder": {
+      "provider_move": "",
+      "news_sentiment": "bullish, bearish oder neutral",
+      "signal_direction": "UP, DOWN oder HOLD",
+      "tag_priority": ""
+    },
+    "severity": {
+      "high": "hoch",
+      "medium": "mittel",
+      "low": "niedrig"
+    },
+    "rules": {
+      "title": "Regeln",
+      "empty": "Noch keine Regeln.",
+      "lastTriggered": "zuletzt ausgeloest {{when}}",
+      "delete": "Loeschen"
+    },
+    "events": {
+      "title": "Offene Ereignisse",
+      "empty": "Keine offenen Ereignisse.",
+      "triggered": "ausgeloest {{when}}",
+      "acknowledge": "Bestaetigen"
+    }
+  },
+  "watchlists": {
+    "title": "Watchlists",
+    "subtitle": "Listen werden pro Nutzer gespeichert. Start-Listen werden bei der Konto-Anlage angelegt.",
+    "newPlaceholder": "Neue Watchlist anlegen…",
+    "create": "Anlegen",
+    "creating": "Wird angelegt…",
+    "createFailed": "Watchlist konnte nicht angelegt werden.",
+    "deleteFailed": "Loeschen fehlgeschlagen: {{message}}",
+    "deleteFailedGeneric": "Watchlist konnte nicht geloescht werden.",
+    "loading": "Watchlists werden geladen…",
+    "loadFailed": "Watchlists konnten nicht geladen werden: {{message}}",
+    "confirmDelete": "Watchlist \"{{name}}\" mit allen Symbolen loeschen?",
+    "defaultBadge": "Start-Liste",
+    "delete": "Loeschen",
+    "symbolCount_one": "{{count}} Symbol",
+    "symbolCount_other": "{{count}} Symbole",
+    "symbolPlaceholder": "Symbol (z. B. AAPL oder BTC/USD)",
+    "namePlaceholder": "Name (optional)",
+    "tagsPlaceholder": "Tags, mit Komma getrennt",
+    "addSymbol": "Symbol hinzufuegen",
+    "adding": "Wird hinzugefuegt…",
+    "emptyItems": "Noch keine Symbole.",
+    "openAnalysis": "Analyse fuer {{symbol}} oeffnen",
+    "confirmRemove": "{{symbol}} entfernen?",
+    "remove": "Entfernen"
+  },
+  "scanner": {
+    "title": "Scanner",
+    "subtitle": "Aktueller Stand der gewaehlten Watchlist. Aktualisiert sich alle 60 s.",
+    "watchlist": "Watchlist",
+    "defaultOption": "(Standard)",
+    "loading": "Scanner-Daten werden geladen…",
+    "loadFailed": "Scanner konnte nicht geladen werden: {{message}}",
+    "empty": "Keine Symbole in dieser Watchlist. Auf der Watchlists-Seite welche hinzufuegen.",
+    "columns": {
+      "symbol": "Symbol",
+      "asset": "Anlageart",
+      "price": "Kurs",
+      "change": "Veraenderung",
+      "changePercent": "% Veraenderung",
+      "provider": "Datenquelle"
+    },
+    "providerStatus": {
+      "live": "live",
+      "partial": "teilweise",
+      "unavailable": "nicht verfuegbar",
+      "unknown": "k. A."
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "subtitle": "Konto, Broker, Portfolio-Voreinstellungen und Zwei-Faktor-Authentifizierung konfigurieren.",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert.",
+    "profile": {
+      "title": "Profil",
+      "role": "Rolle",
+      "roleAdmin": "Administrator",
+      "roleMember": "Mitglied",
+      "mfa": "MFA",
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv"
+    },
+    "alpaca": {
+      "title": "Alpaca-Broker",
+      "subtitle": "Wird fuer Portfolio-Abfragen und (spaeter) Orderaufgabe genutzt. Der Secret Key liegt verschluesselt und wird nach dem Speichern nie im Klartext zurueckgegeben.",
+      "apiKey": "API-Key",
+      "secretKey": "Secret Key",
+      "secretPlaceholder": "eingeben zum Ersetzen; *** behaelt den bestehenden",
+      "paperEndpoint": "Paper-Trading-Endpunkt"
+    },
+    "portfolio": {
+      "title": "Portfolio-Voreinstellungen & Steuern",
+      "subtitle": "Grundlage der Nettorendite-Prognose. Ein Trade gilt erst als handelbar, wenn die erwartete Nettorendite (nach Brokergebuehren und Kapitalertragssteuer) deine Mindestschwelle erreicht.",
+      "feeAbsolute": "Gebuehr absolut / Trade",
+      "feePercent": "Gebuehr in Prozent",
+      "minYield": "Mindest-Nettorendite (%)",
+      "capitalGains": "Kapitalertragssteuer (%)",
+      "capitalGainsPlaceholder": "z. B. 26,375 (DE Abgeltungssteuer)",
+      "incomeTax": "Einkommensteuer-Fallback (%)",
+      "incomeTaxPlaceholder": "0 wenn nicht zutreffend",
+      "displayCurrency": "Anzeige-Waehrung",
+      "taxHint": "Sind beide gesetzt, hat die Kapitalertragssteuer Vorrang; der Einkommensteuer-Fallback greift nur, wenn der Broker kurzfristige Gewinne als normales Einkommen behandelt."
+    },
+    "mfa": {
+      "title": "Zwei-Faktor-Authentifizierung",
+      "enabledHint": "MFA ist aktiv. Zum Deaktivieren wird ein gueltiger Code gebraucht.",
+      "currentCode": "Aktueller Code",
+      "disable": "MFA deaktivieren",
+      "setupHint": "Dieses Konto in der Authenticator-App hinterlegen und dann einen erzeugten Code zur Bestaetigung eingeben.",
+      "secret": "Secret",
+      "provisioningUri": "Provisioning-URI",
+      "confirmationCode": "Bestaetigungscode",
+      "enable": "MFA aktivieren",
+      "notEnabled": "MFA ist nicht aktiv.",
+      "setup": "MFA einrichten",
+      "setupFailed": "Einrichtung fehlgeschlagen.",
+      "enableFailed": "Aktivieren fehlgeschlagen.",
+      "disableFailed": "Deaktivieren fehlgeschlagen."
     }
   }
 }

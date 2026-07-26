@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useTranslation } from "react-i18next";
+
 import { ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -28,27 +30,35 @@ type MfaSetup = {
 };
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { user, refresh } = useAuth();
 
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
         <p className="text-sm text-slate-400">
-          Configure account, broker, portfolio defaults, and multi-factor
-          authentication.
+          {t("settings.subtitle")}
         </p>
       </header>
 
       <section className="card">
-        <h2 className="text-lg font-semibold">Profile</h2>
+        <h2 className="text-lg font-semibold">{t("settings.profile.title")}</h2>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <dt className="text-slate-400">Email</dt>
+          <dt className="text-slate-400">{t("auth.email")}</dt>
           <dd>{user?.email}</dd>
-          <dt className="text-slate-400">Role</dt>
-          <dd>{user?.is_admin ? "Admin" : "Member"}</dd>
-          <dt className="text-slate-400">MFA</dt>
-          <dd>{user?.mfa_enabled ? "Enabled" : "Disabled"}</dd>
+          <dt className="text-slate-400">{t("settings.profile.role")}</dt>
+          <dd>
+            {user?.is_admin
+              ? t("settings.profile.roleAdmin")
+              : t("settings.profile.roleMember")}
+          </dd>
+          <dt className="text-slate-400">{t("settings.profile.mfa")}</dt>
+          <dd>
+            {user?.mfa_enabled
+              ? t("settings.profile.enabled")
+              : t("settings.profile.disabled")}
+          </dd>
         </dl>
       </section>
 
@@ -60,6 +70,7 @@ export function SettingsPage() {
 }
 
 function AlpacaSection() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["alpaca-config"],
@@ -100,14 +111,13 @@ function AlpacaSection() {
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Alpaca broker</h2>
+      <h2 className="text-lg font-semibold">{t("settings.alpaca.title")}</h2>
       <p className="text-sm text-slate-400">
-        Used for portfolio reads and (later) order placement. Secret key is
-        encrypted at rest and never returned in plaintext after save.
+        {t("settings.alpaca.subtitle")}
       </p>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">API key</span>
+          <span className="mb-1 block text-slate-300">{t("settings.alpaca.apiKey")}</span>
           <input
             className="input"
             value={apiKey}
@@ -116,12 +126,12 @@ function AlpacaSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Secret key</span>
+          <span className="mb-1 block text-slate-300">{t("settings.alpaca.secretKey")}</span>
           <input
             className="input"
             value={secretKey}
             onChange={(event) => setSecretKey(event.target.value)}
-            placeholder="enter to replace; *** keeps the existing one"
+            placeholder={t("settings.alpaca.secretPlaceholder")}
           />
         </label>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
@@ -130,11 +140,11 @@ function AlpacaSection() {
             checked={isPaper}
             onChange={(event) => setIsPaper(event.target.checked)}
           />
-          <span>Paper-trading endpoint</span>
+          <span>{t("settings.alpaca.paperEndpoint")}</span>
         </label>
         <div className="sm:col-span-2 flex items-center gap-3">
           <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Save"}
+            {mutation.isPending ? t("settings.saving") : t("settings.save")}
           </button>
           {mutation.error ? (
             <span className="text-sm text-red-300">
@@ -142,7 +152,7 @@ function AlpacaSection() {
             </span>
           ) : null}
           {mutation.isSuccess ? (
-            <span className="text-sm text-bergt-green">Saved.</span>
+            <span className="text-sm text-bergt-green">{t("settings.saved")}</span>
           ) : null}
         </div>
       </form>
@@ -151,6 +161,7 @@ function AlpacaSection() {
 }
 
 function PortfolioSection() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["portfolio-settings"],
@@ -199,15 +210,13 @@ function PortfolioSection() {
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Portfolio defaults &amp; taxes</h2>
+      <h2 className="text-lg font-semibold">{t("settings.portfolio.title")}</h2>
       <p className="text-sm text-slate-400">
-        Used to project net yield. The system only flags a trade as
-        actionable when the projected net return (after broker fees and
-        capital-gains tax) clears your minimum.
+        {t("settings.portfolio.subtitle")}
       </p>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-3">
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Fee absolute / trade</span>
+          <span className="mb-1 block text-slate-300">{t("settings.portfolio.feeAbsolute")}</span>
           <input
             type="number"
             step="1"
@@ -218,7 +227,7 @@ function PortfolioSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Fee percent</span>
+          <span className="mb-1 block text-slate-300">{t("settings.portfolio.feePercent")}</span>
           <input
             type="number"
             step="1"
@@ -230,7 +239,7 @@ function PortfolioSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Min net yield (%)</span>
+          <span className="mb-1 block text-slate-300">{t("settings.portfolio.minYield")}</span>
           <input
             type="number"
             step="1"
@@ -242,7 +251,7 @@ function PortfolioSection() {
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-slate-300">
-            Capital-gains tax (%)
+            {t("settings.portfolio.capitalGains")}
           </span>
           <input
             type="number"
@@ -252,12 +261,12 @@ function PortfolioSection() {
             className="input"
             value={capitalGainsPct}
             onChange={(event) => setCapitalGainsPct(Number(event.target.value))}
-            placeholder="e.g. 26.375 (DE Abgeltungssteuer)"
+            placeholder={t("settings.portfolio.capitalGainsPlaceholder")}
           />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-slate-300">
-            Income tax fallback (%)
+            {t("settings.portfolio.incomeTax")}
           </span>
           <input
             type="number"
@@ -267,11 +276,11 @@ function PortfolioSection() {
             className="input"
             value={incomeTaxPct}
             onChange={(event) => setIncomeTaxPct(Number(event.target.value))}
-            placeholder="0 if not applicable"
+            placeholder={t("settings.portfolio.incomeTaxPlaceholder")}
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Display currency</span>
+          <span className="mb-1 block text-slate-300">{t("settings.portfolio.displayCurrency")}</span>
           <select
             className="input"
             value={displayCurrency}
@@ -286,13 +295,11 @@ function PortfolioSection() {
           </select>
         </label>
         <div className="sm:col-span-3 text-xs text-slate-500">
-          Capital-gains rate dominates if both are set; income-tax fallback
-          is only used when the broker treats short-term gains as ordinary
-          income.
+          {t("settings.portfolio.taxHint")}
         </div>
         <div className="sm:col-span-3 flex items-center gap-3">
           <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : "Save"}
+            {mutation.isPending ? t("settings.saving") : t("settings.save")}
           </button>
           {mutation.error ? (
             <span className="text-sm text-red-300">
@@ -300,7 +307,7 @@ function PortfolioSection() {
             </span>
           ) : null}
           {mutation.isSuccess ? (
-            <span className="text-sm text-bergt-green">Saved.</span>
+            <span className="text-sm text-bergt-green">{t("settings.saved")}</span>
           ) : null}
         </div>
       </form>
@@ -315,6 +322,7 @@ function MfaSection({
   mfaEnabled: boolean;
   onChange: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [setup, setSetup] = useState<MfaSetup | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -327,7 +335,7 @@ function MfaSection({
       const data = await apiFetch<MfaSetup>("/api/auth/mfa/setup", { method: "POST" });
       setSetup(data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Setup failed.");
+      setError(err instanceof ApiError ? err.message : t("settings.mfa.setupFailed"));
     } finally {
       setBusy(false);
     }
@@ -343,7 +351,7 @@ function MfaSection({
       setCode("");
       await onChange();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Enable failed.");
+      setError(err instanceof ApiError ? err.message : t("settings.mfa.enableFailed"));
     } finally {
       setBusy(false);
     }
@@ -358,7 +366,7 @@ function MfaSection({
       setCode("");
       await onChange();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Disable failed.");
+      setError(err instanceof ApiError ? err.message : t("settings.mfa.disableFailed"));
     } finally {
       setBusy(false);
     }
@@ -366,14 +374,14 @@ function MfaSection({
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Multi-factor authentication</h2>
+      <h2 className="text-lg font-semibold">{t("settings.mfa.title")}</h2>
       {mfaEnabled ? (
         <form onSubmit={handleDisable} className="mt-3 flex flex-wrap items-end gap-3">
           <p className="basis-full text-sm text-slate-400">
-            MFA is enabled. Disabling requires a valid code.
+            {t("settings.mfa.enabledHint")}
           </p>
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Current code</span>
+            <span className="mb-1 block text-slate-300">{t("settings.mfa.currentCode")}</span>
             <input
               className="input"
               inputMode="numeric"
@@ -384,24 +392,23 @@ function MfaSection({
             />
           </label>
           <button type="submit" className="btn" disabled={busy}>
-            Disable MFA
+            {t("settings.mfa.disable")}
           </button>
           {error ? <span className="text-sm text-red-300">{error}</span> : null}
         </form>
       ) : setup ? (
         <form onSubmit={handleEnable} className="mt-3 space-y-3">
           <p className="text-sm text-slate-300">
-            Add this account to your authenticator app, then enter a generated
-            code to confirm.
+            {t("settings.mfa.setupHint")}
           </p>
           <div className="rounded-md border border-slate-700 bg-slate-950/40 p-3 text-xs">
-            <p className="text-slate-400">Secret</p>
+            <p className="text-slate-400">{t("settings.mfa.secret")}</p>
             <p className="font-mono break-all">{setup.secret}</p>
-            <p className="mt-2 text-slate-400">Provisioning URI</p>
+            <p className="mt-2 text-slate-400">{t("settings.mfa.provisioningUri")}</p>
             <p className="font-mono break-all">{setup.provisioning_uri}</p>
           </div>
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Confirmation code</span>
+            <span className="mb-1 block text-slate-300">{t("settings.mfa.confirmationCode")}</span>
             <input
               className="input"
               inputMode="numeric"
@@ -412,15 +419,15 @@ function MfaSection({
             />
           </label>
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            Enable MFA
+            {t("settings.mfa.enable")}
           </button>
           {error ? <span className="ml-3 text-sm text-red-300">{error}</span> : null}
         </form>
       ) : (
         <div className="mt-3 flex items-center gap-3">
-          <p className="text-sm text-slate-400">MFA is not enabled.</p>
+          <p className="text-sm text-slate-400">{t("settings.mfa.notEnabled")}</p>
           <button type="button" className="btn btn-primary" onClick={handleSetup} disabled={busy}>
-            Set up MFA
+            {t("settings.mfa.setup")}
           </button>
           {error ? <span className="text-sm text-red-300">{error}</span> : null}
         </div>

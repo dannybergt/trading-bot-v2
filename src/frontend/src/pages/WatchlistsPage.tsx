@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 
@@ -20,6 +21,7 @@ type Watchlist = {
 };
 
 export function WatchlistsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
@@ -51,7 +53,7 @@ export function WatchlistsPage() {
     onError: (error) => {
       // Without this the card silently stays put and the delete looks broken.
       setDeleteError(
-        (error as ApiError).message ?? "Could not delete watchlist.",
+        (error as ApiError).message ?? t("watchlists.deleteFailedGeneric"),
       );
     },
   });
@@ -65,16 +67,16 @@ export function WatchlistsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Watchlists</h1>
+        <h1 className="text-2xl font-semibold">{t("watchlists.title")}</h1>
         <p className="text-sm text-slate-400">
-          Lists are stored per user. Default lists are seeded automatically.
+          {t("watchlists.subtitle")}
         </p>
       </header>
 
       <form onSubmit={handleCreate} className="card flex flex-wrap gap-3">
         <input
           className="input flex-1 min-w-[200px]"
-          placeholder="Add a new watchlist…"
+          placeholder={t("watchlists.newPlaceholder")}
           value={newName}
           onChange={(event) => setNewName(event.target.value)}
         />
@@ -83,29 +85,32 @@ export function WatchlistsPage() {
           className="btn btn-primary"
           disabled={!newName.trim() || createWatchlist.isPending}
         >
-          {createWatchlist.isPending ? "Creating…" : "Create"}
+          {createWatchlist.isPending
+            ? t("watchlists.creating")
+            : t("watchlists.create")}
         </button>
         {createWatchlist.error ? (
           <p className="basis-full text-sm text-red-300">
             {(createWatchlist.error as ApiError).message ??
-              "Could not create watchlist."}
+              t("watchlists.createFailed")}
           </p>
         ) : null}
       </form>
 
       {watchlistsQuery.isLoading ? (
-        <p className="text-sm text-slate-400">Loading watchlists…</p>
+        <p className="text-sm text-slate-400">{t("watchlists.loading")}</p>
       ) : null}
       {watchlistsQuery.error ? (
         <p className="text-sm text-red-300">
-          Failed to load watchlists:{" "}
-          {(watchlistsQuery.error as ApiError).message}
+          {t("watchlists.loadFailed", {
+            message: (watchlistsQuery.error as ApiError).message,
+          })}
         </p>
       ) : null}
 
       {deleteError ? (
         <p className="text-sm text-red-300" data-testid="watchlist-delete-error">
-          Failed to delete watchlist: {deleteError}
+          {t("watchlists.deleteFailed", { message: deleteError })}
         </p>
       ) : null}
 
@@ -117,7 +122,7 @@ export function WatchlistsPage() {
             onDelete={() => {
               if (
                 window.confirm(
-                  `Delete watchlist "${wl.name}" and all its symbols?`,
+                  t("watchlists.confirmDelete", { name: wl.name }),
                 )
               ) {
                 deleteWatchlist.mutate(wl.id);
@@ -137,6 +142,7 @@ function WatchlistCard({
   watchlist: Watchlist;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [symbolInput, setSymbolInput] = useState("");
   const [nameInput, setNameInput] = useState("");
@@ -189,7 +195,7 @@ function WatchlistCard({
           {watchlist.name}{" "}
           {watchlist.is_default ? (
             <span className="ml-1 rounded-full border border-bergt-green/40 px-2 py-0.5 text-xs text-bergt-green">
-              default
+              {t("watchlists.defaultBadge")}
             </span>
           ) : null}
         </h2>
@@ -197,34 +203,34 @@ function WatchlistCard({
           type="button"
           className="btn text-xs"
           onClick={onDelete}
-          title="Delete watchlist"
+          title={t("watchlists.delete")}
           data-testid="watchlist-delete"
         >
-          Delete
+          {t("watchlists.delete")}
         </button>
       </header>
       <p className="mt-1 text-xs text-slate-400">
-        {watchlist.items.length} symbol
-        {watchlist.items.length === 1 ? "" : "s"} · id: {watchlist.id}
+        {t("watchlists.symbolCount", { count: watchlist.items.length })} · id:{" "}
+        {watchlist.id}
       </p>
 
       <form onSubmit={handleAdd} className="mt-3 grid gap-2 sm:grid-cols-3">
         <input
           className="input sm:col-span-1"
-          placeholder="Symbol (e.g. AAPL or BTC/USD)"
+          placeholder={t("watchlists.symbolPlaceholder")}
           value={symbolInput}
           onChange={(event) => setSymbolInput(event.target.value)}
           required
         />
         <input
           className="input sm:col-span-1"
-          placeholder="Name (optional)"
+          placeholder={t("watchlists.namePlaceholder")}
           value={nameInput}
           onChange={(event) => setNameInput(event.target.value)}
         />
         <input
           className="input sm:col-span-1"
-          placeholder="tags, comma separated"
+          placeholder={t("watchlists.tagsPlaceholder")}
           value={tagsInput}
           onChange={(event) => setTagsInput(event.target.value)}
         />
@@ -234,7 +240,7 @@ function WatchlistCard({
             className="btn btn-primary"
             disabled={!symbolInput.trim() || addItem.isPending}
           >
-            {addItem.isPending ? "Adding…" : "Add symbol"}
+            {addItem.isPending ? t("watchlists.adding") : t("watchlists.addSymbol")}
           </button>
           {addItem.error ? (
             <span className="text-xs text-red-300">
@@ -245,7 +251,7 @@ function WatchlistCard({
       </form>
 
       {watchlist.items.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">No symbols yet.</p>
+        <p className="mt-3 text-sm text-slate-500">{t("watchlists.emptyItems")}</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {watchlist.items.map((item) => (
@@ -256,7 +262,7 @@ function WatchlistCard({
               <Link
                 to={`/analysis/${encodeURIComponent(item.symbol)}`}
                 className="flex-1 min-w-0 -mx-3 -my-2 px-3 py-2 hover:text-bergt-green focus:outline-none focus:text-bergt-green"
-                title={`Analyse fuer ${item.symbol} oeffnen`}
+                title={t("watchlists.openAnalysis", { symbol: item.symbol })}
               >
                 <p className="font-medium">{item.symbol}</p>
                 {item.name ? (
@@ -281,13 +287,17 @@ function WatchlistCard({
                   type="button"
                   className="btn text-xs"
                   onClick={() => {
-                    if (window.confirm(`Remove ${item.symbol}?`)) {
+                    if (
+                      window.confirm(
+                        t("watchlists.confirmRemove", { symbol: item.symbol }),
+                      )
+                    ) {
                       removeItem.mutate(item.symbol);
                     }
                   }}
                   disabled={removeItem.isPending}
                 >
-                  Remove
+                  {t("watchlists.remove")}
                 </button>
               </div>
             </li>

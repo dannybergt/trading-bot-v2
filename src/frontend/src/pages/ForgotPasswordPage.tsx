@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export function ForgotPasswordPage() {
       });
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Request failed.");
+      setError(err instanceof ApiError ? err.message : t("auth.forgotFailed"));
     } finally {
       setBusy(false);
     }
@@ -35,19 +37,19 @@ export function ForgotPasswordPage() {
         aria-label="forgot password form"
       >
         <div>
-          <h1 className="text-xl font-semibold">Forgot password</h1>
+          <h1 className="text-xl font-semibold">{t("auth.forgotTitle")}</h1>
           <p className="text-sm text-slate-400">
-            We email a reset link if the address has an account.
+            {t("auth.forgotSubtitle")}
           </p>
         </div>
         {submitted ? (
           <p className="rounded-md border border-bergt-green/40 bg-bergt-green/10 p-3 text-sm text-bergt-green">
-            If the email exists, reset instructions are on their way.
+            {t("auth.forgotSuccess")}
           </p>
         ) : (
           <>
             <label className="block text-sm">
-              <span className="mb-1 block text-slate-300">Email</span>
+              <span className="mb-1 block text-slate-300">{t("auth.email")}</span>
               <input
                 type="email"
                 autoComplete="email"
@@ -63,13 +65,13 @@ export function ForgotPasswordPage() {
               </p>
             ) : null}
             <button type="submit" className="btn btn-primary w-full" disabled={busy}>
-              {busy ? "Requesting…" : "Send reset link"}
+              {busy ? t("auth.forgotRequesting") : t("auth.forgotSubmit")}
             </button>
           </>
         )}
         <p className="text-center text-sm text-slate-400">
           <Link to="/login" className="text-bergt-green hover:underline">
-            Back to login
+            {t("auth.backToLogin")}
           </Link>
         </p>
       </form>
