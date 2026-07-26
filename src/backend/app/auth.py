@@ -18,6 +18,7 @@ import pyotp
 
 from app.database import get_db
 from app.models import User
+from app.watchlist_seed import seed_default_watchlists
 
 # --- Config ---
 JWT_ALGORITHM = "HS256"
@@ -260,6 +261,7 @@ def ensure_initial_admin(db: Session) -> User | None:
 
     db.commit()
     db.refresh(user)
+    seed_default_watchlists(db, user)
     logger.warning(
         "initial_admin_bootstrapped",
         extra={

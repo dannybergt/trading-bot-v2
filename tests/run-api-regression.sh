@@ -811,6 +811,43 @@ backup_import = requests.post(
 backup_import.raise_for_status()
 assert backup_import.json()["status"] == "restored"
 print("backup import ok")
+
+# Watchlist deletion runs last: it removes every list of this user, including the
+# seeded starter lists, and must not be undone by a re-seed on the next create.
+watchlists_before_delete = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_before_delete.raise_for_status()
+before_delete_payload = watchlists_before_delete.json()
+assert any(item.get("is_default") for item in before_delete_payload), "expected at least one seeded default watchlist"
+
+for item in before_delete_payload:
+    deleted = requests.delete(
+        f"{base}/api/watchlists/{item['id']}",
+        headers=headers,
+        timeout=30,
+    )
+    deleted.raise_for_status()
+    assert deleted.json()["status"] == "deleted"
+
+watchlists_after_delete = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_after_delete.raise_for_status()
+assert watchlists_after_delete.json() == [], "watchlists (including defaults) must be deletable"
+print("watchlist delete incl default ok")
+
+recreated = requests.post(
+    f"{base}/api/watchlists",
+    headers=headers,
+    json={"name": "Post Delete Check"},
+    timeout=30,
+)
+recreated.raise_for_status()
+recreated_id = recreated.json()["id"]
+watchlists_after_create = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_after_create.raise_for_status()
+after_create_payload = watchlists_after_create.json()
+assert [item["id"] for item in after_create_payload] == [recreated_id], (
+    "creating a watchlist must not resurrect the deleted starter lists"
+)
+print("watchlist create does not reseed defaults ok")
 PY
 
 assert_scheduled_backups

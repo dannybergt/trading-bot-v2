@@ -830,6 +830,7 @@ class UpdateWatchlistItemRequest(BaseModel):
 class Watchlist(BaseModel):
     id: str
     name: str
+    is_default: bool = False
     items: List[WatchlistItem]
 
 class AlertRuleRequest(BaseModel):
@@ -880,33 +881,11 @@ class PaperOrderRequest(BaseModel):
     target_price: float | None = Field(default=None, alias="targetPrice")
     source: str = "manual"
 
-# Default Data
-DEFAULT_WATCHLISTS = [
-    Watchlist(
-        id="default",
-        name="Tech Giants",
-        items=[
-            WatchlistItem(symbol="NVDA", name="NVIDIA Corp"),
-            WatchlistItem(symbol="AAPL", name="Apple Inc"),
-            WatchlistItem(symbol="MSFT", name="Microsoft Corp"),
-            WatchlistItem(symbol="GOOGL", name="Alphabet Inc"),
-        ]
-    ),
-    Watchlist(
-        id="crypto",
-        name="Crypto Proxies",
-        items=[
-            WatchlistItem(symbol="COIN", name="Coinbase Global"),
-            WatchlistItem(symbol="MSTR", name="MicroStrategy"),
-            WatchlistItem(symbol="MARA", name="Marathon Digital"),
-        ]
-    )
-]
-
 def serialize_watchlist(record: WatchlistRecord) -> Watchlist:
     return Watchlist(
         id=record.id,
         name=record.name,
+        is_default=bool(record.is_default),
         items=[
             serialize_watchlist_item(item)
             for item in sorted(record.items, key=lambda current: current.id or 0)
@@ -914,28 +893,9 @@ def serialize_watchlist(record: WatchlistRecord) -> Watchlist:
     )
 
 
-def seed_default_watchlists(db: Session, user: User) -> None:
-    existing = db.query(WatchlistRecord).filter(WatchlistRecord.user_id == user.id).count()
-    if existing:
-        return
-
-    for default_watchlist in DEFAULT_WATCHLISTS:
-        record = WatchlistRecord(
-            id=str(uuid.uuid4())[:8],
-            user_id=user.id,
-            name=default_watchlist.name,
-            is_default=True,
-        )
-        record.items = [
-            WatchlistItemRecord(symbol=item.symbol, name=item.name or "")
-            for item in default_watchlist.items
-        ]
-        db.add(record)
-    db.commit()
-
-
 def get_user_watchlist_records(db: Session, user: User) -> list[WatchlistRecord]:
-    seed_default_watchlists(db, user)
+    # No seeding here on purpose — see app/watchlist_seed.py. Seeding from the
+    # read path resurrected deleted starter lists on the next page load.
     return (
         db.query(WatchlistRecord)
         .filter(WatchlistRecord.user_id == user.id)
@@ -1565,7 +1525,9 @@ def get_watchlists(current_user: User = Depends(get_current_user), db: Session =
 
 @app.post("/api/watchlists", response_model=Watchlist)
 def create_watchlist(req: CreateWatchlistRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    seed_default_watchlists(db, current_user)
+    # Deliberately no seed_default_watchlists() here: seeding happens once at
+    # registration. Re-seeding on create would resurrect the starter lists for
+    # anyone who deleted all of theirs, which reads as "my deletion came back".
     new_record = WatchlistRecord(id=str(uuid.uuid4())[:8], user_id=current_user.id, name=req.name)
     db.add(new_record)
     db.commit()
@@ -1583,8 +1545,6 @@ def rename_watchlist(id: str, req: RenameWatchlistRequest, current_user: User = 
 @app.delete("/api/watchlists/{id}")
 def delete_watchlist(id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     record = get_watchlist_record_or_404(db, current_user, id)
-    if record.is_default:
-        raise HTTPException(status_code=400, detail="Cannot delete default watchlist")
     db.delete(record)
     db.commit()
     return {"status": "deleted", "id": id}

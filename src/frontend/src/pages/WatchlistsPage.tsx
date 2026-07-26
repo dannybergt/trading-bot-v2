@@ -27,6 +27,7 @@ export function WatchlistsPage() {
   });
 
   const [newName, setNewName] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   const createWatchlist = useMutation({
     mutationFn: (name: string) =>
@@ -44,7 +45,14 @@ export function WatchlistsPage() {
     mutationFn: (id: string) =>
       apiFetch(`/api/watchlists/${encodeURIComponent(id)}`, { method: "DELETE" }),
     onSuccess: () => {
+      setDeleteError("");
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
+    },
+    onError: (error) => {
+      // Without this the card silently stays put and the delete looks broken.
+      setDeleteError(
+        (error as ApiError).message ?? "Could not delete watchlist.",
+      );
     },
   });
 
@@ -95,7 +103,13 @@ export function WatchlistsPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {deleteError ? (
+        <p className="text-sm text-red-300" data-testid="watchlist-delete-error">
+          Failed to delete watchlist: {deleteError}
+        </p>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {(watchlistsQuery.data ?? []).map((wl) => (
           <WatchlistCard
             key={wl.id}
@@ -179,16 +193,15 @@ function WatchlistCard({
             </span>
           ) : null}
         </h2>
-        {!watchlist.is_default ? (
-          <button
-            type="button"
-            className="btn text-xs"
-            onClick={onDelete}
-            title="Delete watchlist"
-          >
-            Delete
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="btn text-xs"
+          onClick={onDelete}
+          title="Delete watchlist"
+          data-testid="watchlist-delete"
+        >
+          Delete
+        </button>
       </header>
       <p className="mt-1 text-xs text-slate-400">
         {watchlist.items.length} symbol

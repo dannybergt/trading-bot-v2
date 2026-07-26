@@ -16,6 +16,7 @@ from app import audit_service
 from app.database import get_db
 from app.logging_config import fingerprint_value
 from app.models import User, PasswordResetToken
+from app.watchlist_seed import seed_default_watchlists
 from app.email_service import PasswordResetDeliveryError, send_password_reset_email
 from app.push_service import PushConfigurationError, PushService
 from app.auth import (
@@ -201,6 +202,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    seed_default_watchlists(db, user)
 
     logger.info(
         "user_registered",
@@ -650,6 +652,7 @@ def create_user_admin(req: RegisterRequest, admin: User = Depends(get_current_ad
     db.add(user)
     db.commit()
     db.refresh(user)
+    seed_default_watchlists(db, user)
 
     logger.info(
         "admin_created_user",
