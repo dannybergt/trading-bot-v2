@@ -1,5 +1,20 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-07-26T16:05Z: Probelauf-Fixes + i18n-Sweep + PR-Aufraeumen, alles deployed
+
+**Diese Session ausgeliefert (alle ff-only nach `main`, CI+publish gruen, live auf BC-KI01 verifiziert):**
+- Ausstehender STATE-Commit `0b9fa1b` nachgezogen
+- **Seiten-Shell dynamisch** statt hart 1152px + Header-Overflow (`880e940`)
+- **Watchlist wirklich loeschbar** — drei verschraenkte Ursachen (`7e0fe33`)
+- **PR #11** (image.source-OCI-Label) + **PR #12** (gebuendelte Dependabot-Bumps #1-#5) gemergt (`d68e247`, `202e28c`)
+- **i18n-Sweep sieben Seiten** DE/EN (`d3d3583`)
+
+**Stand:** Unit 307→**311 gruen**. Drei neue Dauer-Guards (`ui_responsive_shell`, `ui_i18n_german`, 2x api-regression-Watchlist-Delete) — jeder deckt einen blinden Fleck ab, der den jeweiligen Bug erst hat entstehen lassen. Working tree clean, `main` == `origin/main` (Stand vor diesem STATE-Commit). Deployt und per `/api/version` verifiziert: **`2e18bb59ea93` / `v2026.05.08-1-74-g2e18bb5`**.
+
+**Offen (wartet auf User):** UI-Probelauf auf `2e18bb5` — breites Fenster ohne Scrollbalken, Watchlist-Loeschung bleibt nach Reload weg, Sprache Deutsch auf Alerts/Watchlists/Scanner/Einstellungen. Danach: (1) Dependabot-PRs #1-#5 schliessen (inhaltlich via #12 erledigt, GitHub schliesst sie nicht selbst), (2) Tooltip-Sweep uebrige Seiten, (3) Burger-/Dropdown-Nav fuer schmale Viewports, (4) AdminPage-Uebersetzung (heute bewusst englisch), (5) Default-Schwellen-Feintuning nach Forward-Collection-Daten. Naechster autonomer Bau nur auf Ansage (Probelauf-Modus).
+
+**Allokierte Ports/Ressourcen:** aktuell **KEINE** belegt (alle Regressions-Stacks abgeraeumt). Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression (PRIMARY) 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` (8080, 55432, 56379, 59000/1, 51025/58025) + portainer — keine Kollision, nichts angefasst.
+
 ## 2026-07-26: i18n-Luecke geschlossen — sieben Seiten uebersetzt (Branch `feature/i18n-sweep-remaining-pages`, Gates gruen)
 
 **User-Befund (Screenshot AlertsPage bei Sprache=Deutsch): "noch immer nicht eingedeutscht".** Kartierung ergab: kein Alerts-Einzelfall, sondern **sieben Seiten ohne jeden `t()`-Aufruf** — Alerts, Watchlists, Scanner, Settings, Register, ForgotPassword, ResetPassword. Bei den drei Auth-Seiten war es reine Verdrahtung: die `auth.*`-Keys lagen in DE **und** EN schon vollstaendig vor und wurden nur nie benutzt. Neu dazu: Namespaces `alerts.*`, `watchlists.*`, `scanner.*`, `settings.*` + `auth.forgotFailed`/`resetFailed`. Bundle jetzt **618 Keys, DE/EN strukturgleich** (per Assert geprueft).
