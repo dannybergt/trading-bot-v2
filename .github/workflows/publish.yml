@@ -29,6 +29,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # build.sh derives APP_VERSION from `git describe --tags --always`.
+          # The default shallow clone carries no tags and no history, so
+          # describe falls through to its --always fallback and the published
+          # image is labelled with a bare short SHA instead of a readable
+          # version. Full history + tags is what makes the version meaningful.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6

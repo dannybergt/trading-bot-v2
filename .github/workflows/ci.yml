@@ -18,6 +18,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Same reason as publish.yml: build.sh runs here too, so a shallow
+          # clone would make the CI build log report a bare SHA as the version.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
