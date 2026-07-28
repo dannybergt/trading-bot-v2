@@ -1,5 +1,19 @@
 # Current Focus
 
+## 2026-07-28: Drei offene PRs abgeraeumt (#13/#14/#15) — integriert, voll gegated, gemergt
+
+**Ausgangslage:** #13 (Reverse-Proxy-Trust), #14 (Checkout-Tiefe fuer lesbare Version), #15 (Mobile-Nav) lagen offen und hatten auf GitHub nur `validate` + CodeQL gesehen — **nicht** die volle `ci`-Kette. Zusatzbefund: #13 und #14 fassen denselben `docker run`-Block in `ops/automation/test.sh` an, sind also nicht unabhaengig mergebar.
+
+**Vorgehen:** lokaler Integrationsbranch `integration/pr-13-14-15` (#13 ff, #14+#15 cherry-picked), `test.sh`-Konflikt **zusammengefuehrt** statt aufgeloest — der Test-Container mountet jetzt alle vier Pfade, beide neuen Guards laufen gleichzeitig. Danach EINE volle Gate-Kette auf dem integrierten Stand: `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` @ `ddaa737` → **alle Gates gruen**. Unit **311→317** (+4 `test_forwarded_allow_ips`, +2 `test_workflow_checkout_depth`), api-regression inkl. `forwarded-for scopes auth rate limit ok`, ui-regression inkl. `ui_mobile_nav ok` — der `ui_responsive_shell`-Guard aus der Vorsession bleibt dabei gruen, die Mobile-Nav bricht die Wide-Viewport-Shell also nicht.
+
+**Sicherheitsannahme von #13 selbst nachgeprueft** (nicht aus dem PR-Text uebernommen): im gebauten Image gelesen, dass `uvicorn.middleware.proxy_headers` die XFF-Kette `reversed()` laeuft und den ersten nicht-vertrauten Eintrag liefert, waehrend `*` den caller-kontrollierten linkesten zurueckgibt; `Config` liest `FORWARDED_ALLOW_IPS` aus der Umgebung, `proxy_headers=True` ist Default, und das `CMD` startet uvicorn ohne `--forwarded-allow-ips` — die ENV-Zeile greift also. nginx haengt per `$proxy_add_x_forwarded_for` an statt zu ersetzen. Kette stimmt End-to-End.
+
+**Rehearsal bewusst ausgelassen** (geloggter Opt-out): kein Schema-/Migrations-/Persistenz-Change in allen drei PRs.
+
+**Offen nach dieser Session:** (1) **Env-Werte auf BC-KI01** — `ALLOWED_ORIGINS` steht noch auf `localhost:18094`, `PASSWORD_RESET_BASE_URL` vermutlich auf `127.0.0.1` (Reset-Mails haetten dann einen unbrauchbaren Link); beides Node-Konfiguration, kein Repo-Change, braucht User-Hand. (2) `/api/version` liefert erst **nach** dem naechsten publish-Lauf den `git describe`-String — Wirkungsnachweis von #14 steht noch aus. (3) Unveraendert wartend: UI-Probelauf, Tooltip-Sweep uebrige Seiten, AdminPage-Uebersetzung, Default-Schwellen-Feintuning nach Forward-Collection-Daten.
+
+**Allokierte Ports/Ressourcen:** aktuell **KEINE** belegt (Regressions-Stacks abgeraeumt). Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression (PRIMARY) 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` (8080, 55432, 56379, 59000/1, 51025/58025) + portainer — keine Kollision, nichts angefasst.
+
 ## SESSION-ABSCHLUSS 2026-07-26T16:05Z: Probelauf-Fixes + i18n-Sweep + PR-Aufraeumen, alles deployed
 
 **Diese Session ausgeliefert (alle ff-only nach `main`, CI+publish gruen, live auf BC-KI01 verifiziert):**
