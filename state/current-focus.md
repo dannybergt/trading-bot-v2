@@ -10,7 +10,11 @@
 
 **Rehearsal bewusst ausgelassen** (geloggter Opt-out): kein Schema-/Migrations-/Persistenz-Change in allen drei PRs.
 
-**Offen nach dieser Session:** (1) **Env-Werte auf BC-KI01** — `ALLOWED_ORIGINS` steht noch auf `localhost:18094`, `PASSWORD_RESET_BASE_URL` vermutlich auf `127.0.0.1` (Reset-Mails haetten dann einen unbrauchbaren Link); beides Node-Konfiguration, kein Repo-Change, braucht User-Hand. (2) `/api/version` liefert erst **nach** dem naechsten publish-Lauf den `git describe`-String — Wirkungsnachweis von #14 steht noch aus. (3) Unveraendert wartend: UI-Probelauf, Tooltip-Sweep uebrige Seiten, AdminPage-Uebersetzung, Default-Schwellen-Feintuning nach Forward-Collection-Daten.
+**Deployed und live nachgewiesen (nicht nur gemergt):** `main` @ `69952b9`, GitHub `ci`+`codeql`+`publish` gruen, nexainer-Deploy durchgelaufen. Beide Fixes wurden **am ausgelieferten Artefakt** verifiziert, nicht nur am Guard: `/api/version` liefert jetzt **`v2026.05.08-1-81-g69952b9`** statt vorher `aa80510` (= #14 wirkt, das war der eigentliche Zweck des PRs), und `docker inspect dbergt/trading-bot-backend:latest` zeigt `FORWARDED_ALLOW_IPS=127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` im Image-Env (= #13 ist im Artefakt, nicht nur im Repo).
+
+**Bewusst NICHT geprueft:** der Live-Rate-Limit-Pfad wurde nicht von aussen erschoepft — fuenf POSTs gegen `password-reset/confirm` in Produktion waeren genau der Angriff, den #13 verhindert. Der Nachweis liegt in der api-regression samt Negativ-Kontrolle.
+
+**Offen nach dieser Session:** (1) **Env-Werte auf BC-KI01, brauchen User-Hand** — `ALLOWED_ORIGINS` steht noch auf `localhost:18094`, `PASSWORD_RESET_BASE_URL` vermutlich auf `127.0.0.1/reset-password` (dann enthalten Reset-Mails einen unbrauchbaren Link); Node-Konfiguration, kein Repo-Change. (2) Unveraendert wartend: UI-Probelauf (**neu zu pruefen: Mobile-Nav auf dem Telefon**), Tooltip-Sweep uebrige Seiten, AdminPage-Uebersetzung, Default-Schwellen-Feintuning nach Forward-Collection-Daten.
 
 **Allokierte Ports/Ressourcen:** aktuell **KEINE** belegt (Regressions-Stacks abgeraeumt). Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression (PRIMARY) 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` (8080, 55432, 56379, 59000/1, 51025/58025) + portainer — keine Kollision, nichts angefasst.
 
