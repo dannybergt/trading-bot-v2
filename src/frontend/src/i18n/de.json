@@ -33,7 +33,9 @@
     "settings": "Einstellungen",
     "setup": "Einrichtung",
     "admin": "Admin",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "openMenu": "Menue oeffnen",
+    "closeMenu": "Menue schliessen"
   },
   "auth": {
     "loginTitle": "NexusPulse Trade",
