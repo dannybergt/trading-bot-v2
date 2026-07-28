@@ -16,6 +16,7 @@ import {
 } from "../components/StockChart";
 import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumeProfile";
 import { useDisplayCurrency } from "../hooks/useDisplayCurrency";
+import { useTourVisit } from "../onboarding/useTourVisit";
 import { convertMoney, useFxRates } from "../hooks/useFxRates";
 
 type FeatureContribution = {
@@ -525,6 +526,10 @@ export function AnalysisPage() {
       apiFetch<ResearchPayload>(`/api/research/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
   });
+
+  // Counts for the guided run only once the analysis actually resolved -- an
+  // empty or failed page is not "you read the analysis".
+  useTourVisit("analysis", !!stockQuery.data);
 
   const eventsQuery = useQuery({
     queryKey: ["events", decoded],

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
+import { useTourVisit } from "../onboarding/useTourVisit";
 
 type Watchlist = { id: string; name: string };
 
@@ -28,6 +29,7 @@ type ScannerRow = {
 
 export function ScannerPage() {
   const { t } = useTranslation();
+  useTourVisit("scanner");
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
     queryFn: () => apiFetch<Watchlist[]>("/api/watchlists"),

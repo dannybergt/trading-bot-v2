@@ -348,12 +348,32 @@ async function run() {
     );
     console.log("ui_register_submit_to_onboarding ok");
 
-    // 4. Onboarding wizard renders progress + four step cards.
+    // 4. The guided first run greets a new account with its intro, listing every
+    // step of the process before the user commits to walking it.
     await waitForCondition(
       client,
-      "onboarding progress + steps",
-      "(document.body.innerText || document.body.textContent || '').includes('Setup progress') && document.querySelectorAll('ol li').length >= 4",
+      "guided run intro with all steps",
+      "(() => { const t = document.body.textContent || ''; return t.includes('Guided first run') && !!document.querySelector('[data-testid=\"tour-start\"]') && document.querySelectorAll('ol li').length >= 7; })()",
     );
+    await client.evaluate("document.querySelector('[data-testid=\"tour-start\"]').click()");
+    await waitForCondition(
+      client,
+      "guided run started with seven step cards",
+      "(() => !!document.querySelector('[data-testid=\"tour-steps\"]') && document.querySelectorAll('[data-testid=\"tour-steps\"] li').length === 7)()",
+    );
+    // Baseline is taken at start, so the seeded starter watchlists must NOT
+    // already count as "you added a symbol" -- that was the whole point of
+    // measuring growth instead of absolute counts.
+    const watchlistStepPremature = await client.evaluate(`
+      (() => {
+        const progress = document.querySelector('[data-testid="tour-progress"]');
+        return (progress?.textContent || "").includes("of 7") &&
+          !(progress?.textContent || "").match(/[4-7] of 7/);
+      })()
+    `);
+    if (!watchlistStepPremature) {
+      throw new Error("guided run reported artifact steps as done before anything was created");
+    }
     console.log("ui_onboarding_wizard ok");
 
     // Seed a watchlist item via the API while we have a fresh session, so the
@@ -392,6 +412,23 @@ async function run() {
         return true;
       })()
     `);
+
+    // 4b. The seeding above created a real watchlist item after the tour's
+    // baseline was taken. The corresponding step must flip to done on its own --
+    // that is the difference between tracking real artifacts and counting clicks.
+    await navigate(client, `${FRONTEND_URL}/onboarding`);
+    await waitForCondition(
+      client,
+      "watchlist step completed from real data",
+      `(() => {
+        const card = document.querySelector('[data-testid="tour-steps"]');
+        if (!card) return false;
+        const watchlistEntry = Array.from(card.querySelectorAll("li"))[3];
+        return (watchlistEntry?.textContent || "").includes("✓");
+      })()`,
+      20000,
+    );
+    console.log("ui_guided_tour_tracks_real_data ok");
 
     // 5. Dashboard renders with onboarding card + at least one stat label.
     // The dashboard fires /api/watchlists, /api/alerts, watchlist/news in

@@ -140,6 +140,99 @@
       }
     }
   },
+  "tour": {
+    "headline": "Gefuehrte Erstrunde",
+    "intro": "Einmal komplett durch den Entscheidungsprozess - mit echten Aktionen in der echten Anwendung, nicht als Vorschau.",
+    "whatYouWillDo": "Das machst du in dieser Runde",
+    "noRealMoney": "In dieser Runde wird kein echtes Geld bewegt. Der Handel am Ende laeuft als Paper-Trade, und die automatische Ausfuehrung bleibt ausgeschaltet.",
+    "start": "Runde starten",
+    "restart": "Runde neu starten",
+    "finish": "Runde abschliessen",
+    "finished": "Runde abgeschlossen",
+    "stepOf": "Schritt {{index}}/{{total}}",
+    "progress": "Gefuehrte Runde: {{completed}} von {{total}} Schritten",
+    "done": "erledigt",
+    "open": "offen",
+    "evidence": {
+      "config": "Gilt als erledigt, sobald die Werte in den Einstellungen gesetzt sind.",
+      "visited": "Gilt als erledigt, sobald die Seite wirklich geladen war - ein Klick allein reicht nicht.",
+      "created": "Gilt als erledigt, sobald waehrend dieser Runde ein neuer Eintrag entstanden ist. Was vorher schon da war, zaehlt bewusst nicht mit.",
+      "acknowledged": "Gilt als erledigt, sobald du die Runde abschliesst."
+    },
+    "steps": {
+      "basics": {
+        "label": "Grundeinstellungen",
+        "description": "Gebuehren und Steuern bestimmen, ob eine Empfehlung ueberhaupt als handelbar gilt. Ohne diese Werte ist das Netto-Ertrags-Gate wertlos.",
+        "cta": "Einstellungen oeffnen",
+        "watchFor": [
+          "Ordergebuehr absolut und prozentual, so wie dein Broker sie abrechnet",
+          "Kapitalertragssteuer - sie entscheidet mit ueber den Nettoertrag",
+          "Mindest-Zielrendite: darunter wird nichts als handelbar ausgewiesen"
+        ]
+      },
+      "findSymbol": {
+        "label": "Symbol finden",
+        "description": "Der Scanner zeigt die Kandidaten aus deinen Watchlists mit Preis, Veraenderung und Datenquelle.",
+        "cta": "Scanner oeffnen",
+        "watchFor": [
+          "Spalte Datenquelle: echte Providerdaten oder Platzhalter",
+          "Anlageklasse je Zeile - Aktie, ETF oder Krypto",
+          "Ein Klick auf ein Symbol fuehrt direkt in die Analyse"
+        ]
+      },
+      "readAnalysis": {
+        "label": "Analyse lesen",
+        "description": "Hier entsteht die eigentliche Empfehlung. Jede Achse ist einzeln sichtbar, damit nachvollziehbar bleibt, woher das Urteil kommt.",
+        "cta": "Analyse oeffnen",
+        "watchFor": [
+          "Gesamt-Verdict BUY/HOLD/SELL und der Beitrag jeder einzelnen Achse",
+          "P(UP) mit Quelle - das technische ML-Ensemble, nicht die Nachrichten",
+          "Netto-Ertrags-Gate: lohnt der Trade nach Gebuehren und Steuer",
+          "Warnbanner bei synthetischen Daten - dann gibt es bewusst kein Signal"
+        ]
+      },
+      "watchlist": {
+        "label": "Auf die Watchlist setzen",
+        "description": "Beobachtete Symbole speisen Scanner, Nachrichten und Alerts. Lege jetzt einen eigenen Eintrag an.",
+        "cta": "Watchlists oeffnen",
+        "watchFor": [
+          "Eigene Liste anlegen oder ein Symbol zu einer bestehenden hinzufuegen",
+          "Start-Listen sind nur eine Startbefuellung und duerfen geloescht werden",
+          "Tags helfen spaeter beim Filtern und Priorisieren"
+        ]
+      },
+      "alert": {
+        "label": "Alert-Regel anlegen",
+        "description": "Regeln melden sich, wenn eine Bedingung eintritt - damit du nicht dauernd selbst nachsehen musst.",
+        "cta": "Alerts oeffnen",
+        "watchFor": [
+          "Bedingung und Schwellwert festlegen",
+          "Ausgeloeste Ereignisse werden quittiert, nicht still verworfen",
+          "Push-Zustellung braucht zusaetzlich die Freigabe im Browser"
+        ]
+      },
+      "paperTrade": {
+        "label": "Paper-Trade ausfuehren",
+        "description": "Der komplette Handelsweg ohne Kapitalrisiko: Order, Position, Journal und Zusammenfassung.",
+        "cta": "Paper-Trading oeffnen",
+        "watchFor": [
+          "Order anlegen und im Journal wiederfinden",
+          "Position und Zusammenfassung nach der Ausfuehrung pruefen",
+          "Das Netto-Ertrags-Gate kann eine Order begruendet ablehnen"
+        ]
+      },
+      "autoExecution": {
+        "label": "Automatik verstehen",
+        "description": "Die automatische Ausfuehrung kann Vorschlaege selbsttaetig handeln. Sie bleibt in dieser Runde bewusst aus - das Einschalten ist eine eigene Entscheidung.",
+        "cta": "Automatik ansehen",
+        "watchFor": [
+          "Das Composite-Gate kann nur blocken, niemals selbst einen Trade ausloesen",
+          "Limits je Order, je Tag und je Position begrenzen den Schaden",
+          "Standardwerte bleiben aus, bis du sie ausdruecklich aktivierst"
+        ]
+      }
+    }
+  },
   "paperTrading": {
     "title": "Paper-Trading",
     "subtitle": "Simulierte Orders gegen dein Watchlist-Universum. Das Net-Yield-Gate nutzt dieselben Gebühren-/Steuer-Regeln wie echte Empfehlungen.",

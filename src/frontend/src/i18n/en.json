@@ -140,6 +140,99 @@
       }
     }
   },
+  "tour": {
+    "headline": "Guided first run",
+    "intro": "One full pass through the decision process - with real actions in the real application, not a preview.",
+    "whatYouWillDo": "What you will do in this run",
+    "noRealMoney": "No real money moves in this run. The trade at the end is a paper trade, and automated execution stays switched off.",
+    "start": "Start the run",
+    "restart": "Restart the run",
+    "finish": "Finish the run",
+    "finished": "Run finished",
+    "stepOf": "Step {{index}}/{{total}}",
+    "progress": "Guided run: {{completed}} of {{total}} steps",
+    "done": "done",
+    "open": "open",
+    "evidence": {
+      "config": "Counts as done once the values are set in Settings.",
+      "visited": "Counts as done once the page actually loaded - a click alone is not enough.",
+      "created": "Counts as done once a new entry was created during this run. Anything that existed before deliberately does not count.",
+      "acknowledged": "Counts as done once you finish the run."
+    },
+    "steps": {
+      "basics": {
+        "label": "Basic settings",
+        "description": "Fees and taxes decide whether a recommendation is actionable at all. Without them the net yield gate is meaningless.",
+        "cta": "Open settings",
+        "watchFor": [
+          "Absolute and percentage order fee, the way your broker charges them",
+          "Capital gains tax - it co-decides the net return",
+          "Minimum target yield: below it nothing is reported as actionable"
+        ]
+      },
+      "findSymbol": {
+        "label": "Find a symbol",
+        "description": "The scanner lists candidates from your watchlists with price, change and data source.",
+        "cta": "Open scanner",
+        "watchFor": [
+          "Data source column: real provider data or placeholder",
+          "Asset class per row - stock, ETF or crypto",
+          "Clicking a symbol takes you straight into the analysis"
+        ]
+      },
+      "readAnalysis": {
+        "label": "Read the analysis",
+        "description": "This is where the recommendation is formed. Every axis is shown separately so the verdict stays traceable.",
+        "cta": "Open analysis",
+        "watchFor": [
+          "Overall verdict BUY/HOLD/SELL and each axis's contribution",
+          "P(UP) with its source - the technical ML ensemble, not the news",
+          "Net yield gate: is the trade worth it after fees and tax",
+          "Warning banner on synthetic data - no signal is given on purpose then"
+        ]
+      },
+      "watchlist": {
+        "label": "Add it to a watchlist",
+        "description": "Watched symbols feed the scanner, news and alerts. Create your own entry now.",
+        "cta": "Open watchlists",
+        "watchFor": [
+          "Create your own list or add a symbol to an existing one",
+          "Starter lists are just an initial filling and may be deleted",
+          "Tags help with filtering and prioritising later"
+        ]
+      },
+      "alert": {
+        "label": "Create an alert rule",
+        "description": "Rules speak up when a condition is met, so you do not have to keep checking yourself.",
+        "cta": "Open alerts",
+        "watchFor": [
+          "Define the condition and its threshold",
+          "Triggered events are acknowledged, not silently dropped",
+          "Push delivery additionally needs the browser's permission"
+        ]
+      },
+      "paperTrade": {
+        "label": "Place a paper trade",
+        "description": "The whole trading path without capital at risk: order, position, journal and summary.",
+        "cta": "Open paper trading",
+        "watchFor": [
+          "Place an order and find it again in the journal",
+          "Check position and summary after execution",
+          "The net yield gate may reject an order for a stated reason"
+        ]
+      },
+      "autoExecution": {
+        "label": "Understand automation",
+        "description": "Automated execution can trade proposals on its own. It stays off in this run - switching it on is a separate decision.",
+        "cta": "View automation",
+        "watchFor": [
+          "The composite gate can only block, never trigger a trade by itself",
+          "Limits per order, per day and per position bound the damage",
+          "Defaults stay off until you explicitly enable them"
+        ]
+      }
+    }
+  },
   "paperTrading": {
     "title": "Paper trading",
     "subtitle": "Place simulated orders against your watchlist universe. The Net-Yield-Gate applies the same fee + tax math as live recommendations.",
