@@ -1,11 +1,19 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:18094";
 const CHROME_BIN = process.env.CHROME_BIN || "google-chrome";
-const DEBUG_PORT = Number(process.env.CHROME_DEBUG_PORT || "9222");
+// 0 = let Chrome pick a free port and report it via DevToolsActivePort.
+//
+// A fixed port is actively dangerous here: several agents share this host, and
+// a foreign Chrome already listening on it makes our own instance fail to bind
+// while `/json/version` still answers -- from the FOREIGN browser. The gate then
+// drives someone else's profile, complete with a service worker still serving a
+// previously precached bundle, and reports green or red for code it never
+// loaded. Both failure directions were observed before this was pinned down.
+const DEBUG_PORT = Number(process.env.CHROME_DEBUG_PORT || "0");
 const UI_ARTIFACT_DIR = process.env.UI_ARTIFACT_DIR || "artifacts/ui-regression";
 const TEST_EMAIL = process.env.UI_TEST_EMAIL || `ui-regression-${Date.now()}@example.com`;
 const TEST_PASSWORD = process.env.UI_TEST_PASSWORD || "UIRegressionPass123!";
@@ -102,6 +110,35 @@ class CDPClient {
     this.socket.close();
     await sleep(250);
   }
+}
+
+/**
+ * Resolve the debug port of the Chrome WE spawned.
+ *
+ * Chrome writes the port it actually bound to into `DevToolsActivePort` inside
+ * its own user-data-dir. Reading it there -- instead of assuming a port number
+ * -- is what guarantees we attach to our own instance and not to a foreign
+ * browser that happens to answer on the same port.
+ */
+async function resolveOwnDebugPort(chromeProcess, userDataDir, requestedPort, timeoutMs = 30000) {
+  const portFile = join(userDataDir, "DevToolsActivePort");
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (chromeProcess.exitCode !== null || chromeProcess.signalCode !== null) {
+      throw new Error(
+        `Chrome exited before it reported a debugging port (code=${chromeProcess.exitCode}, signal=${chromeProcess.signalCode}). ` +
+          (requestedPort ? `Is port ${requestedPort} already in use by another browser?` : ""),
+      );
+    }
+    try {
+      const port = Number((await readFile(portFile, "utf8")).split("\n")[0].trim());
+      if (Number.isInteger(port) && port > 0) return port;
+    } catch {
+      // not written yet
+    }
+    await sleep(200);
+  }
+  throw new Error("Chrome never wrote DevToolsActivePort -- cannot confirm which browser we would drive");
 }
 
 async function waitForChrome(debugPort, timeoutMs = 15000) {
@@ -205,8 +242,10 @@ async function run() {
   let client;
 
   try {
-    await waitForChrome(DEBUG_PORT);
-    const webSocketUrl = await getPageWebSocketUrl(DEBUG_PORT);
+    const debugPort = await resolveOwnDebugPort(chromeProcess, chromeUserDataDir, DEBUG_PORT);
+    console.log(`ui_regression chrome debug port ${debugPort}`);
+    await waitForChrome(debugPort);
+    const webSocketUrl = await getPageWebSocketUrl(debugPort);
     client = new CDPClient(webSocketUrl);
     await client.connect();
 
@@ -221,6 +260,52 @@ async function run() {
       "!!document.querySelector('form[aria-label=\"login form\"]') && !!document.querySelector('input[type=\"email\"]') && !!document.querySelector('input[type=\"password\"]')",
     );
     console.log("ui_login_screen ok");
+
+    // 1b. The build badge is the only thing that tells an operator which deploy
+    // is live, and nothing asserted how it RENDERS -- api-regression only checks
+    // the /api/version payload. Two defects hid in that gap: the component
+    // prefixed "v" unconditionally (which became "vv..." once the version string
+    // carried the tag's own v), and the badge sat in a row flex next to the login
+    // card instead of underneath it.
+    await waitForCondition(
+      client,
+      "version badge rendered",
+      "(() => !!document.body.innerText.match(/\\d{4}\\.\\d{2}\\.\\d{2}|[0-9a-f]{7}/))()",
+    );
+    const badgeState = await client.evaluate(`
+      (() => {
+        const form = document.querySelector('form[aria-label="login form"]');
+        const badge = Array.from(document.querySelectorAll("span")).find((node) =>
+          /\\d{4}\\.\\d{2}\\.\\d{2}|^v?[0-9a-f]{7}/.test(node.textContent.trim()) &&
+          !node.querySelector("span"),
+        );
+        if (!badge) return JSON.stringify({ error: "no version badge on the login page" });
+        const badgeBox = badge.getBoundingClientRect();
+        const formBox = form.getBoundingClientRect();
+        return JSON.stringify({
+          text: badge.textContent.trim(),
+          belowForm: badgeBox.top >= formBox.bottom - 1,
+        });
+      })()
+    `);
+    const badge = JSON.parse(badgeState);
+    if (badge.error) throw new Error(badge.error);
+    if (/^vv/.test(badge.text)) {
+      throw new Error(`version badge renders a doubled prefix: "${badge.text}"`);
+    }
+    if (!badge.belowForm) {
+      throw new Error(`version badge is not below the login card: "${badge.text}"`);
+    }
+    const apiVersion = await client.evaluate(
+      `(async () => (await (await fetch("${FRONTEND_URL}/api/version")).json()).version)()`,
+    );
+    const shownVersion = badge.text.split("·")[0].trim().replace(/^v/, "");
+    if (shownVersion !== String(apiVersion).replace(/^v/, "")) {
+      throw new Error(
+        `version badge "${badge.text}" does not match /api/version "${apiVersion}"`,
+      );
+    }
+    console.log("ui_version_badge ok");
 
     // 2. Register screen renders
     await navigate(client, `${FRONTEND_URL}/register`);
