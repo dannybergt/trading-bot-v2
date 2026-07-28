@@ -54,7 +54,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+    // Column, not row: the version badge is a sibling of the card and used to
+    // be laid out beside it (where mt-4 does nothing and it floated in dead
+    // space next to the form).
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-4">
       <form
         onSubmit={handleSubmit}
         className="card w-full max-w-sm space-y-4"

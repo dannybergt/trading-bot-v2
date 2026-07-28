@@ -18,9 +18,13 @@ export function VersionBadge({ className }: { className?: string }) {
   if (!data?.version) return null;
   const commit =
     data.commit && data.commit !== "unknown" ? data.commit.slice(0, 7) : null;
+  // `git describe --tags` already carries the tag's own "v" (v2026.05.08-1-82-g5017d76),
+  // so prefixing unconditionally rendered "vv...". Only label a bare version
+  // number; the no-tags fallback is a plain commit sha and gets no "v" either.
+  const label = /^\d/.test(data.version) ? `v${data.version}` : data.version;
   return (
     <span className={className ?? "text-[10px] text-slate-600"} title={data.builtAt}>
-      v{data.version}
+      {label}
       {commit ? ` · ${commit}` : ""}
     </span>
   );
