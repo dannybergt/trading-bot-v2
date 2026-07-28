@@ -19,6 +19,7 @@
 - CORS ist auf explizite Origins begrenzt
 - Alpaca-Secrets werden serverseitig verschluesselt gespeichert
 - Login und Passwort-Reset sind rate-limitiert
+- Hinter einem Reverse-Proxy sehen die Rate-Limits und die Audit-IP-Fingerprints die echte Caller-Adresse: `FORWARDED_ALLOW_IPS` listet die Peers, deren `X-Forwarded-For` das Backend akzeptiert (Default: Loopback + private Ranges, also genau das Compose-Netz des nginx-Frontends). Der Wert darf nur enger gesetzt werden, niemals auf `*` — bei `*` liefert uvicorn den linkesten, also caller-kontrollierten Eintrag zurueck, womit die Rate-Limit-Schluessel faelschbar wuerden
 - HTTP-Requests erzeugen jetzt korrelierbare strukturierte Logs mit `X-Request-ID`
 - Audit-Logs vermeiden direkte E-Mail- und Push-Endpoint-Ausgabe
 - Healthcheck ist vorhanden

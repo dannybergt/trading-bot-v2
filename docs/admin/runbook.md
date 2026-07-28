@@ -48,6 +48,29 @@ Betriebsanleitung fuer den lokal rekonstruierten Trading-Bot-V2-Stand.
    - Backend: `/api/health`
    - Frontend: `/login`
 
+## Betrieb hinter einem Reverse-Proxy
+
+Wenn ein externer Proxy (Apache/nginx/Traefik) auf 443 terminiert und auf den
+veroeffentlichten Frontend-Port weiterleitet, gilt zusaetzlich:
+
+- Der Proxy muss `X-Forwarded-For` setzen bzw. anhaengen. Das nginx-Frontend
+  reicht den Header intern bereits weiter.
+- `FORWARDED_ALLOW_IPS` muss die Adresse des letzten Hops abdecken, sonst
+  verwirft uvicorn den Header und jeder Aufrufer erscheint dem Backend unter
+  derselben Proxy-Adresse. Folge waere ein gemeinsamer Rate-Limit-Bucket
+  (fuenf falsche Reset-Tokens sperren dann den Passwort-Reset instanzweit) und
+  wertlose Audit-IP-Fingerprints. Der Default deckt Loopback + private Ranges
+  ab und passt damit auf das Compose-Netz; nur enger setzen, nie auf `*`.
+- `ALLOWED_ORIGINS` auf die oeffentliche Origin setzen (`https://<host>`).
+  Solange Frontend und API unter derselben Origin liegen, greift CORS nicht,
+  ein veralteter Wert faellt also erst auf, wenn etwas cross-origin wird.
+- `PASSWORD_RESET_BASE_URL` auf die oeffentliche Reset-URL setzen
+  (`https://<host>/reset-password`), sonst enthalten Reset-Mails einen intern
+  nicht erreichbaren Link.
+
+Pruefen laesst sich der erste Punkt von aussen nicht direkt; die
+api-regression deckt ihn ab (`forwarded-for scopes auth rate limit ok`).
+
 ## Stop
 
 - `bash ops/automation/stop.sh`

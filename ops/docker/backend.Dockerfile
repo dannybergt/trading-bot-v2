@@ -41,6 +41,19 @@ LABEL org.opencontainers.image.revision=$GIT_SHA \
       org.opencontainers.image.created=$BUILD_TIME \
       org.opencontainers.image.source=https://github.com/dannybergt/trading-bot-v2
 
+# Uvicorn trusts X-Forwarded-For/-Proto only from peers listed here; its own
+# default is 127.0.0.1, which never matches because the only peer that can
+# reach this container is the nginx frontend on a private compose network.
+# Without this the forwarded headers are dropped and request.client.host stays
+# the proxy address for every caller -- which silently collapses the per-client
+# auth rate-limit buckets into one shared bucket and makes audit IP
+# fingerprints useless. Trusting only private ranges keeps the value
+# spoof-resistant: each hop appends, so a client-supplied public address ends
+# up left of the real one and uvicorn returns the rightmost untrusted entry.
+# Must stay in sync with docker-compose.yml (guarded by
+# tests/test_forwarded_allow_ips.py).
+ENV FORWARDED_ALLOW_IPS=127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/api/health || exit 1
 

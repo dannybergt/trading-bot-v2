@@ -117,8 +117,18 @@ docker run -d \
 wait_for_postgres
 
 echo "Starting isolated backend container"
+# Only forwarded when set, so the run otherwise exercises the image default
+# shipped in ops/docker/backend.Dockerfile. Setting it explicitly is how the
+# negative control for the forwarded-for step is driven:
+#   FORWARDED_ALLOW_IPS=127.0.0.1 bash tests/run-api-regression.sh
+BACKEND_ENV_OVERRIDES=()
+if [[ -n "${FORWARDED_ALLOW_IPS:-}" ]]; then
+  BACKEND_ENV_OVERRIDES+=(-e "FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS}")
+fi
+
 docker run -d \
   --name "${BACKEND_CONTAINER}" \
+  "${BACKEND_ENV_OVERRIDES[@]+"${BACKEND_ENV_OVERRIDES[@]}"}" \
   --network "${NETWORK_NAME}" \
   --network-alias backend \
   -e DATA_DIR=/app/data \
@@ -791,6 +801,44 @@ assert "items" in audit_payload and isinstance(audit_payload["items"], list)
 assert audit_payload["total"] >= 1
 assert any(item.get("action") == "auth.login" for item in audit_payload["items"]), "expected auth.login row in admin browser"
 print("admin audit-events list ok")
+
+# Reverse-proxy trust. The password-reset-confirm limit is keyed on the caller
+# address alone, so when X-Forwarded-For is ignored every caller collapses into
+# one global bucket -- five bad tokens from anywhere would then lock password
+# reset for the whole instance. Exhaust one forwarded address and show a second
+# one is unaffected. This step fails if FORWARDED_ALLOW_IPS stops covering the
+# private network the probe container runs on.
+FORWARDED_A = "203.0.113.10"
+FORWARDED_B = "203.0.113.11"
+CONFIRM_LIMIT = 5
+
+
+def confirm_reset_from(source_ip):
+    return requests.post(
+        f"{base}/api/auth/password-reset/confirm",
+        json={"token": "probe-token-never-valid", "new_password": "irrelevant-Passw0rd"},
+        headers={"X-Forwarded-For": source_ip},
+        timeout=30,
+    )
+
+
+for attempt in range(CONFIRM_LIMIT):
+    probe = confirm_reset_from(FORWARDED_A)
+    assert probe.status_code != 429, (
+        f"bucket for {FORWARDED_A} exhausted at attempt {attempt + 1} of {CONFIRM_LIMIT}"
+    )
+
+blocked = confirm_reset_from(FORWARDED_A)
+assert blocked.status_code == 429, (
+    f"expected 429 after {CONFIRM_LIMIT} attempts from {FORWARDED_A}, got {blocked.status_code}"
+)
+
+other_caller = confirm_reset_from(FORWARDED_B)
+assert other_caller.status_code != 429, (
+    "a second forwarded address hit the same rate-limit bucket -- X-Forwarded-For "
+    f"is being ignored, so every caller shares one bucket (got {other_caller.status_code})"
+)
+print("forwarded-for scopes auth rate limit ok")
 
 platform_import = requests.post(
     f"{base}/api/admin/import",
