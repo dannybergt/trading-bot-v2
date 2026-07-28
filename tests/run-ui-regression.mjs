@@ -360,6 +360,66 @@ async function run() {
     await client.send("Emulation.clearDeviceMetricsOverride");
     console.log("ui_responsive_shell ok");
 
+    // 5c. On a phone the twelve inline nav links have nowhere to go -- they
+    // used to just wrap into a tall stack that pushed the content off-screen.
+    // Below lg they collapse into a toggle-driven panel instead. Checked at a
+    // real phone width because that is the only place the breakpoint applies.
+    await client.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await waitForCondition(
+      client,
+      "no horizontal overflow at 390px",
+      "(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)()",
+      10000,
+    );
+    const navCollapsed = await client.evaluate(`
+      (() => {
+        const inline = document.querySelector('[data-testid="primary-nav"]');
+        const toggle = document.querySelector('[data-testid="nav-toggle"]');
+        if (!inline || !toggle) return false;
+        const inlineHidden = getComputedStyle(inline).display === "none";
+        const toggleShown = getComputedStyle(toggle).display !== "none";
+        const panelClosed = !document.querySelector('[data-testid="mobile-nav"]');
+        return inlineHidden && toggleShown && panelClosed &&
+          toggle.getAttribute("aria-expanded") === "false";
+      })()
+    `);
+    if (!navCollapsed) {
+      throw new Error("nav did not collapse into a toggle at 390px viewport");
+    }
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"nav-toggle\"]').click()",
+    );
+    await waitForCondition(
+      client,
+      "mobile nav panel open with links",
+      "(() => { const p = document.querySelector('[data-testid=\"mobile-nav\"]'); return !!p && p.querySelectorAll('a').length >= 10; })()",
+      10000,
+    );
+    // Following a link must close the panel again, otherwise it covers the very
+    // page the user asked for.
+    await client.evaluate(`
+      (() => {
+        const links = Array.from(
+          document.querySelectorAll('[data-testid="mobile-nav"] a'),
+        );
+        const target = links.find((a) => a.getAttribute("href") === "/watchlists");
+        target.click();
+      })()
+    `);
+    await waitForCondition(
+      client,
+      "mobile nav closed after navigating",
+      "(() => !document.querySelector('[data-testid=\"mobile-nav\"]') && location.pathname === '/watchlists')()",
+      15000,
+    );
+    await client.send("Emulation.clearDeviceMetricsOverride");
+    console.log("ui_mobile_nav ok");
+
     // 6. Watchlists page CRUD surface
     await navigate(client, `${FRONTEND_URL}/watchlists`);
     await waitForCondition(
