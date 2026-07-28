@@ -1,5 +1,28 @@
 # Current Focus
 
+## 2026-07-28 (Abend): Live-Probelauf durch Claude — Harness-Defekt gefunden, drei Artefakt-Bugs gefixt, gefuehrte Erstrunde gebaut
+
+**Auftrag geaendert:** Der Nutzer testet nicht mehr selbst — Claude prueft die Live-Instanz direkt (oeffentlich `https://nex-trade.bergt-consulting.de` und intern `http://172.30.15.75:18094`, beide erreichbar; auf dem Host laeuft Chrome).
+
+**Wichtigster Fund — das UI-Gate war nicht beweiskraeftig.** `run-ui-regression.mjs` hatte Debug-Port **9222 fest verdrahtet**; eine fremde Session hielt ihn. Die eigene Chrome-Instanz stirbt dann, `/json/version` antwortet aber weiter aus dem **fremden** Browser — das Gate steuerte ein fremdes Profil samt Service-Worker und meldete Ergebnisse fuer nie geladenen Code. **Beide** Fehlrichtungen real aufgetreten (falsch gruen und falsch rot), belegt ueber Asset-Hash-Vergleich und `ss -ltnp`. Fix: `--remote-debugging-port=0` + `DevToolsActivePort` aus dem eigenen user-data-dir. Fremder Chrome **nicht** angefasst. **Rueckwirkend: gruene UI-Gate-Ergebnisse aus Sessions mit parallelem Chrome sind nicht beweiskraeftig.**
+
+**Drei Defekte gefunden, die nur am Artefakt existierten** (Suite war blind, alle drei live nachgewiesen und nach dem Deploy am Artefakt gegengeprueft):
+1. `vv2026.05.08-1-82-g5017d76` — doppeltes `v` im Build-Badge, **erzeugt durch PR #14**: das Badge praefigierte unbedingt, seit die Checkout-Tiefe stimmt bringt `git describe` das `v` des Tags schon mit. Live jetzt `v2026.05.08-1-86-g1465e78`.
+2. Badge lag **neben** der Anmeldekarte (Geschwister im Row-Flex, `mt-4` wirkungslos) statt darunter. Live jetzt zentriert unter der Karte.
+3. Oeffentliche Domain deklarierte **ISO-8859-1**, weil nginx `text/html` ohne charset sendet und Apache seinen Default einsetzt. Live jetzt `charset=utf-8`.
+
+**Neu gebaut: gefuehrte Erstrunde** (`/onboarding`, 7 Schritte, vom Nutzer gewaehlte Variante „echte Aktionen, Wizard trackt"). Bisher war das eine reine Konfigurations-Checkliste. Fortschritt kommt aus echten Artefakten (Watchlist-Eintrag, Alert-Regel, Paper-Order) — gezaehlt wird per **Baseline** nur, was waehrend der Runde entsteht, weil ein frischer Account bereits 7 geseedete Symbole hat und absolute Zaehler von Anfang an gelogen haetten. Die zwei Schritte ohne Artefakt gelten erst nach echtem Rendern. Auto-Execution wird erklaert, aber bewusst **nicht** eingeschaltet. Die Konfigurations-Checkliste bleibt als Schritt 1.
+
+**Neue Dauer-Guards:** `ui_version_badge` (doppeltes Praefix, Position, Abgleich mit `/api/version`), `ui_guided_tour_tracks_real_data`, `test_frontend_nginx_conf.py`, `test_i18n_bundles.py` (Key-Baum DE/EN — der Assert vom 26.07. war einmalig und hat nichts hinterlassen). Unit **317 → 323**. Fuer jeden neuen Guard Negativ-Kontrolle gefahren, die des Badge-Guards **nach** der Harness-Reparatur wiederholt.
+
+**Neues Werkzeug:** `tests/run-live-ui-smoke.mjs` — read-only-Sonde gegen eine deployte Instanz (kein Stack, kein Nutzer, keine Datenaenderung). Der angemeldete Teil laeuft nur mit `LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` aus der Umgebung (gehoert in `.env.local`).
+
+**Offen:** (1) **Der angemeldete Teil des Probelaufs steht aus** — Mobile-Nav auf Telefonbreite, i18n-Sweep, Watchlists, Analysis, Docs und die neue Erstrunde sind live noch ungeprueft, weil kein Test-Account hinterlegt ist. (2) Unveraendert: Env-Werte auf BC-KI01 (`ALLOWED_ORIGINS` steht messbar noch nicht auf der Domain — Preflight gegen eigene und fremde Origin liefert identisch 400 ohne `access-control-allow-origin`; `PASSWORD_RESET_BASE_URL` von aussen nicht pruefbar). (3) `http://nex-trade.bergt-consulting.de` liefert **403 statt Redirect auf HTTPS** (Apache auf der Node, kein Repo-Change). (4) Tooltip-Sweep uebrige Seiten, AdminPage-Uebersetzung, Default-Schwellen nach Forward-Collection-Daten.
+
+**Positiv gepruefte Live-Befunde:** Login-Rate-Limit greift durch den Proxy korrekt (5x401, dann 429 — #13 wirkt, mit nicht existierendem Account getestet, keine echte Sperre ausgeloest); Security-Header vollstaendig (HSTS, CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy); `/openapi.json` ist nur der SPA-Fallback, kein FastAPI-Schema exponiert; keine Konsolenfehler auf den oeffentlichen Seiten.
+
+**Allokierte Ports/Ressourcen:** aktuell **KEINE** belegt. Neu: die UI-Regression belegt **keinen** festen Debug-Port mehr (ephemer). Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` + portainer + ein fremder Chrome auf 9222 — nichts angefasst.
+
 ## 2026-07-28: Drei offene PRs abgeraeumt (#13/#14/#15) — integriert, voll gegated, gemergt
 
 **Ausgangslage:** #13 (Reverse-Proxy-Trust), #14 (Checkout-Tiefe fuer lesbare Version), #15 (Mobile-Nav) lagen offen und hatten auf GitHub nur `validate` + CodeQL gesehen — **nicht** die volle `ci`-Kette. Zusatzbefund: #13 und #14 fassen denselben `docker run`-Block in `ops/automation/test.sh` an, sind also nicht unabhaengig mergebar.
