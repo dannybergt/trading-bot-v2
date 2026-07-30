@@ -1,5 +1,19 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-07-30T17:16Z: Quellenpruefung Finviz/Messari/Myfxbook — reine Bewertungssession, kein Code geaendert
+
+**Stand:** `main` @ `811fbb3`, working tree clean bis auf diesen STATE/ADR-Commit, `main == origin/main`. Live `v2026.05.08-1-90-g811fbb3` unveraendert. **Kein Code angefasst, keine Gates gelaufen** — es gab nichts zu verifizieren.
+
+**Ergebnis der Pruefung (ADR 2026-07-30):** **Finviz abgelehnt** — keine offizielle API, nur ToS-riskante Dritt-Scraper, und inhaltlich weitgehend redundant zu dem, was FMP schon lizenziert liefert (Ratings, Analystenschaetzungen, Key Metrics, Ratios, Abschluesse). **Myfxbook abgelehnt** — reiner Forex, also eine Anlageklasse, die wir nicht handeln; dazu serveruntaugliche Auth und API-Bedingungen, die freie Software verlangen. **Messari aufgeschoben, nicht abgelehnt** — inhaltlich der staerkste Kandidat, aber Preis und kommerzielle Lizenz sind ungeklaert (§13) und die Reihenfolge spricht dagegen (s. unten).
+
+**Neuer offener Punkt, unabhaengig von jeder Quelle:** `composite_score.fundamentals_axis()` bewertet KGV, Eigenkapitalrendite und Verschuldungsgrad — fuer **Krypto** sind alle drei `None`, die Achse entfaellt und ihr Gewicht wird still auf die uebrigen verteilt. **Bei Krypto laeuft die Empfehlung damit faktisch auf Technik + News**, waehrend das UI vier Achsen ausweist. Zwei getrennte Schnitte moeglich: (a) quellenfrei — die Achse als „fuer diese Anlageklasse nicht verfuegbar" kennzeichnen statt stillschweigend umzuverteilen; (b) inhaltlich — On-Chain-Metriken als Krypto-Fundamentaldaten (dafuer waere Messari die Quelle).
+
+**Blockiert:** Die Readiness-Abfrage der Forward-Collection (`GET /api/admin/composite-readiness`) konnte **nicht** ausgefuehrt werden — admin-only, ohne Token `401`. Zugangsdaten wurden bewusst nicht geraten und nicht aus dem lokalen Dev-`.env` entliehen. Dem Nutzer wurde ein Einzeiler bereitgestellt, der das Passwort verdeckt abfragt, nichts speichert und nur Zaehler/Datumsangaben ausgibt. **Diese Zahl entscheidet die Reihenfolge:** genug gelabelte Snapshots → Kalibrierung; zu wenige → weiter sammeln, und dann erst ueber zusaetzliche Quellen reden.
+
+**Naechster sinnvoller Schritt:** Readiness abfragen (Einzeiler, s. Konversation oder `state/decisions.md` 2026-07-30). Danach in dieser Reihenfolge: (1) Kalibrierung oder Weitersammeln entscheiden, (2) Krypto-Achsenluecke sichtbar machen — klein, quellenfrei, jederzeit machbar, (3) Messari nur, falls Readiness es traegt und Lizenz/Preis geklaert sind. Unveraendert davor liegend: **der angemeldete Live-Probelauf** (Mobile-Nav, i18n, Watchlists, Analysis, Docs, gefuehrte Erstrunde), blockiert am fehlenden Test-Account in `.env.local`.
+
+**Allokierte Ports/Ressourcen: KEINE.** Keine laufenden trading-bot-Container, keine eigenen Chrome-Prozesse, in dieser Session kein Stack gestartet. Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` + portainer — nichts angefasst.
+
 ## SESSION-ABSCHLUSS 2026-07-30T15:26Z: Live-Probelauf-Session geschlossen, alles deployed und am Artefakt verifiziert
 
 **Stand bei Abschluss:** `main` @ `0b463d2`, working tree clean, `main == origin/main`, nichts unveroeffentlicht. CI + codeql + publish gruen, nexainer-Deploy durchgelaufen. Live-Version `v2026.05.08-1-89-g0b463d2` (Build `2026-07-28T21:07:46Z`) — identisch mit HEAD, also ist der ausgelieferte Stand genau der gepruefte. Live-Sonde gegen die oeffentliche Domain: **8 ok, 0 Befunde**.
