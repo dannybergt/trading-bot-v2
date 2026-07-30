@@ -1,5 +1,24 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-07-30T15:26Z: Live-Probelauf-Session geschlossen, alles deployed und am Artefakt verifiziert
+
+**Stand bei Abschluss:** `main` @ `0b463d2`, working tree clean, `main == origin/main`, nichts unveroeffentlicht. CI + codeql + publish gruen, nexainer-Deploy durchgelaufen. Live-Version `v2026.05.08-1-89-g0b463d2` (Build `2026-07-28T21:07:46Z`) — identisch mit HEAD, also ist der ausgelieferte Stand genau der gepruefte. Live-Sonde gegen die oeffentliche Domain: **8 ok, 0 Befunde**.
+
+**Ausgeliefert in dieser Session (4 Themen, alle ff-only nach `main`):**
+1. `1020ecb` UI-Regression steuert nur noch den selbst gestarteten Browser (Harness-Defekt, s. ADR)
+2. `815aa5a` Build-Badge einfach statt doppelt praefigiert + unter der Anmeldekarte
+3. `e741cb8` `charset utf-8` im Frontend-nginx
+4. `1465e78` Live-Sonde `tests/run-live-ui-smoke.mjs`
+5. `a1c3e95` gefuehrte Erstrunde (7 Schritte, Fortschritt aus echten Artefakten)
+6. `73d1746` Struktur-Guard fuer die Sprachbuendel
+7. `0b463d2` STATE/ADR
+
+**Unit 317 → 323.** Fuenf ADRs geschrieben (2026-07-28). Fuer jeden neuen Guard Negativ-Kontrolle gefahren; die des Badge-Guards **nach** der Harness-Reparatur wiederholt, weil die erste durch genau diesen Defekt wertlos war.
+
+**Naechster sinnvoller Schritt:** Der **angemeldete Teil des Probelaufs** — Mobile-Nav auf Telefonbreite, i18n-Sweep, Watchlists, Analysis, Docs und die neue gefuehrte Erstrunde sind live noch **ungeprueft**. Blockiert ausschliesslich daran, dass kein Test-Account hinterlegt ist: `LIVE_TEST_EMAIL` / `LIVE_TEST_PASSWORD` in `/root/trading-bot-v2/.env.local` (Mode 600, gitignored), dann `set -a; . ./.env.local; set +a; node tests/run-live-ui-smoke.mjs`. Der angemeldete Block des Skripts existiert bereits und laeuft dann automatisch mit. Bei aktivem MFA auf dem Account braucht es einen anderen Weg.
+
+**Allokierte Ports/Ressourcen bei Abschluss: KEINE.** Keine laufenden trading-bot-Container, keine eigenen Chrome-Prozesse, Probe-Image `tb-negctl-frontend:probe` entfernt. Gestoppte Container-Reste im Daemon stammen aus Sessions von 2026-03-18 bis 2026-05-07 und wurden nicht angefasst. Die UI-Regression belegt **keinen festen Debug-Port mehr** (ephemer) — das Band 9222 ist damit dauerhaft frei fuer andere Sessions. Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` (8080, 55432, 56379, 59000/1, 51025/58025), portainer, ein fremder Chrome auf 9222 — nichts angefasst.
+
 ## 2026-07-28 (Abend): Live-Probelauf durch Claude — Harness-Defekt gefunden, drei Artefakt-Bugs gefixt, gefuehrte Erstrunde gebaut
 
 **Auftrag geaendert:** Der Nutzer testet nicht mehr selbst — Claude prueft die Live-Instanz direkt (oeffentlich `https://nex-trade.bergt-consulting.de` und intern `http://172.30.15.75:18094`, beide erreichbar; auf dem Host laeuft Chrome).
