@@ -17,7 +17,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Same reason as publish.yml: build.sh runs here too, so a shallow
           # clone would make the CI build log report a bare SHA as the version.
