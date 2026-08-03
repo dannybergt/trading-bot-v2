@@ -28,7 +28,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # build.sh derives APP_VERSION from `git describe --tags --always`.
           # The default shallow clone carries no tags and no history, so
