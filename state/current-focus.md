@@ -93,7 +93,25 @@ als Satz).
 jeder Kennzahl. Der Datenbestand liegt im `data_quality_service` bereit, die Verdrahtung an jede
 einzelne Zahl ist eine eigene PR. Steht als offen im Katalog, nicht halb gebaut als erledigt.
 
-**Naechster Schritt:** PR 7 (Fundament: zentrale Formatter, i18n fuer AdminPage/StockChart, A11y)
+**PR 7 (Fundament) erledigt, Gates gruen.** Zentrale Formatter (`src/frontend/src/format/numbers.ts`)
+an `i18n.language` gebunden; migriert sind zuerst die Stellen, die die UX-Direktive direkt verletzten:
+Analyse-Zonen ohne Waehrung (jetzt mit Einheit **und** Abstand zum aktuellen Kurs) und die
+Scanner-Tabelle, deren Vorzeichen nur ueber die Farbe kodiert war. `StockChart` ist uebersetzt (hatte
+keinen einzigen `t()`-Aufruf), `.btn` hat einen Fokusring (~120 Buttons ohne sichtbaren Tastaturfokus),
+die zwei label-losen Admin-Felder sind beschriftet.
+
+**Offen aus PR 7, bewusst:** vollstaendige AdminPage-Uebersetzung (927 Zeilen, 3 `t()`-Aufrufe) und die
+restlichen ~100 `toFixed`-Stellen. Mechanisch, aber umfangreich; Admin hat die kleinste Reichweite.
+
+**Flakiness, nicht zugedeckt:** ein Lauf brach an `scanner page heading` ab, der naechste war ohne
+Aenderung gruen. Der Scanner zieht pro Symbol Provider-Daten, die hier in Zeitueberschreitungen laufen —
+dieselbe Klasse wie der `paper trading order placed`-ReadTimeout. Kein hoeheres Timeout als Pflaster.
+
+**Naechster sinnvoller Schritt:** Stufe-3-Nachweis gegen die deployte Instanz. Vier Zusagen sind hier
+strukturell nicht beweisbar und warten darauf: TBV2-Z01 (Composite-Karte rendert ohne Provider gar
+nicht), der Realdatenzweig von Z02, der Push-**Empfang** aus PR 4 und die Auswahl in der Symbolsuche aus
+PR 5. Dafuer braucht es den zugesagten Test-Account (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` in
+`.env.local`, Mode 600) und gesetzte VAPID-Schluessel auf der Instanz.
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
