@@ -181,6 +181,18 @@ Tests grün ≠ Feature funktioniert. Pflicht ist beides:
 
 Wenn Tests fehlen: erstellen. Wenn Tests fehlschlagen: Ursache analysieren, Code fixen (nicht Test lockern), erneut ausführen, Ergebnis dokumentieren.
 
+**Den Nachweis führt der `verifier`-Subagent — verbindlich, nicht nach Ermessen.**
+
+Die manuelle Verifikation oben wird **nicht** nebenbei im Hauptlauf erledigt, sondern an den `verifier` delegiert (oder per `/verify` gestartet). Grund: wer eine Änderung gebaut hat, prüft sie mit der Erwartung, dass sie funktioniert — und übersieht dabei zuverlässig genau die Fälle, die er beim Bauen nicht bedacht hat. Der `verifier` startet stattdessen den Stack, ruft die Endpunkte auf, klickt den Golden Path **und** einen Edge Case durch, liest die Konsole mit und misst Persistenz und Migration gegen den Zielkatalog des Projekts.
+
+Er unterscheidet dabei **"grün" von "nachgewiesen"** und meldet jede übersprungene Prüfung als **Lücke**, nicht als Erfolg. Das ist der eigentliche Zweck: ein grüner Exit-Code sagt aus, dass ein Programm ohne Fehler endete, nicht dass das Ziel erreicht ist.
+
+**Wann er zwingend läuft:** vor jedem PR, vor jedem Merge, vor jedem Release — und immer, wenn jemand fragt, ob etwas *wirklich* funktioniert.
+
+**Die Lücke, die er schließen soll** (echter Fall, nex-im 2026-08-05): eine abgelaufene Sitzung machte die Anwendung unbenutzbar, und **keine** Prüfung hat es gefunden — weil jede automatisierte Prüfung schneller war als die Sitzungsdauer. Alles war grün, nichts war nachgewiesen. Wenn ein Zielkatalog-Punkt nur unter Bedingungen eintritt, die kein Testlauf herstellt (Zeitablauf, zweiter Nutzer, zweiter Browser, Neustart), muss die Prüfung diese Bedingung **herstellen** statt sie zu unterstellen.
+
+**Weitere Subagents, die dieselbe Trennung herstellen:** `reviewer` (Diff gegen §5/§6 prüfen), `test-runner` (Failures bis zur Ursache verfolgen, ohne den Test zu lockern), `planner` (Slices vor größeren Umbauten), `explorer` (Orientierung ohne Datei-Dumps).
+
 ### Phase 5 — Security Review
 
 Prüfe jede Änderung auf: Injection-Risiken, Auth-Bypass, unsichere Defaults, fehlerhafte Rollenprüfung, unsichere Dateiuploads, SSRF, XSS, CSRF, IDOR, unsichere Deserialisierung, Secrets in Code/Logs, fehlende Rate Limits, fehlende Audit Logs, Datenschutzrisiken, Prompt Injection bei KI-Komponenten.
@@ -207,6 +219,7 @@ Eine Aufgabe ist nur fertig, wenn alle Punkte erfüllt sind:
 - [ ] Unit Tests vorhanden und erfolgreich
 - [ ] Integration Tests vorhanden oder begründet nicht nötig
 - [ ] Manuelle Verifikation durchgeführt (Browser/Request) oder explizit als unmöglich markiert
+- [ ] **`verifier`-Subagent gelaufen** (bzw. `/verify`) und **ohne offene Lücke** zurückgekommen — gemessen am Zielkatalog, nicht an grünen Exit-Codes. Gemeldete Lücken sind entweder behoben oder im PR als bewusst offen benannt.
 - [ ] Security Review durchgeführt
 - [ ] Keine Secrets im Repository
 - [ ] Keine sensiblen Daten in Logs
@@ -403,6 +416,7 @@ Kurze Beschreibung der Änderung.
 - Welche Tests wurden ergänzt?
 - Welche Tests wurden ausgeführt? Ergebnis?
 - Wie wurde manuell verifiziert (Browser-Klicks, curl-Requests)? Wenn nicht möglich: Begründung.
+- **`verifier` gelaufen?** Ergebnis und **jede gemeldete Lücke** — behoben oder bewusst offen (mit Begründung). Ein „grün" ohne Nachweis am laufenden System zählt hier nicht.
 
 ### Security Review
 - Welche Security-Aspekte wurden geprüft?
@@ -487,7 +501,7 @@ Am Ende jeder abgeschlossenen Aufgabe liefere:
 2. Welche Dateien wurden geändert?
 3. Welche Tests wurden erstellt?
 4. Welche Tests wurden ausgeführt? Ergebnis?
-5. Wie wurde manuell verifiziert?
+5. Wie wurde manuell verifiziert? Was hat der `verifier` gemeldet — und was davon ist noch offen?
 6. Welche Security-Aspekte wurden geprüft?
 7. Welche Dokumentation wurde aktualisiert?
 8. Wurde `STATE.md` aktualisiert? Wurde ADR geschrieben?
