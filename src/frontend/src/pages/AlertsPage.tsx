@@ -17,7 +17,13 @@ type AlertRule = {
   watchlistId: string;
   symbol: string;
   name: string;
-  ruleType: "provider_move" | "news_sentiment" | "signal_direction" | "tag_priority";
+  ruleType:
+    | "provider_move"
+    | "news_sentiment"
+    | "signal_direction"
+    | "tag_priority"
+    | "price_above"
+    | "price_below";
   threshold: number | null;
   direction: string | null;
   tag: string | null;
@@ -52,11 +58,17 @@ type AlertsResponse = {
 };
 
 const RULE_TYPES: AlertRule["ruleType"][] = [
+  // Preisziele stehen vorn: es ist die Alarmart, die Nutzer zuerst suchen.
+  "price_above",
+  "price_below",
   "provider_move",
   "news_sentiment",
   "signal_direction",
   "tag_priority",
 ];
+
+// Regeltypen, ohne deren Schwelle gar nichts ausloest.
+const RULE_TYPES_REQUIRING_THRESHOLD: AlertRule["ruleType"][] = ["price_above", "price_below"];
 
 export function AlertsPage() {
   const { t } = useTranslation();
@@ -113,6 +125,31 @@ export function AlertsPage() {
     },
   });
 
+  // PUT /api/alerts/rules/{id} existierte, wurde aber von keiner Seite
+  // aufgerufen: eine deaktivierte Regel sah in der Liste exakt aus wie eine
+  // aktive, und ein Tippfehler in der Schwelle hiess loeschen und neu anlegen.
+  const toggleRule = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      apiFetch<AlertRule>(`/api/alerts/rules/${id}`, {
+        method: "PUT",
+        body: { enabled },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+
+  const updateThreshold = useMutation({
+    mutationFn: ({ id, threshold }: { id: number; threshold: number }) =>
+      apiFetch<AlertRule>(`/api/alerts/rules/${id}`, {
+        method: "PUT",
+        body: { threshold },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+
   const ackEvent = useMutation({
     mutationFn: (id: number) =>
       apiFetch(`/api/alerts/events/${id}/ack`, { method: "POST" }),
@@ -121,9 +158,15 @@ export function AlertsPage() {
     },
   });
 
+  // Ohne Schwelle loest ein Preisziel nie aus. Das stillschweigend anzulegen
+  // waere eine Regel, die nie feuert und wie eine funktionierende aussieht.
+  const thresholdMissing =
+    RULE_TYPES_REQUIRING_THRESHOLD.includes(ruleType) &&
+    (threshold.trim() === "" || !Number.isFinite(Number(threshold)));
+
   function handleCreate(event: FormEvent) {
     event.preventDefault();
-    if (!watchlistId || !symbol || !ruleType) {
+    if (!watchlistId || !symbol || !ruleType || thresholdMissing) {
       return;
     }
     createRule.mutate();
@@ -239,10 +282,15 @@ export function AlertsPage() {
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={!watchlistId || !symbol || createRule.isPending}
+            disabled={!watchlistId || !symbol || thresholdMissing || createRule.isPending}
           >
             {createRule.isPending ? t("alerts.form.adding") : t("alerts.form.add")}
           </button>
+          {thresholdMissing ? (
+            <p className="mt-1 text-xs text-amber-300" data-testid="alert-threshold-required">
+              {t("alerts.form.thresholdRequired")}
+            </p>
+          ) : null}
           {createRule.error ? (
             <span className="ml-3 text-sm text-red-300">
               {(createRule.error as ApiError).message}
@@ -261,12 +309,31 @@ export function AlertsPage() {
         ) : null}
         <ul className="space-y-2">
           {(alertsQuery.data?.rules ?? []).map((rule) => (
-            <li key={rule.id} className="card flex items-start justify-between gap-3">
+            <li
+              key={rule.id}
+              className={`card flex items-start justify-between gap-3 ${
+                rule.enabled ? "" : "opacity-60"
+              }`}
+              data-testid={`alert-rule-${rule.id}`}
+            >
               <div>
-                <p className="font-medium">{rule.name}</p>
+                <p className="font-medium">
+                  {rule.name}
+                  {!rule.enabled ? (
+                    // Eine deaktivierte Regel sah bisher aus wie eine aktive,
+                    // waehrend das Dashboard "X aktiv" zaehlte.
+                    <span className="ml-2 rounded-full border border-slate-600 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                      {t("alerts.rules.disabledBadge")}
+                    </span>
+                  ) : null}
+                </p>
                 <p className="text-xs text-slate-400">
                   {rule.symbol} · {t(`alerts.ruleTypes.${rule.ruleType}`)}
-                  {rule.threshold !== null ? ` · ≥ ${rule.threshold}` : ""}
+                  {rule.threshold !== null
+                    ? ` · ${
+                        rule.ruleType === "price_below" ? "≤" : "≥"
+                      } ${rule.threshold}`
+                    : ""}
                   {rule.direction ? ` · ${rule.direction}` : ""}
                   {rule.tag ? ` · #${rule.tag}` : ""}
                 </p>
@@ -278,14 +345,43 @@ export function AlertsPage() {
                   </p>
                 ) : null}
               </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => deleteRule.mutate(rule.id)}
-                disabled={deleteRule.isPending}
-              >
-                {t("alerts.rules.delete")}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {rule.threshold !== null ? (
+                  <label className="flex items-center gap-1 text-xs text-slate-400">
+                    <span className="sr-only">{t("alerts.form.threshold")}</span>
+                    <input
+                      type="number"
+                      className="input w-24 py-1 text-xs"
+                      defaultValue={rule.threshold}
+                      step="any"
+                      data-testid={`alert-rule-threshold-${rule.id}`}
+                      onBlur={(event) => {
+                        const next = Number(event.target.value);
+                        if (Number.isFinite(next) && next !== rule.threshold) {
+                          updateThreshold.mutate({ id: rule.id, threshold: next });
+                        }
+                      }}
+                    />
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => toggleRule.mutate({ id: rule.id, enabled: !rule.enabled })}
+                  disabled={toggleRule.isPending}
+                  data-testid={`alert-rule-toggle-${rule.id}`}
+                >
+                  {rule.enabled ? t("alerts.rules.disable") : t("alerts.rules.enable")}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => deleteRule.mutate(rule.id)}
+                  disabled={deleteRule.isPending}
+                >
+                  {t("alerts.rules.delete")}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -333,13 +429,91 @@ export function AlertsPage() {
           ))}
         </ul>
       </section>
+
+      <AlertHistorySection />
     </div>
+  );
+}
+
+/**
+ * Quittierte Alarme waren bisher unwiederbringlich weg: `GET /api/alerts`
+ * liefert ausschliesslich offene Ereignisse, und `GET /api/alerts/events`
+ * (inklusive `status=all`) wurde von keiner Seite aufgerufen. Wer einen Alarm
+ * quittierte, konnte nicht mehr nachsehen, was ihn ausgeloest hatte.
+ */
+function AlertHistorySection() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const historyQuery = useQuery({
+    queryKey: ["alert-events-history"],
+    queryFn: () => apiFetch<{ items: AlertEvent[] }>("/api/alerts/events?status=all"),
+    enabled: open,
+  });
+
+  const items = historyQuery.data?.items ?? [];
+
+  return (
+    <section data-testid="alert-history">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 className="text-lg font-semibold">{t("alerts.history.title")}</h2>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setOpen((prev) => !prev)}
+          data-testid="alert-history-toggle"
+        >
+          {open ? t("alerts.history.hide") : t("alerts.history.show")}
+        </button>
+      </div>
+
+      {!open ? (
+        <p className="text-sm text-slate-500">{t("alerts.history.hint")}</p>
+      ) : historyQuery.isLoading ? (
+        <p className="text-sm text-slate-500">{t("alerts.history.loading")}</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-slate-500">{t("alerts.history.empty")}</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((event) => (
+            <li key={event.id} className="card text-sm">
+              <p className="font-medium">
+                <span
+                  className={`mr-2 inline-block rounded-full px-2 py-0.5 text-xs ${severityClass(
+                    event.severity,
+                  )}`}
+                >
+                  {t(`alerts.severity.${event.severity}`, { defaultValue: event.severity })}
+                </span>
+                {event.title}
+                <span className="ml-2 text-xs text-slate-500">
+                  {t(`alerts.history.status.${event.status}`, {
+                    defaultValue: event.status,
+                  })}
+                </span>
+              </p>
+              <p className="text-slate-300">{event.message}</p>
+              {event.triggeredAt ? (
+                <p className="text-xs text-slate-500">
+                  {t("alerts.events.triggered", {
+                    when: new Date(event.triggeredAt).toLocaleString(),
+                  })}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
 
 function thresholdPlaceholder(ruleType: AlertRule["ruleType"]): string {
   switch (ruleType) {
+    case "price_above":
+      return "200.00";
+    case "price_below":
+      return "150.00";
     case "provider_move":
       return "1.0";
     case "news_sentiment":

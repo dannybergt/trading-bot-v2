@@ -666,13 +666,16 @@
       "tag": "Tag",
       "name": "Name (optional)",
       "add": "Add rule",
-      "adding": "Creating…"
+      "adding": "Creating…",
+      "thresholdRequired": "A price target needs a threshold — without one the rule would never fire."
     },
     "ruleTypes": {
       "provider_move": "price move",
       "news_sentiment": "news sentiment",
       "signal_direction": "signal direction",
-      "tag_priority": "tag priority"
+      "tag_priority": "tag priority",
+      "price_above": "Price at or above",
+      "price_below": "Price at or below"
     },
     "thresholdHint": {
       "provider_move": "(% change)",
@@ -695,13 +698,28 @@
       "title": "Rules",
       "empty": "No rules yet.",
       "lastTriggered": "last triggered {{when}}",
-      "delete": "Delete"
+      "delete": "Delete",
+      "enable": "Enable",
+      "disable": "Disable",
+      "disabledBadge": "disabled"
     },
     "events": {
       "title": "Open events",
       "empty": "No open events.",
       "triggered": "triggered {{when}}",
       "acknowledge": "Acknowledge"
+    },
+    "history": {
+      "title": "Alert history",
+      "show": "Show history",
+      "hide": "Hide history",
+      "hint": "Acknowledged alerts stay available here.",
+      "loading": "Loading history…",
+      "empty": "No alerts recorded yet.",
+      "status": {
+        "open": "open",
+        "acknowledged": "acknowledged"
+      }
     }
   },
   "watchlists": {
@@ -804,6 +822,24 @@
       "setupFailed": "Setup failed.",
       "enableFailed": "Enable failed.",
       "disableFailed": "Disable failed."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "hint": "Price targets and signal alerts reach you even when this page is closed. The browser asks for permission once.",
+      "enable": "Enable notifications",
+      "state": {
+        "loading": "Checking…",
+        "default": "Not enabled yet",
+        "subscribed": "Enabled for this browser",
+        "denied": "Blocked in this browser — allow notifications for this site in the browser settings",
+        "unsupported": "This browser does not support web push",
+        "unconfigured": "Not available: the server has no push keys configured"
+      },
+      "error": {
+        "push_permission_denied": "You declined the permission. Allow notifications for this site in the browser settings to enable them.",
+        "push_unconfigured": "The server has no push keys configured — an administrator has to set VAPID keys first.",
+        "push_unsupported": "This browser does not support web push."
+      }
     }
   }
 }

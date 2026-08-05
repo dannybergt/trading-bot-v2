@@ -666,13 +666,16 @@
       "tag": "Tag",
       "name": "Name (optional)",
       "add": "Regel hinzufuegen",
-      "adding": "Wird angelegt…"
+      "adding": "Wird angelegt…",
+      "thresholdRequired": "Ein Preisziel braucht eine Schwelle — ohne sie wuerde die Regel nie ausloesen."
     },
     "ruleTypes": {
       "provider_move": "Kursbewegung",
       "news_sentiment": "News-Stimmung",
       "signal_direction": "Signal-Richtung",
-      "tag_priority": "Tag-Prioritaet"
+      "tag_priority": "Tag-Prioritaet",
+      "price_above": "Kurs erreicht oder ueberschreitet",
+      "price_below": "Kurs erreicht oder unterschreitet"
     },
     "thresholdHint": {
       "provider_move": "(% Veraenderung)",
@@ -695,13 +698,28 @@
       "title": "Regeln",
       "empty": "Noch keine Regeln.",
       "lastTriggered": "zuletzt ausgeloest {{when}}",
-      "delete": "Loeschen"
+      "delete": "Loeschen",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "disabledBadge": "deaktiviert"
     },
     "events": {
       "title": "Offene Ereignisse",
       "empty": "Keine offenen Ereignisse.",
       "triggered": "ausgeloest {{when}}",
       "acknowledge": "Bestaetigen"
+    },
+    "history": {
+      "title": "Alarm-Historie",
+      "show": "Historie anzeigen",
+      "hide": "Historie ausblenden",
+      "hint": "Quittierte Alarme bleiben hier abrufbar.",
+      "loading": "Historie wird geladen …",
+      "empty": "Noch keine Alarme aufgezeichnet.",
+      "status": {
+        "open": "offen",
+        "acknowledged": "quittiert"
+      }
     }
   },
   "watchlists": {
@@ -804,6 +822,24 @@
       "setupFailed": "Einrichtung fehlgeschlagen.",
       "enableFailed": "Aktivieren fehlgeschlagen.",
       "disableFailed": "Deaktivieren fehlgeschlagen."
+    },
+    "notifications": {
+      "title": "Benachrichtigungen",
+      "hint": "Preisziele und Signal-Alarme erreichen dich auch dann, wenn diese Seite geschlossen ist. Der Browser fragt einmal um Erlaubnis.",
+      "enable": "Benachrichtigungen aktivieren",
+      "state": {
+        "loading": "Wird geprueft …",
+        "default": "Noch nicht aktiviert",
+        "subscribed": "Fuer diesen Browser aktiviert",
+        "denied": "In diesem Browser blockiert — erlaube Benachrichtigungen fuer diese Seite in den Browser-Einstellungen",
+        "unsupported": "Dieser Browser unterstuetzt kein Web-Push",
+        "unconfigured": "Nicht verfuegbar: auf dem Server sind keine Push-Schluessel hinterlegt"
+      },
+      "error": {
+        "push_permission_denied": "Du hast die Erlaubnis abgelehnt. Erlaube Benachrichtigungen fuer diese Seite in den Browser-Einstellungen.",
+        "push_unconfigured": "Auf dem Server sind keine Push-Schluessel hinterlegt — das muss zuerst ein Administrator einrichten.",
+        "push_unsupported": "Dieser Browser unterstuetzt kein Web-Push."
+      }
     }
   }
 }
