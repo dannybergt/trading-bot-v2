@@ -73,10 +73,25 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Trading Bot API")
 ALERT_PRIORITY_RANKS = {"low": 1, "medium": 2, "high": 3}
-ALERT_RULE_TYPES = {"provider_move", "news_sentiment", "signal_direction", "tag_priority"}
+ALERT_RULE_TYPES = {
+    "provider_move",
+    "news_sentiment",
+    "signal_direction",
+    "tag_priority",
+    # Preisziele: die naheliegendste Alarmart ueberhaupt, bis 2026-08-05 nicht
+    # vorhanden. Beide brauchen zwingend threshold_value.
+    "price_above",
+    "price_below",
+}
 WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS", "300"))
 WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS", "90"))
 WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
+# Alarmregeln wurden bis 2026-08-05 ausschliesslich beim Oeffnen der Alarmseite
+# ausgewertet. Das Intervall liegt bewusst ueber dem des Watchlist-Dispatchers:
+# eine Regelauswertung zieht pro Watchlist einen vollstaendigen Alert-Payload,
+# und die Provider-Abfragen dahinter sind der teure Teil.
+ALERT_RULE_EVAL_INTERVAL_SECONDS = int(os.getenv("ALERT_RULE_EVAL_INTERVAL_SECONDS", "600"))
+ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS = int(os.getenv("ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS", "120"))
 PAPER_ORDER_FILL_INTERVAL_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INTERVAL_SECONDS", "180"))
 PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS", "60"))
 ML_RETRAIN_INTERVAL_SECONDS = int(os.getenv("ML_RETRAIN_INTERVAL_SECONDS", "3600"))
@@ -539,6 +554,57 @@ def build_alert_event_payload(rule: AlertRuleRecord, alert_item: dict) -> dict |
             "trigger": {
                 "changePercent": change_percent,
                 "threshold": threshold_value,
+                "source": provider_context.get("source"),
+            },
+        }
+
+    if rule_type in {"price_above", "price_below"}:
+        # Der meist erwartete Alarm ueberhaupt hat bis 2026-08-05 gefehlt.
+        # Der Kurs liegt bereits im Alert-Payload (providerContext.price), es
+        # brauchte also keine neue Quelle.
+        if threshold is None:
+            return None
+        provider_context = alert_item.get("providerContext") or {}
+        price = provider_context.get("price")
+        if price is None:
+            return None
+        try:
+            price_value = float(price)
+            threshold_value = float(threshold)
+        except (TypeError, ValueError):
+            return None
+
+        crossed = (
+            price_value >= threshold_value
+            if rule_type == "price_above"
+            else price_value <= threshold_value
+        )
+        if not crossed:
+            return None
+
+        currency = provider_context.get("currency") or ""
+        unit = f" {currency}".rstrip()
+        direction_word = "at or above" if rule_type == "price_above" else "at or below"
+        distance_pct = (
+            ((price_value - threshold_value) / threshold_value) * 100
+            if threshold_value
+            else 0.0
+        )
+        return {
+            # Ein Preisziel ist eine bewusst gesetzte Schwelle des Nutzers,
+            # keine abgeleitete Beobachtung — entsprechend hoch eingestuft.
+            "severity": "high",
+            "title": f"{symbol} price {direction_word} target",
+            "message": (
+                f"{symbol} is at {price_value:.2f}{unit}, "
+                f"{direction_word} your target of {threshold_value:.2f}{unit} "
+                f"({distance_pct:+.2f}%)."
+            ),
+            "trigger": {
+                "price": price_value,
+                "threshold": threshold_value,
+                "currency": provider_context.get("currency"),
+                "distancePct": round(distance_pct, 2),
                 "source": provider_context.get("source"),
             },
         }
@@ -1332,6 +1398,85 @@ def _run_auto_execution_paper_for_user(
             )
 
 
+def evaluate_alert_rules_for_all_users(db: Session) -> int:
+    """Wertet die Alarmregeln aller Nutzer aus, die welche haben.
+
+    Warum das ueberhaupt noetig ist: `evaluate_alert_rules` hatte bis
+    2026-08-05 genau einen Aufrufer — den HTTP-Handler von `GET /api/alerts`.
+    Eine Regel feuerte damit ausschliesslich, wenn der Nutzer die Alarmseite
+    oeffnete. Wer sie nicht oeffnete, bekam nie ein Ereignis, und eine
+    Benachrichtigung ausserhalb der Anwendung gab es folglich auch nicht. Die
+    Funktion war auf dem Papier fertig und in der Praxis wirkungslos.
+
+    Ein Fehler bei einem Nutzer darf die uebrigen nicht mitnehmen, deshalb
+    wird pro Nutzer gefangen und weitergemacht.
+    """
+    user_ids = [
+        row[0]
+        for row in db.query(AlertRuleRecord.user_id)
+        .filter(AlertRuleRecord.enabled == True)  # noqa: E712 — SQLAlchemy-Vergleich
+        .distinct()
+        .all()
+    ]
+
+    created_total = 0
+    for user_id in user_ids:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.is_active:
+            continue
+        try:
+            created = evaluate_alert_rules(db, user)
+        except Exception:
+            db.rollback()
+            logger.exception("alert_rule_evaluation_failed user_id=%s", user_id)
+            continue
+
+        created_total += len(created)
+        for event in created:
+            # Ohne Zustellung bliebe das Ereignis in der Datenbank liegen, bis
+            # jemand zufaellig die Seite oeffnet — also genau der Zustand, den
+            # dieser Task beheben soll.
+            try:
+                PushService.send_notification_to_user(
+                    db,
+                    user.id,
+                    {
+                        "title": event.title,
+                        "body": event.message,
+                        "url": f"/analysis/{event.symbol}",
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "alert_rule_push_failed user_id=%s event_id=%s", user_id, event.id
+                )
+    return created_total
+
+
+async def alert_rule_evaluation_task():
+    logger.info(
+        "alert_rule_evaluator_started interval_seconds=%s",
+        ALERT_RULE_EVAL_INTERVAL_SECONDS,
+    )
+    await asyncio.sleep(ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS)
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                created = evaluate_alert_rules_for_all_users(db)
+                logger.info(
+                    "alert_rule_evaluator_cycle_completed",
+                    extra={"created_events": created},
+                )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("alert_rule_evaluator_cycle_failed")
+
+        await asyncio.sleep(ALERT_RULE_EVAL_INTERVAL_SECONDS)
+
+
 async def watchlist_alert_dispatch_task():
     logger.info(
         "watchlist_alert_dispatcher_started interval_seconds=%s dedup_hours=%s",
@@ -1381,6 +1526,7 @@ async def on_startup():
     # Start the auto-scanner
     asyncio.create_task(auto_scanner_task())
     asyncio.create_task(watchlist_alert_dispatch_task())
+    asyncio.create_task(alert_rule_evaluation_task())
     asyncio.create_task(paper_order_fill_task())
     asyncio.create_task(ml_retrain_task())
     asyncio.create_task(auto_execution_paper_loop_task())

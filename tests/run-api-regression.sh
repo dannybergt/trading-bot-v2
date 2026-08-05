@@ -607,6 +607,62 @@ assert alert_rule_payload["ruleType"] == "tag_priority"
 assert alert_rule_payload["tag"] == "priority"
 print("alert rule create ok")
 
+# Preisziel-Regeln: bis 2026-08-05 gab es diesen Regeltyp gar nicht, obwohl er
+# der am naheliegendsten erwartete ist. Die Schwelle wird bewusst
+# unerreichbar hoch gesetzt, damit dieser Schritt keine Ereignisse erzeugt und
+# die Zaehlungen der folgenden Schritte nicht verschiebt.
+create_price_rule = requests.post(
+    f"{base}/api/alerts/rules",
+    headers=headers,
+    json={
+        "watchlistId": watchlist_id,
+        "symbol": "BTC/USD",
+        "name": "BTC price target",
+        "ruleType": "price_above",
+        "threshold": 99999999,
+    },
+    timeout=30,
+)
+create_price_rule.raise_for_status()
+price_rule_payload = create_price_rule.json()
+price_rule_id = price_rule_payload["id"]
+assert price_rule_payload["ruleType"] == "price_above"
+assert float(price_rule_payload["threshold"]) == 99999999
+assert price_rule_payload["enabled"] is True
+print("alert rule price target create ok")
+
+# Regel bearbeiten und deaktivieren: PUT existierte, wurde aber von keiner
+# Seite aufgerufen — eine deaktivierte Regel sah aus wie eine aktive und ein
+# Tippfehler in der Schwelle hiess loeschen und neu anlegen.
+update_price_rule = requests.put(
+    f"{base}/api/alerts/rules/{price_rule_id}",
+    headers=headers,
+    json={"threshold": 88888888, "enabled": False},
+    timeout=30,
+)
+update_price_rule.raise_for_status()
+updated_rule_payload = update_price_rule.json()
+assert float(updated_rule_payload["threshold"]) == 88888888, updated_rule_payload
+assert updated_rule_payload["enabled"] is False, updated_rule_payload
+print("alert rule update and disable ok")
+
+# Eine unbekannte Regelart muss abgelehnt werden — sonst legt ein Tippfehler
+# eine Regel an, die nie ausloest und wie eine funktionierende aussieht.
+bad_rule = requests.post(
+    f"{base}/api/alerts/rules",
+    headers=headers,
+    json={
+        "watchlistId": watchlist_id,
+        "symbol": "BTC/USD",
+        "name": "typo rule",
+        "ruleType": "price_abvoe",
+        "threshold": 1,
+    },
+    timeout=30,
+)
+assert bad_rule.status_code in (400, 422), bad_rule.text
+print("alert rule rejects unknown type ok")
+
 alert_rules = requests.get(f"{base}/api/alerts/rules", headers=headers, timeout=30)
 alert_rules.raise_for_status()
 assert any(item["id"] == alert_rule_id for item in alert_rules.json()["items"])
