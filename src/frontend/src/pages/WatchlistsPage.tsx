@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
+import { useHashScroll } from "../hooks/useHashScroll";
 
 type WatchlistItem = {
   symbol: string;
@@ -22,6 +23,7 @@ type Watchlist = {
 
 export function WatchlistsPage() {
   const { t } = useTranslation();
+  useHashScroll();
   const queryClient = useQueryClient();
   const watchlistsQuery = useQuery({
     queryKey: ["watchlists"],
@@ -189,7 +191,9 @@ function WatchlistCard({
   }
 
   return (
-    <article className="card">
+    // id: Sprungziel fuer "/watchlists#<id>" aus der Provider-Coverage-Kachel
+    // des Dashboards. Ohne sie zeigte der Link ins Leere.
+    <article className="card" id={watchlist.id}>
       <header className="flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold">
           {watchlist.name}{" "}

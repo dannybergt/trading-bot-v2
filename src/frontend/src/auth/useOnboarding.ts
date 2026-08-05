@@ -77,11 +77,16 @@ export function useOnboarding() {
     },
     {
       id: "alpaca",
+      // Bewusst optional (ADR 2026-08-05): die Zugangsdaten werden heute nur
+      // fuer Quotes/Bars im Hintergrund genutzt. Es gibt noch keine Seite, die
+      // Depot, Positionen oder echte Orders zeigt — ein Pflichtschritt ohne
+      // sichtbare Gegenleistung. Sobald die Portfolio-Seite steht, wird der
+      // Schritt wieder required.
       label: "Broker (Alpaca)",
       description:
-        "Required for portfolio reads and (later) automated execution.",
+        "Optional today: the keys feed background quotes. Portfolio and live execution land in a later wave.",
       completed: !!alpaca?.api_key,
-      required: true,
+      required: false,
       cta: alpaca?.api_key ? "Configured" : "Connect Alpaca",
     },
     {
@@ -119,6 +124,12 @@ export function useOnboarding() {
     total,
     requiredOpenCount,
     allRequiredDone,
-    isComplete: completedCount === total,
+    // "Vollstaendig konfiguriert" heisst: alle Pflichtschritte sind erledigt.
+    // Frueher stand hier completedCount === total, also inklusive der als
+    // optional deklarierten Schritte — die Dashboard-Karte konnte damit nie
+    // verschwinden und wurde zur Dauer-Erinnerung ohne Signalwirkung
+    // (Zielkatalog TBV2-Z05: "verschwindet erst bei vollstaendiger
+    // Konfiguration"). Optionale Schritte bleiben im Wizard erreichbar.
+    isComplete: allRequiredDone,
   };
 }

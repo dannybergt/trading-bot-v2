@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useHashScroll } from "../hooks/useHashScroll";
 
 type AlpacaConfig = {
   api_key: string;
@@ -31,6 +32,7 @@ type MfaSetup = {
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  useHashScroll();
   const { user, refresh } = useAuth();
 
   return (
@@ -373,7 +375,8 @@ function MfaSection({
   }
 
   return (
-    <section className="card">
+    // id: Sprungziel fuer "/settings#mfa" aus dem Onboarding-Wizard.
+    <section className="card" id="mfa">
       <h2 className="text-lg font-semibold">{t("settings.mfa.title")}</h2>
       {mfaEnabled ? (
         <form onSubmit={handleDisable} className="mt-3 flex flex-wrap items-end gap-3">
