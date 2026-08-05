@@ -1,5 +1,19 @@
 # Current Focus
 
+## 2026-08-05 (2): Zielkatalog angelegt — vier Kernziele haben gar keinen Beweis (Branch `feature/zielkatalog`, Gates gruen)
+
+**Neu:** `docs/verification/zielkatalog.md` fixiert die sieben Punkte der Produktvision plus UX-Direktive als pruefbare Zeilen (ID, Zielsatz mit Quellenverweis, Kriterium, Schicht L1/L2/L3, Beweisschritt, Negativkontrolle). Massstab fuer den globalen `verifier`-Agent (agent-baseline PR #26). Guard `tests/test_zielkatalog.py` haelt ihn am Leben, **Unit 327 → 334**.
+
+**Wichtigster Befund — vier Kernzeilen haben keinen Beweisschritt:** niemand prueft P(UP)/P(DOWN) (Produktvision Punkt 2!), niemand prueft, dass eine Achse ohne Daten als "nicht verfuegbar" ausgewiesen wird statt still umverteilt zu werden, niemand prueft N/M und das Verschwinden der Onboarding-Karte. `ui_analysis` prueft nur, dass ueberhaupt ein Chart-Element existiert.
+
+**Zweiter Befund, teuer und lehrreich:** der am selben Tag ergaenzte Regressionsschritt behauptete `price_history != "missing"`. Der erste Lauf druckte `synthetic placeholder (181 bars) — no provider reachable from this host`. **Die Assertion haette auch mit dem kaputten Grader bestanden.** Jetzt prueft sie die Kohaerenz und druckt den Modus mit. **Konsequenz: der Realdatenfall ist in der Regressionsumgebung strukturell nicht beweisbar** — TBV2-Z01/Z02/Z07 erreichen NACHGEWIESEN nur ueber Stufe 3 gegen die deployte Instanz.
+
+**Naechster Schritt:** PR 3 (AGENTS.md-Verankerung in allen sechs byte-identischen Kopien — **Achtung: eine parallele Session hat `.claude/AGENTS.md` bereits ergaenzt**) und PR 4 (blockierender Hook an `git push`, mit `is_ours()`-Erweiterung in beiden Installern). Danach Kataloge fuer nex-im, nexainer, lms-platform.
+
+**Wartet auf den Nutzer:** dedizierter Test-Account fuer Stufe 3 (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` in `.env.local`), Operationalisierung von "Erklaerbarkeit ist Kern" (Katalogzeile TBV2-Z06 steht auf `OFFEN`), und weiterhin `FMP_API_KEY` auf BC-KI01.
+
+**Allokierte Ports/Ressourcen: KEINE.** Fremde Container vor und nach allen Laeufen identisch (7x `lms-platform-*`, portainer) — nichts angefasst.
+
 ## 2026-08-05: Datenqualitaets-Karte log ueber die eigene Datenlage — Verdrahtungsfehler gefixt (Branch `fix/data-quality-price-history-wiring`, Gates gruen)
 
 **Nutzerbefund aus der Live-Instanz:** auf `/analysis/AAPL` stand "PRICE HISTORY: missing — no provider returned data" **neben einem vollstaendig gerenderten Kurschart**. Ursache war kein Provider-Ausfall, sondern eine Verdrahtung: der Grader las `chart_data` (existiert erst nach der Serialisierung in `/api/stock/`), der Aufrufer uebergibt aber das rohe `get_stock_data`-Ergebnis mit den Balken unter `data`. **Die Bewertung war exakt invertiert** — echte Balken fielen auf MISSING, nur der synthetische Pfad wurde korrekt bewertet. Die falsche Zeile zog zusaetzlich die Gesamtkonfidenz auf "low".
