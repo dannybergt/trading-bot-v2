@@ -52,7 +52,24 @@ gebaut. **Der neue Z05-Schritt hat sich im ersten Lauf selbst bezahlt gemacht:**
 dass `OnboardingCard` den Ladezustand mitrendert — bei jedem Dashboard-Aufruf blitzte kurz
 "0 / 4 konfiguriert" auf, auch bei vollstaendig eingerichtetem Konto. Behoben.
 
-**Naechster Schritt:** PR 4
+**PR 4 (Wirksamkeit) erledigt, Gates gruen, Unit 344 → 362.** Alarmregeln werden jetzt zyklisch im
+Hintergrund ausgewertet und per Push zugestellt — vorher hatte `evaluate_alert_rules` **genau einen**
+Aufrufer, den HTTP-Handler: eine Regel feuerte nur, wenn jemand die Seite oeffnete. Neu: Regeltypen
+`price_above`/`price_below` (der Kurs lag laengst im Payload), Regeln an-/abschaltbar und ihre Schwelle
+direkt korrigierbar, Alarm-Historie fuer quittierte Ereignisse. Und der **Push-Client existiert
+ueberhaupt zum ersten Mal**: Service-Worker-Handler, Abo ueber `pushManager`, Berechtigungsdialog nur
+auf Knopfdruck. Die Serverseite war seit Phase 4 fertig und sendete ins Leere.
+
+**Luecke aus PR 4, bewusst offen:** der Push-**Empfang** ist am laufenden Artefakt nicht nachgewiesen.
+Die ui-regression faehrt headless ohne VAPID-Konfiguration und ohne echten Push-Dienst — die Kette ist
+strukturell belegt, die Zustellung nicht. Gehoert in Stufe 3 gegen die deployte Instanz.
+
+**Lehre aus PR 4, festgehalten:** ein Test-Mount ist kein lokaler Eingriff. Der Mount von
+`src/backend/app` liess das Verzeichnis im Container erstmals existieren und hat damit einen bewussten
+Fallback in elf anderen Tests ausgehebelt. Zurueckgenommen; der Guard holt die Quelle jetzt ueber
+`inspect.getsource`.
+
+**Naechster Schritt:** PR 5
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
