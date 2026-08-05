@@ -1,5 +1,47 @@
 # Current Focus
 
+## 2026-08-05 (3): Welle "leichter, benutzerfreundlicher, funktionaler" — PR 1 Blocker gefixt (Branch `fix/blocker-bugs`, alle Gates gruen + Rehearsal)
+
+**Auftrag:** tief recherchieren, was leichter, benutzerfreundlicher und funktionaler geht, und die Welle
+selbstaendig durcharbeiten. Der Nutzer hat alle vier Straenge freigegeben (Blocker, Ehrlichkeit+Beweis,
+Wirksamkeit, Fundament), TBV2-Z06 in **allen vier** Lesarten operationalisiert und entschieden, den
+Alpaca-Pflichtschritt jetzt optional zu stellen statt die Portfolio-Seite vorzuziehen.
+
+**Drei harte Defekte hinter einer vollstaendig gruenen Gate-Kette** — verifiziert am Code, nicht aus einem
+Agentenbericht uebernommen:
+1. **Der Not-Halt der Automatik war wirkungslos.** `apiFetch` serialisiert selbst, die Seite serialisierte
+   ein zweites Mal → JSON-String an einen `dict`-Endpunkt → 422 bei jedem Speichern **und** bei jedem
+   Druck auf den Kill-Switch. `FetchOptions.body` ist `unknown`, TypeScript konnte es nicht sehen; beide
+   Endpunkte hatten **null** Regressionsabdeckung.
+2. **Der Restore war kaputt, sobald jemand Auto-Execution-Limits hatte.** Die beiden Tabellen fehlten in
+   der Loeschliste vor `db.query(User).delete()` → Fremdschluesselverletzung → 500. Aufgefallen erst, als
+   die Regression diese Zeilen zum ersten Mal ueberhaupt erzeugte. Dazu: `mode` fehlte im Export, ein
+   Restore setzte den Handelsmodus still zurueck.
+3. **Die Analyse-Seite crashte bei Provider-Ausfall.** Zwei Hooks unterhalb der Early Returns →
+   Rules-of-Hooks-Bruch → die ErrorBoundary schluckte die Seite statt der vorbereiteten Fehlermeldung.
+
+**Dazu behoben:** die Dashboard-Onboarding-Karte konnte nie verschwinden (`isComplete` zaehlte optionale
+Schritte mit — TBV2-Z05), der Alpaca-Schritt war Pflicht ohne jede sichtbare Gegenleistung, und zwei
+Kontext-Spruenge (`/settings#mfa`, `/watchlists#<id>`) zeigten ins Leere.
+
+**Beweisfuehrung:** jeder Fix hat einen Nachweis, der die **Fehlerklasse** trifft, und jede neue Assertion
+eine gefahrene Negativkontrolle. Der Contract-Guard liest die Serialisierungszusage aus `client.ts` und
+haelt jeden Aufrufer dagegen; der Restore-Guard prueft gegen die SQLAlchemy-Metadaten, dass jedes Modell
+mit einem nicht selbst aufloesbaren Fremdschluessel auf `users.id` vor den Nutzern geleert wird. Der neue
+ui-regression-Schritt `ui_auto_execution_limits_persist` scheitert gegen den alten Frontend-Stand an genau
+der Persistenz-Assertion. Unit **335 → 341**, api-regression **+5 Schritte**, ui-regression **+1 Schritt**.
+
+**Naechster Schritt: PR 2 (Ehrlichkeit).** `effective_weight` exportieren und in der Composite-Karte
+zeigen, Confidence mit Coverage daempfen, und die erfundenen Wahrscheinlichkeiten auf dem synthetischen
+Pfad abstellen — dort stehen heute **P(UP) 100 % und P(DOWN) 100 %** gleichzeitig unter dem Banner "es
+wird keine Handelsempfehlung gegeben". Danach PR 3 (Beweisschritte Z01/Z02/Z05 + Konsolen-Mitschnitt),
+PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
+(Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
+(Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
+
+**Allokierte Ports/Ressourcen: KEINE.** Alle Stacks abgeraeumt. Fremd auf dem geteilten Daemon:
+`nexura-*` (5), `lms-platform-*` (7), `portainer` — vor und nach allen Laeufen identisch, nichts angefasst.
+
 ## SESSION-ABSCHLUSS 2026-08-05T15:05Z: Datenqualitaets-Bug gefixt, globaler Verifikations-Agent gebaut und abgenommen
 
 **Stand bei Abschluss:** `main` @ `0574ed7`, working tree clean, `main == origin/main`, nichts unveroeffentlicht. Live-Version `v2026.05.08-1-101-g0574ed7` (Build `2026-08-05T14:49:22Z`) — **identisch mit HEAD**, der ausgelieferte Stand ist also genau der gepruefte. Unit **323 → 335**.
