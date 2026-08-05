@@ -180,15 +180,41 @@ def compute_composite(
             {
                 "axis": axis,
                 "weight": round(weights.get(axis, 0.0), 3),
+                # Das tatsaechlich wirksame Gewicht. Es wurde bisher nur intern
+                # fuer `contribution` benutzt und nicht ausgeliefert — die
+                # Oberflaeche zeigte deshalb neben einer nicht verfuegbaren
+                # Achse weiter deren konfiguriertes Gewicht, waehrend die
+                # Ueberschrift "alle Quellen gewichtet" behauptete. Genau die
+                # stille Umverteilung, die der Zielkatalog in TBV2-Z01
+                # ausschliesst. Jetzt kann die Karte 0 % ausweisen.
+                "effectiveWeight": round(effective_weight, 3),
                 "value": round(v, 3) if v is not None else None,
                 "contribution": round(effective_weight * v, 3) if v is not None else None,
                 "available": v is not None,
             }
         )
 
+    # Abdeckung: welcher Anteil des vorgesehenen Signalgewichts stand
+    # tatsaechlich zur Verfuegung. Bei Krypto fallen `fundamentals` und
+    # `analyst` aus, das Urteil ruht dann auf 55 % des geplanten Gewichts.
+    configured_weight = sum(max(0.0, weights.get(axis, 0.0)) for axis in AXES)
+    coverage = total_weight / configured_weight if configured_weight > 0 else 0.0
+    coverage = _clamp(coverage, 0.0, 1.0)
+
     return {
         "score": round(score, 3),
         "verdict": verdict,
-        "confidence": round(abs(score), 3),
+        # Die Ueberzeugung wird an der Abdeckung gedaempft. Vorher trug ein
+        # Urteil aus zwei von vier Achsen dieselbe Zahl wie ein vollstaendig
+        # belegtes — die Anzeige behauptete eine Sicherheit, die die Datenlage
+        # nicht hergab. Fuer das Risiko-Gate der Automatik
+        # (`min_composite_confidence`) wirkt das strenger, nie lockerer.
+        "confidence": round(abs(score) * coverage, 3),
+        # Ungedaempft weiter mitgeliefert, damit die Herkunft der Zahl
+        # nachvollziehbar bleibt (Erklaerbarkeit, TBV2-Z06).
+        "rawConfidence": round(abs(score), 3),
+        "coverage": round(coverage, 3),
+        "axesAvailable": len(available),
+        "axesTotal": len(AXES),
         "breakdown": breakdown,
     }

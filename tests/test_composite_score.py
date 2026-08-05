@@ -89,6 +89,89 @@ class CompositeTests(unittest.TestCase):
             )
         )
 
+    def test_effective_weight_is_exported_and_zero_for_missing_axes(self):
+        """Ohne dieses Feld zeigt die Karte das Roh-Gewicht neben "n/a".
+
+        Genau das war der Befund vom 2026-08-05: `effective_weight` wurde
+        berechnet, aber nicht ausgeliefert. Die Oberflaeche wies deshalb fuer
+        eine Achse ohne Daten weiter ihr konfiguriertes Gewicht aus, waehrend
+        die Ueberschrift "alle Quellen gewichtet" behauptete — die stille
+        Umverteilung, die TBV2-Z01 ausschliesst.
+        """
+        result = cs.compute_composite(
+            prediction={"probabilityUp": 0.8},
+            analyst=None,
+            fundamentals_info=None,
+            news_sentiment=None,
+        )
+        by_axis = {b["axis"]: b for b in result["breakdown"]}
+
+        for axis in ("analyst", "fundamentals", "news"):
+            self.assertIn("effectiveWeight", by_axis[axis])
+            self.assertEqual(
+                0.0,
+                by_axis[axis]["effectiveWeight"],
+                f"{axis} hat keine Daten, traegt also kein Gewicht",
+            )
+            self.assertGreater(
+                by_axis[axis]["weight"],
+                0.0,
+                "das konfigurierte Gewicht bleibt sichtbar, damit der "
+                "Unterschied nachvollziehbar ist",
+            )
+
+        # Die einzige verfuegbare Achse traegt alles.
+        self.assertEqual(1.0, by_axis["technical"]["effectiveWeight"])
+
+    def test_coverage_reports_the_share_of_available_signal(self):
+        """Krypto ist der reale Fall: fundamentals + analyst fallen aus."""
+        crypto_like = cs.compute_composite(
+            prediction={"probabilityUp": 0.9},
+            analyst=None,
+            fundamentals_info=None,
+            news_sentiment=0.5,
+        )
+        # technical 0.40 + news 0.15 von insgesamt 1.00
+        self.assertAlmostEqual(0.55, crypto_like["coverage"], places=3)
+        self.assertEqual(2, crypto_like["axesAvailable"])
+        self.assertEqual(4, crypto_like["axesTotal"])
+
+    def test_confidence_is_damped_by_coverage(self):
+        """Ein Urteil aus zwei Achsen darf nicht so sicher auftreten wie eines aus vier.
+
+        Die Daempfung wirkt auch auf das Risiko-Gate der Automatik
+        (`min_composite_confidence`) — dort ausschliesslich strenger, nie
+        lockerer.
+        """
+        partial = cs.compute_composite(
+            prediction={"probabilityUp": 0.9},
+            analyst=None,
+            fundamentals_info=None,
+            news_sentiment=None,
+        )
+        self.assertLess(
+            partial["confidence"],
+            partial["rawConfidence"],
+            "eine Teilabdeckung muss die Ueberzeugung senken",
+        )
+        self.assertAlmostEqual(
+            partial["rawConfidence"] * partial["coverage"],
+            partial["confidence"],
+            places=2,
+        )
+
+        full = cs.compute_composite(
+            prediction={"probabilityUp": 0.9},
+            analyst={"stance": "bullish", "targetUpsidePct": 20},
+            fundamentals_info={"trailingPE": 15, "returnOnEquity": 0.2, "debtToEquity": 30},
+            news_sentiment=0.5,
+        )
+        self.assertEqual(1.0, full["coverage"])
+        self.assertAlmostEqual(
+            full["rawConfidence"], full["confidence"], places=3,
+            msg="bei voller Abdeckung darf die Daempfung nichts aendern",
+        )
+
     def test_verdict_thresholds(self):
         hold = cs.compute_composite(
             prediction={"probabilityUp": 0.52}, analyst=None,
