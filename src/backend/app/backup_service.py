@@ -234,6 +234,9 @@ class BackupService:
                         "id": row.id,
                         "user_id": row.user_id,
                         "enabled": bool(row.enabled),
+                        # mode fehlte im Export: ein Restore hat den Modus
+                        # stillschweigend auf den Spalten-Default zurueckgesetzt.
+                        "mode": row.mode or "paper",
                         "max_position_size_usd": float(row.max_position_size_usd or 0),
                         "max_daily_loss_usd": float(row.max_daily_loss_usd or 0),
                         "max_open_positions": int(row.max_open_positions or 0),
@@ -334,6 +337,15 @@ class BackupService:
             db.query(Watchlist).delete()
             db.query(PushSubscription).delete()
             db.query(PasswordResetToken).delete()
+            # Diese beiden Tabellen fehlten hier, obwohl sie seit Phase 4e
+            # exportiert werden und per FK an users.id haengen: der Restore
+            # loeschte die Nutzer und lief in eine Fremdschluesselverletzung
+            # (500), sobald ueberhaupt ein Nutzer Auto-Execution-Limits hatte.
+            # Unsichtbar geblieben ist das nur, weil die Regression diese
+            # Zeilen nie erzeugt hat. tests/test_backup_restore_contract.py
+            # haelt die Liste jetzt strukturell vollstaendig.
+            db.query(AutoExecutionEvent).delete()
+            db.query(AutoExecutionLimits).delete()
             db.query(User).delete()
             db.commit()
 
@@ -562,6 +574,10 @@ class BackupService:
                     id=record.get("id"),
                     user_id=record["user_id"],
                     enabled=bool(record.get("enabled", False)),
+                    # Aeltere Backups kennen das Feld nicht. Der Ruecksturz auf
+                    # "paper" ist die konservative Wahl: ein Restore darf den
+                    # Handel nie schaerfer stellen, als er gesichert wurde.
+                    mode=str(record.get("mode") or "paper").lower(),
                     max_position_size_usd=float(record.get("max_position_size_usd") or 0),
                     max_daily_loss_usd=float(record.get("max_daily_loss_usd") or 0),
                     max_open_positions=int(record.get("max_open_positions") or 0),
