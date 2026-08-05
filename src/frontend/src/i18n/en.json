@@ -482,6 +482,37 @@
     },
     "prediction": {
       "probabilitiesUnavailable": "No directional probabilities for this data situation — none are shown rather than derived ones that would contradict the verdict."
+    },
+    "gates": {
+      "title": "Why no automated trade?",
+      "hint": "Dry-runs this symbol through every risk gate and halt trigger. Nothing is ordered.",
+      "run": "Check gates",
+      "running": "Checking…",
+      "allowed": "All gates pass — the automation would consider this proposal.",
+      "allowedHint": "Whether an order is actually placed still depends on the automation being enabled.",
+      "blocked": "Blocked by {{count}} gate(s):",
+      "haltTitle": "Halt triggers from external data",
+      "reason": {
+        "auto_execution_disabled": "Automated execution is switched off.",
+        "asset_class_not_allowed": "This asset class is not in your allowed list.",
+        "asset_class_missing": "The asset class is unknown, so it cannot be checked against your allowed list.",
+        "position_value_invalid": "The position value could not be computed.",
+        "position_size_exceeds_limit": "The position would exceed your maximum position size.",
+        "daily_loss_budget_exhausted": "Your daily loss budget is used up.",
+        "open_position_cap_reached": "You already hold the maximum number of open positions.",
+        "net_yield_gate_blocked": "The net yield after fees and capital-gains tax stays below your minimum.",
+        "prediction_not_actionable": "The model gives no directional signal (HOLD).",
+        "prediction_confidence_below_threshold": "The model confidence is below the required threshold.",
+        "entry_price_unavailable": "No entry price is available — no provider returned a quote.",
+        "composite_unavailable": "The combined verdict could not be computed.",
+        "composite_verdict_mismatch": "The combined verdict contradicts the model direction.",
+        "composite_confidence_below_threshold": "The combined conviction is below your threshold.",
+        "qty_below_one_share": "The position size does not cover a single share.",
+        "halt_recent_8k_material_event": "A material 8-K filing was published recently.",
+        "halt_yield_curve_inverted": "The yield curve is inverted.",
+        "halt_fomc_within_24h": "An FOMC decision is due within 24 hours.",
+        "halt_symbol_beta_exceeds_limit": "The symbol's beta exceeds your portfolio limit."
+      }
     }
   },
   "news": {

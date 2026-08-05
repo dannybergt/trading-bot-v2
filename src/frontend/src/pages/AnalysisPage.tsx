@@ -18,6 +18,7 @@ import { VolumeProfile, type VolumeProfilePayload } from "../components/VolumePr
 import { useDisplayCurrency } from "../hooks/useDisplayCurrency";
 import { useTourVisit } from "../onboarding/useTourVisit";
 import { convertMoney, useFxRates } from "../hooks/useFxRates";
+import { TradeGatePanel } from "../components/TradeGatePanel";
 
 type FeatureContribution = {
   feature: string;
@@ -708,6 +709,14 @@ export function AnalysisPage() {
         prediction={stock?.prediction}
         symbol={decoded}
         confidenceOverall={dataQualityQuery.data?.overall}
+      />
+      {/* Warum die Automatik hier nicht kauft. Steht direkt unter der
+          Empfehlung, weil genau dort die Frage entsteht. */}
+      <TradeGatePanel
+        symbol={decoded}
+        assetClass={stock?.assetClass}
+        limitPrice={lastClose}
+        targetPrice={stock?.prediction?.zones?.target ?? null}
       />
       <AnalystConsensusCard
         consensus={stock?.analyst}

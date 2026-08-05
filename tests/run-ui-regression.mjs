@@ -732,6 +732,53 @@ async function run() {
       console.log(`ui_prediction_probabilities ok [real — UP ${UP}% / DOWN ${DOWN}%]`);
     }
 
+    // 8a2. "Warum kein automatischer Handel?" — die Gate-Kette einzeln.
+    //
+    // POST /api/auto-execution/proposals/evaluate begruendet jede Ablehnung
+    // einzeln und wurde bis 2026-08-06 von keiner Seite aufgerufen. Damit war
+    // der einzige Ort unerreichbar, an dem ein Nutzer nachvollziehen kann,
+    // warum die Automatik nicht kauft (Produktvision Punkt 6, TBV2-Z06 (d)).
+    //
+    // Die Zusage ist nicht "ein Kasten ist da", sondern "es steht ein
+    // erklaerender Satz drin, kein roher Code".
+    await waitForCondition(
+      client,
+      "trade gate panel present",
+      "!!document.querySelector('[data-testid=\"trade-gate-run\"]')",
+      20000,
+    );
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"trade-gate-run\"]').click()",
+    );
+    await waitForCondition(
+      client,
+      "gate evaluation returns a verdict",
+      "!!document.querySelector('[data-testid=\"trade-gate-verdict\"]')",
+      30000,
+    );
+    const gateState = await client.evaluate(`
+      (() => {
+        const verdict = document.querySelector('[data-testid="trade-gate-verdict"]');
+        const reasons = Array.from(
+          document.querySelectorAll('[data-testid="trade-gate-reasons"] li'),
+        ).map((li) => (li.textContent || "").trim());
+        return { verdict: (verdict?.textContent || "").trim(), reasons };
+      })()
+    `);
+    // Ein roher Grund-Code waere technisch gruen und fuer den Nutzer wertlos.
+    const rawCode = gateState.reasons.find((text) => /^[a-z0-9_]+$/.test(text));
+    if (rawCode) {
+      throw new Error(
+        `gate reason rendered as a raw code instead of a sentence: "${rawCode}"`,
+      );
+    }
+    if (!gateState.verdict) {
+      throw new Error("gate panel produced no verdict");
+    }
+    console.log(
+      `ui_trade_gates ok [${gateState.reasons.length} reason(s), all rendered as sentences]`,
+    );
+
     // 8b. Macro-Context-Section renders on the analysis page regardless of
     // symbol (computed from VIX/^TNX/DXY, not the analyzed symbol). Best-
     // effort because the underlying yfinance probes for the index symbols

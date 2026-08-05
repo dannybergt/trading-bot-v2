@@ -482,6 +482,37 @@
     },
     "prediction": {
       "probabilitiesUnavailable": "Fuer diese Datenlage gibt es keine gerichteten Wahrscheinlichkeiten — es werden lieber keine gezeigt als abgeleitete, die dem Urteil widersprechen."
+    },
+    "gates": {
+      "title": "Warum kein automatischer Handel?",
+      "hint": "Faehrt dieses Symbol testweise durch jedes Risiko-Gate und jeden Halt-Ausloeser. Es wird nichts geordert.",
+      "run": "Gates pruefen",
+      "running": "Wird geprueft …",
+      "allowed": "Alle Gates bestanden — die Automatik wuerde diesen Vorschlag in Betracht ziehen.",
+      "allowedHint": "Ob tatsaechlich eine Order entsteht, haengt zusaetzlich davon ab, dass die Automatik eingeschaltet ist.",
+      "blocked": "Von {{count}} Gate(s) blockiert:",
+      "haltTitle": "Halt-Ausloeser aus externen Daten",
+      "reason": {
+        "auto_execution_disabled": "Die automatische Ausfuehrung ist ausgeschaltet.",
+        "asset_class_not_allowed": "Diese Anlageklasse steht nicht auf deiner Freigabeliste.",
+        "asset_class_missing": "Die Anlageklasse ist unbekannt und laesst sich deshalb nicht gegen deine Freigabeliste pruefen.",
+        "position_value_invalid": "Der Positionswert liess sich nicht berechnen.",
+        "position_size_exceeds_limit": "Die Position wuerde deine maximale Positionsgroesse ueberschreiten.",
+        "daily_loss_budget_exhausted": "Dein Tagesverlust-Budget ist aufgebraucht.",
+        "open_position_cap_reached": "Du haeltst bereits die maximale Zahl offener Positionen.",
+        "net_yield_gate_blocked": "Der Netto-Ertrag nach Gebuehren und Kapitalertragssteuer bleibt unter deinem Mindestwert.",
+        "prediction_not_actionable": "Das Modell gibt kein gerichtetes Signal (HOLD).",
+        "prediction_confidence_below_threshold": "Die Modell-Konfidenz liegt unter der geforderten Schwelle.",
+        "entry_price_unavailable": "Es gibt keinen Einstiegskurs — kein Anbieter hat eine Notierung geliefert.",
+        "composite_unavailable": "Das Gesamturteil liess sich nicht berechnen.",
+        "composite_verdict_mismatch": "Das Gesamturteil widerspricht der Modellrichtung.",
+        "composite_confidence_below_threshold": "Die Gesamt-Ueberzeugung liegt unter deiner Schwelle.",
+        "qty_below_one_share": "Die Positionsgroesse reicht nicht fuer einen einzigen Anteil.",
+        "halt_recent_8k_material_event": "Es wurde kuerzlich eine wesentliche 8-K-Meldung veroeffentlicht.",
+        "halt_yield_curve_inverted": "Die Zinsstrukturkurve ist invers.",
+        "halt_fomc_within_24h": "Innerhalb von 24 Stunden steht eine FOMC-Entscheidung an.",
+        "halt_symbol_beta_exceeds_limit": "Das Beta des Symbols ueberschreitet dein Portfolio-Limit."
+      }
     }
   },
   "news": {
