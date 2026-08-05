@@ -1,5 +1,35 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-08-05T15:05Z: Datenqualitaets-Bug gefixt, globaler Verifikations-Agent gebaut und abgenommen
+
+**Stand bei Abschluss:** `main` @ `0574ed7`, working tree clean, `main == origin/main`, nichts unveroeffentlicht. Live-Version `v2026.05.08-1-101-g0574ed7` (Build `2026-08-05T14:49:22Z`) — **identisch mit HEAD**, der ausgelieferte Stand ist also genau der gepruefte. Unit **323 → 335**.
+
+**Ausgeliefert in dieser Session (alle ff-only nach `main`):**
+1. `5e7cf2b` Datenqualitaet bewertet die Kursbalken aus der echten Nutzlast
+2. `3aab5f6` Termin-Meldung nach Ursache getrennt (`unsupported`/`unconfigured`/`unavailable`), DE/EN
+3. `4e4ea4e` Datenqualitaets-Regression prueft Kohaerenz statt eines festen Wertes
+4. `5597008` Zielkatalog `docs/verification/zielkatalog.md` + Guard
+5. `964ec4a` Quellenverweise korrigiert, Guard prueft jetzt das Ziel des Verweises
+6. `04f009a` Plan in den Test-Container gemountet
+7. `0574ed7` Constitution-Kopie auf den geltenden Stand
+Dazu in `agent-baseline`: `verifier`-Agent + `verify`-Skill (PR #26, gemergt), Verankerung in §4/§5/§15/§18 durch eine parallele Session (PR #27).
+
+**Der Ausgangsbefund:** die Analyse-Seite zeigte live "PRICE HISTORY: missing" **neben einem vollstaendig gerenderten Kurschart**. Der Grader las `chart_data`, der Aufrufer uebergibt `data` — die Bewertung war **exakt invertiert**: echte Balken fielen auf MISSING, nur der synthetische Pfad wurde korrekt bewertet. Zwoelf Tests waren gruen, weil sie dieselbe Fixture-Form benutzten wie der Fehler.
+
+**Daraus entstanden: der globale `verifier`.** Erster scharfer Lauf gegen den Zielkatalog: **4 von 11 Kernkriterien NACHGEWIESEN**, null WIDERLEGT — unter einer Endzeile `✅ ALL GATES GREEN`. Er hat drei Maengel in der Arbeit gefunden, die ihn beauftragt hat (alle sieben Quellenverweise um zwei Zeilen versetzt; der Guard pruefte die Form des Verweises statt sein Ziel; vier Shell-Fehler durch Backticks im interpolierenden Here-Doc). **Sein Fix-Vorschlag fuer den dritten war falsch** (`<<'PY'` haette Zugangsdaten literal durchgereicht) und wurde verworfen. Er hat ausserdem ein gruenes Ergebnis **abgelehnt**: TBV2-Z07 ist `NICHT PRUEFBAR`, weil alter und neuer Grader im synthetischen Modus beide `FALLBACK` liefern — null Trennschaerfe fuer genau den Bug, den die Zeile bewachen soll.
+
+**Offene Threads (nach Prioritaet):**
+1. **Push-Hook (Plan-PR 4) — ungeloester Entwurfswiderspruch.** Er soll auf ein Protokoll unter `artifacts/verification/` pruefen, aber der `verifier` hat bewusst kein Schreibrecht; schreibt die Hauptsitzung das Protokoll, stellt der Prueflings-Autor seine eigene Bescheinigung aus. Zu klaeren, bevor gebaut wird.
+2. **Die ui-regression schneidet die Browser-Konsole nicht mit** — ein Konsolenfehler auf dem Golden Path faellt durch jedes Gate, obwohl §4 Phase 4 die Konsolenpruefung verlangt.
+3. **Vier Kernzeilen ohne Beweisschritt:** Z01 (Achse als n/a ausweisen statt still umverteilen), Z02 (P(UP)/P(DOWN) — Produktvision Punkt 2!), Z04 (Pflichtwerte im Wizard), Z05 (N/M, Click-through, Verschwinden).
+4. **43 von 75 Harnisch-Schritten bewachen keine Zusage;** `ui_guided_tour_tracks_real_data` und `admin audit-events list` gehoeren in den Katalog.
+5. **Flakiness, bewusst nicht zugedeckt:** `paper trading order placed` lief einmal in einen `ReadTimeoutError` (30 s, externe Provider-Abfrage) und beim naechsten Lauf durch.
+6. Kataloge fuer nex-im, nexainer, lms-platform; Constitution-Sync in diese drei Repos.
+
+**Wartet auf den Nutzer (§13):** dedizierter Test-Account fuer Stufe 3 (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` in `.env.local`, Mode 600) — ohne ihn bleiben Z01/Z02/Z07/Z13 dauerhaft unbewiesen, weil die Regressionsumgebung **keinen Provider erreicht** (belegt: `synthetic placeholder (181 bars) — no provider reachable from this host`). Operationalisierung von "Erklaerbarkeit ist Kern" (Z06 steht auf `OFFEN`). `FMP_API_KEY` auf BC-KI01 nicht gesetzt und yfinance dort nicht erreichbar — fuer AAPL laufen zwei der vier Achsen auf `n/a`, waehrend die Karte "alle Quellen gewichtet" behauptet; setzbar ueber Admin - Plattform-Konfiguration. Und die Frage, ob die Projekt-Kopien der Constitution ueberhaupt bleiben sollen.
+
+**Allokierte Ports/Ressourcen: KEINE.** Keine eigenen Container, kein Devstack, kein Chrome-Profil. Reservierte Baender unveraendert: Devstack 18090/18094, API-/UI-Regression 18150/18154, Restore-Rehearsal 18160/18164. Fremd auf dem geteilten Daemon: `lms-platform-*` (7 Container) + portainer, dazu ein fremder Chrome einer parallelen Sitzung — vor und nach allen Laeufen identisch, nichts angefasst (§3 belegt, nicht behauptet).
+
 ## 2026-08-05 (2): Zielkatalog angelegt — vier Kernziele haben gar keinen Beweis (Branch `feature/zielkatalog`, Gates gruen)
 
 **Neu:** `docs/verification/zielkatalog.md` fixiert die sieben Punkte der Produktvision plus UX-Direktive als pruefbare Zeilen (ID, Zielsatz mit Quellenverweis, Kriterium, Schicht L1/L2/L3, Beweisschritt, Negativkontrolle). Massstab fuer den globalen `verifier`-Agent (agent-baseline PR #26). Guard `tests/test_zielkatalog.py` haelt ihn am Leben, **Unit 327 → 334**.
