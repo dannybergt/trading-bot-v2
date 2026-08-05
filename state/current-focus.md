@@ -43,7 +43,16 @@ erweitert: ein Wert, der sich selbst widerspricht, ist schlechter als kein Wert.
 wirksame Gewicht ist auf Unit-Ebene belegt und am laufenden Artefakt unbewiesen. TBV2-Z01 bleibt damit
 `NICHT PRUEFBAR` und erreicht `NACHGEWIESEN` nur ueber Stufe 3 gegen die deployte Instanz.
 
-**Naechster Schritt:** PR 3 (Beweisschritte Z01/Z02/Z05 + Konsolen-Mitschnitt),
+**PR 3 (Beweis) erledigt, Gates gruen.** Die ui-regression schneidet die Browser-Konsole jetzt mit und
+**bricht ab**, statt nur zu protokollieren (`ui_console_clean`, erster Lauf: null Meldungen). Neu:
+`ui_prediction_probabilities` (Z02, beidseitig) und `ui_onboarding_progress` (Z05 — liest N/M, klickt
+durch, **stellt die Vollkonfiguration selbst her** und prueft die Abwesenheit ueber ein Zeitfenster).
+Beide mit gefahrener Negativkontrolle. Z06 ist in allen vier Lesarten operationalisiert, ein Viertel
+gebaut. **Der neue Z05-Schritt hat sich im ersten Lauf selbst bezahlt gemacht:** er fiel und deckte auf,
+dass `OnboardingCard` den Ladezustand mitrendert — bei jedem Dashboard-Aufruf blitzte kurz
+"0 / 4 konfiguriert" auf, auch bei vollstaendig eingerichtetem Konto. Behoben.
+
+**Naechster Schritt:** PR 4
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
