@@ -69,7 +69,20 @@ strukturell belegt, die Zustellung nicht. Gehoert in Stufe 3 gegen die deployte 
 Fallback in elf anderen Tests ausgehebelt. Zurueckgenommen; der Guard holt die Quelle jetzt ueber
 `inspect.getsource`.
 
-**Naechster Schritt:** PR 5
+**PR 5 (Auffindbarkeit) erledigt, Gates gruen.** Symbolsuche mit ISIN-/WKN-Aufloesung in der Kopfzeile
+und im Watchlist-Formular — der Endpunkt existierte seit langem und wurde von **keiner** Seite
+aufgerufen. Freitext bleibt moeglich, damit ein unbekanntes Symbol nicht blockiert. Scanner-Leerzustand
+verlinkt jetzt tatsaechlich dorthin, wohin er verweist.
+
+**Luecke aus PR 5, ehrlich als `partial` gemeldet:** `ui_symbol_search` bekommt hier keine Vorschlaege,
+weil der Alpaca-Asset-Cache ohne Providerzugang leer ist. Nachgewiesen ist, dass die Suche reagiert und
+die Liste rendert; Auswahl und Sprung zur Analyse gehoeren zu Stufe 3.
+
+**Zweite Testfalle gefunden und behoben:** der Wahrscheinlichkeitsschritt navigierte nicht selbst und
+bewertete nach Einfuegen des Suchschritts das Dashboard statt der Analyse-Seite. Eine Assertion, die von
+der Reihenfolge ihrer Nachbarn abhaengt, ist keine Pruefung.
+
+**Naechster Schritt:** PR 6
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
