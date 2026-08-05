@@ -31,10 +31,19 @@ mit einem nicht selbst aufloesbaren Fremdschluessel auf `users.id` vor den Nutze
 ui-regression-Schritt `ui_auto_execution_limits_persist` scheitert gegen den alten Frontend-Stand an genau
 der Persistenz-Assertion. Unit **335 → 341**, api-regression **+5 Schritte**, ui-regression **+1 Schritt**.
 
-**Naechster Schritt: PR 2 (Ehrlichkeit).** `effective_weight` exportieren und in der Composite-Karte
-zeigen, Confidence mit Coverage daempfen, und die erfundenen Wahrscheinlichkeiten auf dem synthetischen
-Pfad abstellen — dort stehen heute **P(UP) 100 % und P(DOWN) 100 %** gleichzeitig unter dem Banner "es
-wird keine Handelsempfehlung gegeben". Danach PR 3 (Beweisschritte Z01/Z02/Z05 + Konsolen-Mitschnitt),
+**PR 2 (Ehrlichkeit) erledigt, Gates gruen, Unit 341 → 344.** Die Karte zeigt jetzt das **wirksame**
+Gewicht (n/a-Achse = 0 %) und nennt das konfigurierte daneben; `coverage`/`rawConfidence`/`axesAvailable`
+kommen neu aus dem Backend, die Ueberzeugung wird an der Abdeckung gedaempft. Auf dem synthetischen Pfad
+stehen **keine** Wahrscheinlichkeiten mehr — vorher zeigte die Seite dort P(UP) 100 % **und** P(DOWN)
+100 % gleichzeitig unter dem Banner "es wird keine Handelsempfehlung gegeben". Regel K ist um einen Satz
+erweitert: ein Wert, der sich selbst widerspricht, ist schlechter als kein Wert.
+
+**Luecke aus PR 2, bewusst offen:** die Composite-Karte ist in der Regressionsumgebung **nicht pruefbar** —
+`services.py` unterdrueckt den Composite auf dem synthetischen Pfad, die Karte rendert dort gar nicht. Das
+wirksame Gewicht ist auf Unit-Ebene belegt und am laufenden Artefakt unbewiesen. TBV2-Z01 bleibt damit
+`NICHT PRUEFBAR` und erreicht `NACHGEWIESEN` nur ueber Stufe 3 gegen die deployte Instanz.
+
+**Naechster Schritt:** PR 3 (Beweisschritte Z01/Z02/Z05 + Konsolen-Mitschnitt),
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
