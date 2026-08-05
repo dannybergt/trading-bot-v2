@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useHashScroll } from "../hooks/useHashScroll";
+import { readPushState, subscribeToPush, type PushSupportState } from "../push/subscribe";
 
 type AlpacaConfig = {
   api_key: string;
@@ -66,8 +67,82 @@ export function SettingsPage() {
 
       <AlpacaSection />
       <PortfolioSection />
+      <NotificationsSection />
       <MfaSection mfaEnabled={!!user?.mfa_enabled} onChange={refresh} />
     </div>
+  );
+}
+
+/**
+ * Benachrichtigungen einschalten.
+ *
+ * Bis 2026-08-05 gab es diese Sektion nicht, und damit im gesamten Frontend
+ * keinen einzigen `pushManager`-Aufruf — der Server verschickte
+ * Benachrichtigungen, die niemand abonniert hatte. Der Berechtigungsdialog
+ * wird bewusst erst auf Knopfdruck ausgeloest: ungefragt gestellt, ist er der
+ * zuverlaessigste Weg, dauerhaft blockiert zu werden.
+ */
+function NotificationsSection() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<PushSupportState | "loading">("loading");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    readPushState()
+      .then((next) => {
+        if (!cancelled) setState(next);
+      })
+      .catch(() => {
+        if (!cancelled) setState("unsupported");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleEnable() {
+    setBusy(true);
+    setError("");
+    try {
+      setState(await subscribeToPush());
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "push_failed";
+      // Uebersetzte Ursache statt "irgendwas ging schief".
+      setError(t(`settings.notifications.error.${reason}`, { defaultValue: reason }));
+      setState(await readPushState().catch(() => "unsupported" as PushSupportState));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card" id="notifications" data-testid="settings-notifications">
+      <h2 className="text-lg font-semibold">{t("settings.notifications.title")}</h2>
+      <p className="mt-1 text-sm text-slate-400">{t("settings.notifications.hint")}</p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <span className="text-sm" data-testid="push-state">
+          {t(`settings.notifications.state.${state}`, {
+            defaultValue: t("settings.notifications.state.default"),
+          })}
+        </span>
+        {state === "default" ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleEnable}
+            disabled={busy}
+            data-testid="push-enable"
+          >
+            {busy ? t("settings.saving") : t("settings.notifications.enable")}
+          </button>
+        ) : null}
+      </div>
+
+      {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+    </section>
   );
 }
 

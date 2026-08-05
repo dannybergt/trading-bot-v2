@@ -25,6 +25,8 @@ docker run --rm \
   -v "${PROJECT_ROOT}/.github/workflows:/app/.github/workflows:ro" \
   -v "${PROJECT_ROOT}/ops/docker/frontend.nginx.conf:/app/ops/docker/frontend.nginx.conf:ro" \
   -v "${PROJECT_ROOT}/src/frontend/src:/app/src/frontend/src:ro" \
+  -v "${PROJECT_ROOT}/src/frontend/public:/app/src/frontend/public:ro" \
+  -v "${PROJECT_ROOT}/src/frontend/vite.config.ts:/app/src/frontend/vite.config.ts:ro" \
   -v "${PROJECT_ROOT}/docs/verification:/app/docs/verification:ro" \
   -v "${PROJECT_ROOT}/docs/admin/project-plan.md:/app/docs/admin/project-plan.md:ro" \
   trading-bot-v2-backend:local \

@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["icon.svg"],
+      includeAssets: ["icon.svg", "push-sw.js"],
       manifest: {
         name: "NexusPulse Trade",
         short_name: "NexusPulse",
@@ -41,6 +41,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Haengt die Push-/Notification-Handler in den generierten Service
+        // Worker ein, ohne die Caching-Strategie auf injectManifest umzustellen.
+        importScripts: ["/push-sw.js"],
         // Static assets get cache-first; the API path is network-first
         // with a short cache fallback so offline clients still see the
         // last-known data instead of a blank page.
