@@ -2,7 +2,7 @@
 
 ## SESSION-ABSCHLUSS 2026-08-06T00:00Z: Welle "leichter, benutzerfreundlicher, funktionaler" — 8 PRs, Verifikationslauf, 4 eigene Fehler gefunden und behoben
 
-**Stand:** `main` @ `90f7fc7`, working tree clean, alles gepusht. Unit **335 → 365**, api-regression **+11 Schritte**, ui-regression **+5 Schritte**. Acht PRs, jede einzeln durch die volle Gate-Kette, jeder neue Beweisschritt mit gefahrener Negativkontrolle.
+**Stand:** `main`, working tree clean nach diesem Commit, alles gepusht. Unit **335 → 365**, api-regression **+11 Schritte**, ui-regression **+5 Schritte**. Acht PRs, jede einzeln durch die volle Gate-Kette, jeder neue Beweisschritt mit gefahrener Negativkontrolle.
 
 **Was diese Welle wirklich gefunden hat — drei Defekte hinter einer vollstaendig gruenen Kette:**
 1. **Der Not-Halt der Automatik war wirkungslos.** Doppelte Serialisierung → 422 bei jedem Speichern und bei jedem Druck auf den Kill-Switch. Beide Endpunkte hatten **null** Regressionsabdeckung, und `FetchOptions.body: unknown` machte es fuer TypeScript unsichtbar.
