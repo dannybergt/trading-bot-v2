@@ -26,6 +26,33 @@ class CDPClient {
     this.nextId = 1;
     this.pending = new Map();
     this.listeners = new Map();
+    // Konsolenfehler werden mitgeschnitten, weil §4 Phase 4 die
+    // Konsolenpruefung verlangt und dieser Harnisch sie bis 2026-08-05 gar
+    // nicht erhoben hat: eine React-Komponente konnte einen TypeError werfen,
+    // und solange die assertierten Textbausteine im DOM standen, blieb der
+    // Lauf gruen. Die Implementierung stammt aus run-live-ui-smoke.mjs, wo sie
+    // sich bereits bewaehrt hat.
+    this.consoleErrors = [];
+    this.currentUrl = "(before first navigation)";
+  }
+
+  trackConsoleErrors() {
+    this.on("Runtime.exceptionThrown", (params) => {
+      const text =
+        params?.exceptionDetails?.exception?.description ||
+        params?.exceptionDetails?.text ||
+        "unknown exception";
+      this.consoleErrors.push({ url: this.currentUrl, text: String(text).split("\n")[0] });
+    });
+    this.on("Runtime.consoleAPICalled", (params) => {
+      if (params.type !== "error") return;
+      const text = (params.args || [])
+        .map((arg) => arg.value ?? arg.description ?? "")
+        .join(" ")
+        .trim();
+      if (!text) return;
+      this.consoleErrors.push({ url: this.currentUrl, text: text.split("\n")[0] });
+    });
   }
 
   async connect() {
@@ -175,6 +202,7 @@ async function waitForCondition(client, description, expression, timeoutMs = 150
 
 async function navigate(client, url) {
   const loadEvent = client.once("Page.loadEventFired");
+  client.currentUrl = url;
   await client.send("Page.navigate", { url });
   await loadEvent;
 }
@@ -251,6 +279,9 @@ async function run() {
 
     await client.send("Page.enable");
     await client.send("Runtime.enable");
+    // Muss vor der ersten Navigation stehen, sonst gehen Fehler des ersten
+    // Seitenaufbaus verloren.
+    client.trackConsoleErrors();
 
     // 1. Login screen renders
     await navigate(client, `${FRONTEND_URL}/login`);
@@ -832,6 +863,176 @@ async function run() {
       throw new Error("Missing access token after authenticated navigation");
     }
     console.log("ui_token_persisted ok");
+
+    // 12b. Onboarding-Fortschrittskarte: N von M, Click-through, Verschwinden.
+    //
+    // Beweisschritt zu TBV2-Z05. Bis 2026-08-05 deckte `ui_dashboard` davon
+    // nur ab, dass irgendwo das Wort "Setup progress" steht — nicht die Zahl,
+    // nicht den Klickweg und vor allem nicht das Verschwinden.
+    //
+    // Das Verschwinden tritt nur unter einer Bedingung ein, die kein Testlauf
+    // von selbst herstellt: alle Pflichtwerte gesetzt. Der Schritt **stellt
+    // sie deshalb her**, statt sie zu unterstellen (§4 Phase 4). Er laeuft
+    // ganz am Ende, damit die geaenderten Portfolio-Einstellungen keinem
+    // frueheren Schritt in die Quere kommen.
+    await navigate(client, `${FRONTEND_URL}/`);
+    await waitForCondition(
+      client,
+      "onboarding card present for a fresh account",
+      "!!document.querySelector('[data-testid=\"onboarding-card\"]')",
+      30000,
+    );
+
+    const progress = await client.evaluate(`
+      (() => {
+        const el = document.querySelector('[data-testid="onboarding-progress"]');
+        if (!el) return null;
+        return {
+          completed: Number(el.getAttribute("data-completed")),
+          total: Number(el.getAttribute("data-total")),
+          text: (el.textContent || "").trim(),
+        };
+      })()
+    `);
+    if (!progress || !Number.isFinite(progress.total) || progress.total <= 0) {
+      throw new Error(`onboarding card shows no N/M progress: ${JSON.stringify(progress)}`);
+    }
+    if (progress.completed >= progress.total) {
+      throw new Error(
+        `a fresh account reports itself fully configured (${progress.text}) — ` +
+          "the card cannot be proving anything",
+      );
+    }
+    // Die Zahl muss auch sichtbar sein, nicht nur im Attribut stehen.
+    if (!/\d+\s*\/\s*\d+/.test(progress.text)) {
+      throw new Error(`progress text carries no visible N/M: "${progress.text}"`);
+    }
+
+    // Click-through: der Knopf muss zum offenen Schritt fuehren.
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"onboarding-continue\"]').click()",
+    );
+    await waitForCondition(
+      client,
+      "click-through reaches the onboarding wizard",
+      "window.location.pathname === '/onboarding'",
+      15000,
+    );
+
+    // Jetzt die Bedingung herstellen: alle Pflichtwerte setzen.
+    const settingsStatus = await client.evaluate(`
+      (async () => {
+        const token = localStorage.getItem("access_token");
+        const response = await fetch("/api/auth/me/portfolio-settings", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            trade_fee_absolute: 1,
+            trade_fee_percent: 0,
+            min_target_yield: 5,
+            capital_gains_tax_bps: 2500,
+            income_tax_bps: 0,
+          }),
+        });
+        return response.status;
+      })()
+    `);
+    if (settingsStatus !== 200) {
+      throw new Error(`could not complete the required settings: HTTP ${settingsStatus}`);
+    }
+
+    await navigate(client, `${FRONTEND_URL}/`);
+    await waitForCondition(
+      client,
+      "dashboard rendered after completing the required steps",
+      "(document.body.textContent || '').includes('Tracked symbols')",
+      30000,
+    );
+    // Abwesenheit direkt nach dem Laden waere kein Beweis: die Karte rendert
+    // erst, wenn ihre drei Abfragen zurueck sind. Deshalb wird ueber ein
+    // Zeitfenster geprueft — waere die Logik kaputt, taucht sie darin auf.
+    // Die Negativkontrolle belegt, dass das Fenster ausreicht.
+    const ABSENCE_WINDOW_MS = 6000;
+    const absenceDeadline = Date.now() + ABSENCE_WINDOW_MS;
+    while (Date.now() < absenceDeadline) {
+      const cardStillThere = await client.evaluate(
+        "!!document.querySelector('[data-testid=\"onboarding-card\"]')",
+      );
+      if (cardStillThere) {
+        const shown = await client.evaluate(
+          "(document.querySelector('[data-testid=\"onboarding-progress\"]')?.textContent || '').trim()",
+        );
+        throw new Error(
+          "the onboarding card is still shown although every required step is " +
+            `configured (card reads "${shown}") — it never ends and loses its ` +
+            "signal value (TBV2-Z05)",
+        );
+      }
+      await sleep(250);
+    }
+
+    // Gegenprobe zur Abwesenheit: die Daten, aus denen die Karte ihren Zustand
+    // ableitet, muessen tatsaechlich vollstaendig sein. Sonst koennte die Karte
+    // auch aus einem ganz anderen Grund fehlen (Fehler beim Laden etwa) und
+    // der Schritt waere gruen, ohne irgendetwas zu belegen.
+    const settingsCheck = await client.evaluate(`
+      (async () => {
+        const token = localStorage.getItem("access_token");
+        const response = await fetch("/api/auth/me/portfolio-settings", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        if (!response.ok) return { ok: false, status: response.status };
+        const s = await response.json();
+        return {
+          ok: true,
+          trading: s.min_target_yield > 0 && (s.trade_fee_absolute > 0 || s.trade_fee_percent > 0),
+          taxes: s.capital_gains_tax_bps > 0,
+        };
+      })()
+    `);
+    if (!settingsCheck.ok || !settingsCheck.trading || !settingsCheck.taxes) {
+      throw new Error(
+        "the card is gone, but the required settings are not actually complete: " +
+          JSON.stringify(settingsCheck),
+      );
+    }
+    console.log(
+      `ui_onboarding_progress ok [${progress.text} → click-through → card gone after completion]`,
+    );
+
+    // 13. Die Browser-Konsole des gesamten Durchlaufs.
+    //
+    // Bis 2026-08-05 wurde sie gar nicht erhoben: ein Konsolenfehler auf dem
+    // Golden Path fiel durch jedes Gate, obwohl §4 Phase 4 die
+    // Konsolenpruefung ausdruecklich verlangt. Dieser Schritt ist bewusst
+    // blockierend — ein mitgeschnittener, aber folgenloser Fehler waere nur
+    // Dekoration.
+    //
+    // Gefiltert wird ausschliesslich Umgebungsrauschen, das nichts ueber die
+    // Anwendung aussagt: fehlendes Favicon, vom Browser blockierte Requests,
+    // und die Provider-Ausfaelle, die in dieser Umgebung strukturell auftreten
+    // (kein Netzzugang zu Kursquellen). Jeder Filter ist eine bewusste
+    // Entscheidung und steht hier, statt still im Rauschen zu verschwinden.
+    const IGNORED_CONSOLE_NOISE = /favicon|ERR_BLOCKED_BY_CLIENT|manifest|net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED)/i;
+    const consoleFindings = client.consoleErrors.filter(
+      (entry) => !IGNORED_CONSOLE_NOISE.test(entry.text),
+    );
+    if (consoleFindings.length) {
+      console.log(`# console errors (${consoleFindings.length})`);
+      for (const entry of consoleFindings.slice(0, 25)) {
+        console.log(`  ${entry.url} :: ${entry.text}`);
+      }
+      throw new Error(
+        `${consoleFindings.length} console error(s) on the golden path — first: ` +
+          `${consoleFindings[0].url} :: ${consoleFindings[0].text}`,
+      );
+    }
+    console.log(
+      `ui_console_clean ok [${client.consoleErrors.length} suppressed as environment noise]`,
+    );
 
     await captureArtifacts(client, UI_ARTIFACT_DIR, "ui-regression-success");
     console.log(`UI regression passed for ${TEST_EMAIL}`);
