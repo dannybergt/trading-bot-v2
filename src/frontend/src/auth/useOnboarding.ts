@@ -112,24 +112,35 @@ export function useOnboarding() {
     },
   ];
 
-  const completedCount = steps.filter((s) => s.completed).length;
-  const total = steps.length;
-  const requiredOpenCount = steps.filter((s) => s.required && !s.completed).length;
+  // Der Fortschritt zaehlt die **Pflicht**schritte, nicht alle.
+  //
+  // Befund des Verifikationslaufs vom 2026-08-06: die Karte zeigte
+  // "1 / 4 konfiguriert" und verschwand, sobald die zwei Pflichtwerte gesetzt
+  // waren — bei "2 / 4". Zahl und Verschwinden zaehlten also Verschiedenes,
+  // und zwei Darstellungen derselben Tatsache widersprachen sich. Das ist
+  // genau der Fall, den Regel K ausschliesst (TBV2-Z07), im Gewand einer
+  // Fortschrittsanzeige. Optionale Schritte bleiben im Wizard sichtbar und
+  // werden unter `optionalOpenCount` getrennt ausgewiesen, statt in eine Zahl
+  // zu wandern, die etwas anderes bedeutet.
+  const requiredSteps = steps.filter((s) => s.required);
+  const completedCount = requiredSteps.filter((s) => s.completed).length;
+  const total = requiredSteps.length;
+  const requiredOpenCount = total - completedCount;
   const allRequiredDone = requiredOpenCount === 0;
+  const optionalOpenCount = steps.filter((s) => !s.required && !s.completed).length;
 
   return {
     isLoading,
     steps,
     completedCount,
     total,
+    optionalOpenCount,
     requiredOpenCount,
     allRequiredDone,
-    // "Vollstaendig konfiguriert" heisst: alle Pflichtschritte sind erledigt.
-    // Frueher stand hier completedCount === total, also inklusive der als
-    // optional deklarierten Schritte — die Dashboard-Karte konnte damit nie
-    // verschwinden und wurde zur Dauer-Erinnerung ohne Signalwirkung
-    // (Zielkatalog TBV2-Z05: "verschwindet erst bei vollstaendiger
-    // Konfiguration"). Optionale Schritte bleiben im Wizard erreichbar.
+    // "Vollstaendig konfiguriert" heisst: alle Pflichtschritte sind erledigt —
+    // und seit dem Verifikationsbefund vom 2026-08-06 zaehlt die Anzeige
+    // daneben dieselben Schritte. Frueher stand hier completedCount === total
+    // ueber alle vier Schritte, die Karte konnte damit nie verschwinden.
     isComplete: allRequiredDone,
   };
 }

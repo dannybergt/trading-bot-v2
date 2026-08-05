@@ -215,7 +215,13 @@ function OnboardingCard() {
   if (isLoading) return null;
   if (isComplete) return null;
   const pct = total === 0 ? 0 : (completedCount / total) * 100;
-  const openLabels = steps.filter((s) => !s.completed).map((s) => s.label);
+  // Nur Pflichtschritte, passend zur Zahl daneben. Optionale Schritte in
+  // dieselbe Liste zu werfen, war der zweite Teil des Widerspruchs: die Karte
+  // nannte "Two-factor authentication" als offen, obwohl sie ohne diesen
+  // Schritt verschwindet.
+  const openLabels = steps
+    .filter((s) => s.required && !s.completed)
+    .map((s) => s.label);
   const requiredText =
     requiredOpenCount === 0
       ? t("dashboard.onboarding.allRequiredDone")

@@ -741,6 +741,12 @@ async function run() {
     //
     // Die Zusage ist nicht "ein Kasten ist da", sondern "es steht ein
     // erklaerender Satz drin, kein roher Code".
+    //
+    // Der Schritt navigiert selbst. Beim Verifikationslauf am 2026-08-06 fiel
+    // auf, dass er sonst vom Stand seines Vorgaengers lebt — dieselbe Falle,
+    // die in PR 5 beim Wahrscheinlichkeitsschritt behoben wurde und hier
+    // unbemerkt neu entstanden war.
+    await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
     await waitForCondition(
       client,
       "trade gate panel present",
@@ -762,11 +768,16 @@ async function run() {
         const reasons = Array.from(
           document.querySelectorAll('[data-testid="trade-gate-reasons"] li'),
         ).map((li) => (li.textContent || "").trim());
-        return { verdict: (verdict?.textContent || "").trim(), reasons };
+        const halts = Array.from(
+          document.querySelectorAll('[data-testid="trade-gate-halts"] li'),
+        ).map((li) => (li.textContent || "").trim());
+        return { verdict: (verdict?.textContent || "").trim(), reasons, halts };
       })()
     `);
     // Ein roher Grund-Code waere technisch gruen und fuer den Nutzer wertlos.
-    const rawCode = gateState.reasons.find((text) => /^[a-z0-9_]+$/.test(text));
+    const rawCode = [...gateState.reasons, ...gateState.halts].find((text) =>
+      /^[a-z0-9_]+$/.test(text),
+    );
     if (rawCode) {
       throw new Error(
         `gate reason rendered as a raw code instead of a sentence: "${rawCode}"`,
@@ -774,6 +785,26 @@ async function run() {
     }
     if (!gateState.verdict) {
       throw new Error("gate panel produced no verdict");
+    }
+    // Kohaerenz zwischen Zustandswort und Inhalt daneben (Regel K): die Zahl
+    // im Urteil muss zur Laenge der Liste passen. Vorher bestand der Schritt
+    // auch mit null Gruenden und druckte "0 reason(s), all rendered as
+    // sentences" — ein Zustandswort ohne Inhalt.
+    const claimedCount = Number((gateState.verdict.match(/\d+/) || [])[0]);
+    if (Number.isFinite(claimedCount)) {
+      if (claimedCount !== gateState.reasons.length) {
+        throw new Error(
+          `verdict claims ${claimedCount} blocking gate(s) but ${gateState.reasons.length} ` +
+            `are listed — the state word and the content beside it disagree`,
+        );
+      }
+      if (claimedCount === 0) {
+        throw new Error("verdict claims blocked gates but names none");
+      }
+    } else if (gateState.reasons.length > 0) {
+      throw new Error(
+        `verdict reads as "allowed" while ${gateState.reasons.length} blocking reason(s) are listed`,
+      );
     }
     console.log(
       `ui_trade_gates ok [${gateState.reasons.length} reason(s), all rendered as sentences]`,
@@ -1031,6 +1062,21 @@ async function run() {
     // Die Zahl muss auch sichtbar sein, nicht nur im Attribut stehen.
     if (!/\d+\s*\/\s*\d+/.test(progress.text)) {
       throw new Error(`progress text carries no visible N/M: "${progress.text}"`);
+    }
+
+    // Kohaerenz zwischen der Zahl und dem Verschwinden (Regel K).
+    //
+    // Der Verifikationslauf vom 2026-08-06 hat genau hier einen Widerspruch
+    // gefunden: die Karte zeigte "1 / 4 konfiguriert" und verschwand bei
+    // "2 / 4", weil Zahl und Verschwinden Verschiedenes zaehlten. Der Schritt
+    // haelt jetzt fest, wie viele Schritte noch fehlen — und prueft weiter
+    // unten, dass die Karte nach **genau diesen** verschwindet.
+    const openRequired = progress.total - progress.completed;
+    if (openRequired <= 0) {
+      throw new Error(
+        `card claims nothing is open (${progress.text}) yet is still shown — ` +
+          "the number and the visibility contradict each other",
+      );
     }
 
     // Click-through: der Knopf muss zum offenen Schritt fuehren.
