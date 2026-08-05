@@ -309,10 +309,38 @@ price_history = next(
     None,
 )
 assert price_history is not None, "data-quality report has no price_history field"
-assert price_history["confidence"] != "missing", (
-    f"price_history graded missing although bars were fetched: {price_history}"
+
+# Coherence, not a fixed value: what the panel says about the bars must match the
+# bars the chart endpoint actually delivers. A bare `!= "missing"` would pass
+# without discriminating power whenever the regression host reaches no provider —
+# the synthetic path was graded correctly even by the broken grader, so such a run
+# proves nothing. The observed mode is printed so a provider-less run is visible
+# as such instead of passing silently.
+stock_for_quality = requests.get(f"{base}/api/stock/AAPL", headers=headers, timeout=60)
+stock_for_quality.raise_for_status()
+stock_for_quality_payload = stock_for_quality.json()
+bars = len(stock_for_quality_payload.get("chart_data") or [])
+is_synthetic = bool(stock_for_quality_payload.get("synthetic"))
+
+if is_synthetic:
+    expected = {"fallback"}
+    mode = f"synthetic placeholder ({bars} bars) — no provider reachable from this host"
+elif bars >= 30:
+    expected = {"full"}
+    mode = f"real bars ({bars})"
+elif bars > 0:
+    expected = {"partial"}
+    mode = f"real bars ({bars}, partial)"
+else:
+    expected = {"missing"}
+    mode = "no bars at all — get_stock_data should never produce this"
+
+assert price_history["confidence"] in expected, (
+    f"data-quality contradicts the chart: {mode}, but price_history is "
+    f"{price_history['confidence']!r} (expected one of {sorted(expected)}). "
+    f"provider={price_history['provider']!r}"
 )
-print("data quality price history graded from real bars ok")
+print(f"data quality price history coheres with the chart ok [{mode}]")
 
 # Empty event lists must name their cause. Crypto has no earnings/dividends/
 # splits at all — reporting that as a provider gap sends the user hunting for
