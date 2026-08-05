@@ -350,7 +350,10 @@
         "analyst": "Analysten",
         "fundamentals": "Fundamentals",
         "news": "News"
-      }
+      },
+      "subtitlePartial": "{{available}} von {{total}} Quellen verfuegbar",
+      "coverageNote": "Nur {{available}} von {{total}} Achsen haben Daten geliefert. Das Urteil ruht auf {{percent}} % des vorgesehenen Signalgewichts; die fehlenden Achsen tragen kein Gewicht und stehen auf 0 %.",
+      "weightTitle": "Wirksames Gewicht {{effective}} % (konfiguriert {{configured}} %)"
     },
     "analyst": {
       "title": "Analystenkonsens",
@@ -476,6 +479,9 @@
         "insider": "Insider-Form",
         "other": "Sonstige"
       }
+    },
+    "prediction": {
+      "probabilitiesUnavailable": "Fuer diese Datenlage gibt es keine gerichteten Wahrscheinlichkeiten — es werden lieber keine gezeigt als abgeleitete, die dem Urteil widersprechen."
     }
   },
   "news": {

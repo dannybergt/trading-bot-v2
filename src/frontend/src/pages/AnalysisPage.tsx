@@ -50,6 +50,7 @@ type Prediction = {
   zones?: ChartZones | null;
   modelTrainedAt?: string | null;
   modelAccuracy?: number | null;
+  synthetic?: boolean;
 };
 
 type AnalystConsensus = {
@@ -67,6 +68,7 @@ type AnalystConsensus = {
 type CompositeAxis = {
   axis: string;
   weight: number;
+  effectiveWeight?: number;
   value: number | null;
   contribution: number | null;
   available: boolean;
@@ -76,6 +78,10 @@ type CompositeScore = {
   score: number;
   verdict: "BUY" | "HOLD" | "SELL";
   confidence: number;
+  rawConfidence?: number;
+  coverage?: number;
+  axesAvailable?: number;
+  axesTotal?: number;
   breakdown: CompositeAxis[];
 };
 
@@ -855,9 +861,29 @@ function PredictionCard({
   symbol?: string;
   confidenceOverall?: "high" | "medium" | "low";
 }) {
+  // Vor dem Early Return: Hooks duerfen nicht hinter einer Bedingung stehen.
+  const { t } = useTranslation();
   if (!prediction || !prediction.direction) return null;
   const dir = prediction.direction;
   const confidence = prediction.confidence ?? 0;
+
+  // Wahrscheinlichkeiten werden nur noch gezeigt, wenn das Modell sie
+  // tatsaechlich geliefert hat oder wenn sie sich aus einer gerichteten
+  // Vorhersage sauber ableiten lassen.
+  //
+  // Der Fall, der das erzwungen hat: auf dem synthetischen Pfad (kein Provider
+  // hat Kursdaten geliefert) ersetzt das Backend die Vorhersage durch
+  // HOLD/confidence 0 ohne Wahrscheinlichkeiten. Die alte Ableitung
+  // `1 - confidence` machte daraus fuer beide Richtungen 1.0 — die Seite zeigte
+  // "P(UP) 100,0 %" und "P(DOWN) 100,0 %" gleichzeitig, direkt unter dem
+  // Banner "es wird keine Handelsempfehlung gegeben". Ein Wert, der sich
+  // selbst widerspricht, ist schlechter als kein Wert (Regel K, TBV2-Z07).
+  const hasModelProbabilities =
+    typeof prediction.probabilityUp === "number" &&
+    typeof prediction.probabilityDown === "number";
+  const isSynthetic = prediction.synthetic === true;
+  const canDeriveProbabilities = !isSynthetic && (dir === "UP" || dir === "DOWN");
+  const showProbabilities = !isSynthetic && (hasModelProbabilities || canDeriveProbabilities);
   const pUp = prediction.probabilityUp ?? (dir === "UP" ? confidence : 1 - confidence);
   const pDown = prediction.probabilityDown ?? (dir === "DOWN" ? confidence : 1 - confidence);
   const baseCls =
@@ -896,7 +922,16 @@ function PredictionCard({
         </div>
       </header>
 
-      <ProbabilityBars probabilityUp={pUp} probabilityDown={pDown} />
+      {showProbabilities ? (
+        <ProbabilityBars probabilityUp={pUp} probabilityDown={pDown} />
+      ) : (
+        <p
+          className="mt-3 text-xs text-slate-400"
+          data-testid="prediction-probabilities-unavailable"
+        >
+          {t("analysis.prediction.probabilitiesUnavailable")}
+        </p>
+      )}
 
       {prediction.reasoning ? (
         <p className="mt-2 text-xs opacity-90">{prediction.reasoning}</p>
@@ -1232,6 +1267,12 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
   const { t } = useTranslation();
   if (!composite || !composite.breakdown?.length) return null;
   const { verdict, score, confidence, breakdown } = composite;
+  const axesTotal = composite.axesTotal ?? breakdown.length;
+  const axesAvailable =
+    composite.axesAvailable ?? breakdown.filter((b) => b.available).length;
+  // Nur melden, wenn tatsaechlich etwas fehlt. Bei voller Abdeckung waere der
+  // Hinweis blosses Rauschen.
+  const hasGap = axesAvailable < axesTotal;
 
   const verdictClass =
     verdict === "BUY"
@@ -1253,7 +1294,16 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
             testId="tip-composite-verdict"
           />
         </h2>
-        <span className="text-xs text-slate-500">{t("analysis.composite.subtitle")}</span>
+        <span className="text-xs text-slate-500">
+          {/* Die Unterzeile behauptete pauschal "alle Quellen gewichtet" —
+              auch dann, wenn zwei der vier Achsen gar keine Daten hatten. */}
+          {hasGap
+            ? t("analysis.composite.subtitlePartial", {
+                available: axesAvailable,
+                total: axesTotal,
+              })
+            : t("analysis.composite.subtitle")}
+        </span>
       </header>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <span className={`rounded-md border px-3 py-1 text-lg font-semibold ${verdictClass}`}>
@@ -1262,20 +1312,64 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
         <span className="text-sm text-slate-400">
           {t("analysis.composite.score")}: <span className="tabular-nums">{score >= 0 ? "+" : ""}{score.toFixed(2)}</span>
           {" · "}
-          {t("analysis.composite.confidence")}: <span className="tabular-nums">{(confidence * 100).toFixed(0)}%</span>
+          {t("analysis.composite.confidence")}:{" "}
+          <span className="tabular-nums" data-testid="composite-confidence">
+            {(confidence * 100).toFixed(0)}%
+          </span>
         </span>
       </div>
+      {hasGap ? (
+        <p
+          className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-200/90"
+          data-testid="composite-coverage-note"
+        >
+          {t("analysis.composite.coverageNote", {
+            available: axesAvailable,
+            total: axesTotal,
+            percent: Math.round((composite.coverage ?? 0) * 100),
+          })}
+        </p>
+      ) : null}
       <div className="mt-3 space-y-1.5">
         {breakdown.map((b) => {
           const contrib = b.contribution ?? 0;
           const widthPct = Math.min(100, (Math.abs(contrib) / barMax) * 100);
+          // Aeltere Backends liefern effectiveWeight noch nicht. Dann bleibt
+          // das konfigurierte Gewicht die beste verfuegbare Auskunft — fuer
+          // eine Achse ohne Daten ist sie aber nachweislich 0.
+          const effectiveWeight =
+            b.effectiveWeight ?? (b.available ? b.weight : 0);
+          const showBothWeights =
+            Math.round(effectiveWeight * 100) !== Math.round(b.weight * 100);
           return (
-            <div key={b.axis} className="flex items-center gap-2 text-xs">
+            <div
+              key={b.axis}
+              className="flex items-center gap-2 text-xs"
+              data-testid={`composite-axis-${b.axis}`}
+            >
               <span className="w-24 shrink-0 text-slate-400">
                 {t(`analysis.composite.axis.${b.axis}`)}
               </span>
-              <span className="w-10 shrink-0 text-right text-slate-600">
-                {Math.round(b.weight * 100)}%
+              {/* Bis 2026-08-05 stand hier ausschliesslich das konfigurierte
+                  Gewicht — auch neben einer Achse ohne Daten. Eine
+                  Fundamentals-Achse ohne Zahlen wurde also mit "20 %"
+                  ausgewiesen, obwohl ihr Gewicht in Wahrheit auf die uebrigen
+                  Achsen umverteilt wurde. Jetzt steht das wirksame Gewicht
+                  vorne; weicht es vom konfigurierten ab, ist beides zu sehen. */}
+              <span
+                className="w-[4.5rem] shrink-0 text-right text-slate-600"
+                data-testid={`composite-weight-${b.axis}`}
+                title={t("analysis.composite.weightTitle", {
+                  configured: Math.round(b.weight * 100),
+                  effective: Math.round(effectiveWeight * 100),
+                })}
+              >
+                <span className={b.available ? "" : "text-amber-300/70"}>
+                  {Math.round(effectiveWeight * 100)}%
+                </span>
+                {showBothWeights ? (
+                  <span className="text-slate-700"> ({Math.round(b.weight * 100)}%)</span>
+                ) : null}
               </span>
               <div className="relative h-3 flex-1 rounded bg-slate-800">
                 {b.available ? (

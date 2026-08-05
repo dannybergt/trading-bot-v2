@@ -350,7 +350,10 @@
         "analyst": "Analysts",
         "fundamentals": "Fundamentals",
         "news": "News"
-      }
+      },
+      "subtitlePartial": "{{available}} of {{total}} sources available",
+      "coverageNote": "Only {{available}} of {{total}} axes returned data. The verdict rests on {{percent}}% of the intended signal weight; the missing axes carry no weight and are shown as 0%.",
+      "weightTitle": "Effective weight {{effective}}% (configured {{configured}}%)"
     },
     "analyst": {
       "title": "Analyst consensus",
@@ -476,6 +479,9 @@
         "insider": "Insider form",
         "other": "Other"
       }
+    },
+    "prediction": {
+      "probabilitiesUnavailable": "No directional probabilities for this data situation — none are shown rather than derived ones that would contradict the verdict."
     }
   },
   "news": {

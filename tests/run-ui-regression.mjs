@@ -572,6 +572,57 @@ async function run() {
     );
     console.log("ui_analysis ok");
 
+    // 8a. Wahrscheinlichkeiten muessen zur Datenlage passen (TBV2-Z02, Regel K).
+    //
+    // Der Befund vom 2026-08-05: auf dem synthetischen Pfad liefert das Backend
+    // HOLD/confidence 0 ohne Wahrscheinlichkeiten. Die alte Ableitung
+    // `1 - confidence` machte daraus fuer beide Richtungen 1.0 — die Seite
+    // zeigte "P(UP) 100.0%" UND "P(DOWN) 100.0%" gleichzeitig, direkt unter dem
+    // Banner "es wird keine Handelsempfehlung gegeben".
+    //
+    // Diese Umgebung erreicht keinen Provider, rendert also zuverlaessig genau
+    // diesen synthetischen Fall — die Einschraenkung der Umgebung ist hier
+    // ausnahmsweise der Testfall. Geprueft wird trotzdem beidseitig, damit der
+    // Schritt auf einem Host MIT Providerzugang nicht still bedeutungslos wird.
+    const probabilityState = await client.evaluate(`
+      (() => {
+        const text = document.body.innerText || document.body.textContent || "";
+        const synthetic = !!Array.from(document.querySelectorAll('[role="alert"]'))
+          .find((el) => /placeholder|Platzhalter/i.test(el.textContent || ""));
+        const unavailable = !!document.querySelector(
+          '[data-testid="prediction-probabilities-unavailable"]',
+        );
+        const matches = Array.from(text.matchAll(/P\\((UP|DOWN)\\)[^0-9]*([0-9]+(?:\\.[0-9]+)?)%/g));
+        const values = {};
+        for (const m of matches) values[m[1]] = parseFloat(m[2]);
+        return { synthetic, unavailable, values, shown: matches.length };
+      })()
+    `);
+
+    if (probabilityState.synthetic) {
+      if (!probabilityState.unavailable || probabilityState.shown > 0) {
+        throw new Error(
+          "synthetic data path still renders directional probabilities: " +
+            JSON.stringify(probabilityState),
+        );
+      }
+      console.log("ui_prediction_probabilities ok [synthetic — no probabilities shown]");
+    } else {
+      const { UP, DOWN } = probabilityState.values;
+      if (typeof UP !== "number" || typeof DOWN !== "number") {
+        throw new Error(
+          "real data path shows no P(UP)/P(DOWN) — product vision point 2: " +
+            JSON.stringify(probabilityState),
+        );
+      }
+      if (Math.abs(UP + DOWN - 100) > 1.5) {
+        throw new Error(
+          `P(UP) ${UP}% and P(DOWN) ${DOWN}% do not sum to 100% — the pair contradicts itself`,
+        );
+      }
+      console.log(`ui_prediction_probabilities ok [real — UP ${UP}% / DOWN ${DOWN}%]`);
+    }
+
     // 8b. Macro-Context-Section renders on the analysis page regardless of
     // symbol (computed from VIX/^TNX/DXY, not the analyzed symbol). Best-
     // effort because the underlying yfinance probes for the index symbols
