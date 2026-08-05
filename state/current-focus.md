@@ -1,5 +1,39 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-08-06T00:00Z: Welle "leichter, benutzerfreundlicher, funktionaler" — 8 PRs, Verifikationslauf, 4 eigene Fehler gefunden und behoben
+
+**Stand:** `main` @ `90f7fc7`, working tree clean, alles gepusht. Unit **335 → 365**, api-regression **+11 Schritte**, ui-regression **+5 Schritte**. Acht PRs, jede einzeln durch die volle Gate-Kette, jeder neue Beweisschritt mit gefahrener Negativkontrolle.
+
+**Was diese Welle wirklich gefunden hat — drei Defekte hinter einer vollstaendig gruenen Kette:**
+1. **Der Not-Halt der Automatik war wirkungslos.** Doppelte Serialisierung → 422 bei jedem Speichern und bei jedem Druck auf den Kill-Switch. Beide Endpunkte hatten **null** Regressionsabdeckung, und `FetchOptions.body: unknown` machte es fuer TypeScript unsichtbar.
+2. **Der Restore war kaputt, sobald ein Nutzer Auto-Execution-Limits hatte** — Fremdschluesselverletzung, 500. Sichtbar erst, als die Regression solche Zeilen zum ersten Mal erzeugte.
+3. **Die Analyse-Seite crashte bei Provider-Ausfall** (Hooks unterhalb der Early Returns).
+
+**Und drei Zusagen, die nur auf dem Papier standen:** der Push-Client existierte **gar nicht** (Serverseite seit Phase 4 komplett, sendete ins Leere), Alarmregeln feuerten **nur beim Oeffnen der Seite**, und `GET /api/search` mit ISIN-/WKN-Aufloesung wurde von **keiner** Seite aufgerufen — ein neues Symbol war nur durch Tippen der Adresszeile erreichbar.
+
+**Der Verifikationslauf am Ende hat vier Fehler in genau dieser Arbeit gefunden.** Wichtigster: **TBV2-Z05 WIDERLEGT** — die Onboarding-Karte zeigte "1 / 4 konfiguriert" und verschwand bei "2 / 4", weil meine eigene Aenderung die Bedeutung von "vollstaendig" verschoben hatte, ohne die Anzeige daneben mitzunehmen. Dazu: Z03 hatte keine Trennschaerfe (die im Katalog behauptete Positivkontrolle gab es im Harnisch nie), `ui_trade_gates` hatte die Reihenfolge-Falle neu gebaut, die in PR 5 behoben wurde, und die Composite-Karte hatte einen stillen Rueckweg in den Z01-Bug. **Alle vier behoben.**
+
+**Urteil des Verifikationslaufs (vor den Fixes): 6 von 11 Kernkriterien NACHGEWIESEN, 1 WIDERLEGT, 4 NICHT PRUEFBAR.**
+
+**Offen und benannt, nicht zugedeckt:**
+1. **Standardwerte taeuschen Konfiguration vor** (§13, gehoert dem Menschen): `models.py` setzt `trade_fee_absolute=1` und `min_target_yield=1` als DB-Defaults, das Onboarding wertet das als "konfiguriert". Ein frisches Konto handelt damit gegen eine 1-%-Schwelle, die niemand gewaehlt hat. Saubere Loesung: `configured_at`-Marker oder NULL-Defaults — beruehrt Schema, Migration und die Bedeutung einer Handelsschwelle.
+2. **Z10-Abdeckung zu schmal:** die Rehearsal restauriert keine Alarmregeln, Paper-Orders oder Auto-Execution-Limits — genau die Tabellenklasse, an der der Restore in PR 1 zerbrach.
+3. **`build.sh` stempelt `git describe` des Repos, nicht des gebauten Baums.** `ui_version_badge` kann das strukturell nicht sehen.
+4. **TBV2-Z06 (b)** — Quellen-Tooltip mit Provider und Zeitstempel — ist **nicht gebaut**. Die Zeile kann in keiner Umgebung gruen werden, bis das steht.
+5. **43+ Harnisch-Schritte bewachen keine Zielzeile**, durch die neuen Schritte eher gewachsen.
+6. Vollstaendige AdminPage-Uebersetzung (927 Zeilen, 3 `t()`-Aufrufe) und die restlichen ~100 `toFixed`-Stellen.
+7. Flakiness, bewusst nicht kaschiert: ein Lauf brach an `scanner page heading` ab, der naechste war ohne Aenderung gruen (Provider-Zeitueberschreitungen, dieselbe Klasse wie der `paper trading order placed`-ReadTimeout).
+
+**Wartet auf den Nutzer (§13):**
+- **Test-Account fuer Stufe 3** (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` in `.env.local`, Mode 600). Ohne ihn bleiben dauerhaft unbewiesen: TBV2-Z01 (die Composite-Karte rendert ohne Provider gar nicht), der Realdatenzweig von Z02 und Z07, Z13, die Auswahl in der Symbolsuche und der **Push-Empfang** aus PR 4.
+- **VAPID-Schluessel auf der Instanz**, sonst bleibt der Push-Client ohne Gegenstelle.
+- **`FMP_API_KEY` auf BC-KI01** (ueber Admin - Plattform-Konfiguration setzbar), sonst laufen fuer AAPL zwei der vier Achsen auf `n/a`.
+- **Entscheidung zu Befund 1** oben: sollen Handelsschwellen weiter stille Defaults haben?
+
+**Naechster sinnvoller Schritt:** Stufe-3-Lauf gegen die deployte Instanz, sobald Test-Account und VAPID-Schluessel stehen. Danach Befund 1 (Defaults), dann Z06 (b).
+
+**Allokierte Ports/Ressourcen: KEINE.** Alle Stacks abgeraeumt, keine eigenen Container. Fremd auf dem geteilten Daemon: `nexura-*`, `lms-platform-*`, `portainer` — vor und nach allen Laeufen identisch, nichts angefasst.
+
 ## 2026-08-05 (3): Welle "leichter, benutzerfreundlicher, funktionaler" — PR 1 Blocker gefixt (Branch `fix/blocker-bugs`, alle Gates gruen + Rehearsal)
 
 **Auftrag:** tief recherchieren, was leichter, benutzerfreundlicher und funktionaler geht, und die Welle
