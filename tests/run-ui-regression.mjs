@@ -1168,6 +1168,16 @@ async function run() {
       } catch {
         // best-effort capture
       }
+      // Die gesammelten Konsolenfehler gehoeren genau hierhin: bei einem
+      // Abbruch erreicht der Auswertungsschritt am Ende sie nie, und dann
+      // faehrt man mit einem Timeout im Log herum, waehrend die eigentliche
+      // Ursache (ein Renderfehler) bereits mitgeschrieben war.
+      if (client.consoleErrors?.length) {
+        console.log(`# console errors before the failure (${client.consoleErrors.length})`);
+        for (const entry of client.consoleErrors.slice(0, 25)) {
+          console.log(`  ${entry.url} :: ${entry.text}`);
+        }
+      }
     }
     throw error;
   } finally {
