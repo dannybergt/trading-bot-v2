@@ -2563,17 +2563,25 @@ def get_symbol_events(
 ):
     """Return historical earnings, dividends, and splits for a symbol.
 
-    Sourced from FMP (Free tier covers most of this). When `FMP_API_KEY` is
-    unset or the provider returns nothing, every list is empty so the
-    frontend can render a neutral "no data" state.
+    Sourced from FMP (Free tier covers most of this). Every list is empty
+    when no data is available, and `provider.status` names *why* so the
+    frontend can say something true instead of one catch-all sentence:
+
+    - `unsupported`: crypto has no earnings, dividends or splits at all —
+      nothing is missing, the section does not apply to this asset class.
+    - `unconfigured`: no FMP key is set. An operator action fixes this.
+    - `unavailable`: FMP answered but had nothing for this symbol.
     """
     fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
     asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
     canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
 
-    if not service.fmp.configured or asset_profile.get("isCrypto"):
+    if asset_profile.get("isCrypto"):
         events = {"dividends": [], "splits": [], "earnings": []}
-        provider_status = "unavailable"
+        provider_status = "unsupported"
+    elif not service.fmp.configured:
+        events = {"dividends": [], "splits": [], "earnings": []}
+        provider_status = "unconfigured"
     else:
         events = service.fmp.normalized_events(canonical)
         any_data = any(events[k] for k in ("dividends", "splits", "earnings"))

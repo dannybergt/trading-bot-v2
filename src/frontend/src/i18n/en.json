@@ -328,6 +328,12 @@
     }
   },
   "analysis": {
+    "events": {
+      "title": "Events",
+      "unsupported": "This asset class has no earnings, dividends or splits — no data is missing here.",
+      "unconfigured": "No FMP access configured. Earnings, dividends and splits stay empty until an administrator sets the key under Admin - Platform configuration.",
+      "unavailable": "The provider returned no earnings, dividends or splits for this symbol."
+    },
     "composite": {
       "title": "Overall verdict",
       "subtitle": "all sources weighted",

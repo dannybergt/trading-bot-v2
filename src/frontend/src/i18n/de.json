@@ -328,6 +328,12 @@
     }
   },
   "analysis": {
+    "events": {
+      "title": "Termine",
+      "unsupported": "Diese Anlageklasse kennt keine Quartalszahlen, Dividenden oder Splits — hier fehlen keine Daten.",
+      "unconfigured": "Kein FMP-Zugang hinterlegt. Quartalszahlen, Dividenden und Splits bleiben deshalb leer; ein Administrator kann den Schluessel unter Admin - Plattform-Konfiguration setzen.",
+      "unavailable": "Der Anbieter hat fuer dieses Symbol keine Quartalszahlen, Dividenden oder Splits geliefert."
+    },
     "composite": {
       "title": "Gesamtbewertung",
       "subtitle": "alle Quellen gewichtet",

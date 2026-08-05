@@ -314,6 +314,23 @@ assert price_history["confidence"] != "missing", (
 )
 print("data quality price history graded from real bars ok")
 
+# Empty event lists must name their cause. Crypto has no earnings/dividends/
+# splits at all — reporting that as a provider gap sends the user hunting for
+# a defect that does not exist.
+stock_events = requests.get(f"{base}/api/events/AAPL", headers=headers, timeout=30)
+stock_events.raise_for_status()
+stock_events_payload = stock_events.json()
+assert stock_events_payload["provider"]["status"] in {"live", "unconfigured", "unavailable"}, (
+    f"unexpected stock events status {stock_events_payload['provider']['status']}"
+)
+crypto_events = requests.get(f"{base}/api/events/BTC/USD", headers=headers, timeout=30)
+crypto_events.raise_for_status()
+crypto_events_payload = crypto_events.json()
+assert crypto_events_payload["provider"]["status"] == "unsupported", (
+    "crypto events must be reported as not applicable, not as a provider gap"
+)
+print("symbol events provider status names its cause ok")
+
 crypto_research_full = requests.get(
     f"{base}/api/research/BTC/USD",
     headers=headers,

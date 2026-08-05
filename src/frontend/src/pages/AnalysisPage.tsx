@@ -2864,16 +2864,27 @@ function EventsSection({
   events: EventsPayload["events"] | undefined;
   provider: EventsPayload["provider"] | undefined;
 }) {
+  const { t } = useTranslation();
   if (!events) return null;
   const { earnings, dividends, splits } = events;
   if (earnings.length === 0 && dividends.length === 0 && splits.length === 0) {
-    if (provider?.status === "unavailable") {
+    // Say which of the three reasons applies. "Crypto has no dividends" is a
+    // property of the asset, not a gap in our data — reporting it as a defect
+    // sends the user hunting for a problem that does not exist.
+    const reasonKey =
+      provider?.status === "unsupported"
+        ? "unsupported"
+        : provider?.status === "unconfigured"
+        ? "unconfigured"
+        : provider?.status === "unavailable"
+        ? "unavailable"
+        : null;
+    if (reasonKey) {
       return (
-        <section className="card">
-          <h2 className="text-lg font-semibold">Events</h2>
-          <p className="mt-2 text-xs text-slate-500">
-            No earnings/dividend/split history available for this symbol
-            (provider returned nothing or FMP_API_KEY is unset).
+        <section className="card" data-testid="events-empty">
+          <h2 className="text-lg font-semibold">{t("analysis.events.title")}</h2>
+          <p className="mt-2 text-xs text-slate-500" data-testid="events-empty-reason">
+            {t(`analysis.events.${reasonKey}`)}
           </p>
         </section>
       );
@@ -2883,7 +2894,7 @@ function EventsSection({
   return (
     <section className="card">
       <header className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">Events</h2>
+        <h2 className="text-lg font-semibold">{t("analysis.events.title")}</h2>
         {provider?.source ? (
           <span className="text-xs text-slate-500">via {provider.source}</span>
         ) : null}
