@@ -1,5 +1,21 @@
 # Current Focus
 
+## 2026-08-05: Datenqualitaets-Karte log ueber die eigene Datenlage — Verdrahtungsfehler gefixt (Branch `fix/data-quality-price-history-wiring`, Gates gruen)
+
+**Nutzerbefund aus der Live-Instanz:** auf `/analysis/AAPL` stand "PRICE HISTORY: missing — no provider returned data" **neben einem vollstaendig gerenderten Kurschart**. Ursache war kein Provider-Ausfall, sondern eine Verdrahtung: der Grader las `chart_data` (existiert erst nach der Serialisierung in `/api/stock/`), der Aufrufer uebergibt aber das rohe `get_stock_data`-Ergebnis mit den Balken unter `data`. **Die Bewertung war exakt invertiert** — echte Balken fielen auf MISSING, nur der synthetische Pfad wurde korrekt bewertet. Die falsche Zeile zog zusaetzlich die Gesamtkonfidenz auf "low".
+
+**Warum die Suite blind war:** die zwoelf bestehenden Tests bauen ihre Nutzlast selbst und benutzen dabei dieselbe Form wie der Fehler. Geprueft wurde die Payload-Ebene, nie die Verdrahtung. Der neue Guard liest die Schluessel von `get_stock_data` **per AST aus `services.py`**, statt sie zu hardcoden. **Negativkontrolle gefahren:** mit dem alten Grader fallen drei der vier neuen Tests rot.
+
+**Zweiter Fix:** die Termin-Sektion warf drei Sachverhalte in einen englischen Satz. Fuer Krypto war "kein Anbieter hat geliefert" schlicht falsch — es gibt dort keine Quartalszahlen. `provider.status` trennt jetzt `unsupported` / `unconfigured` / `unavailable`, DE/EN uebersetzt.
+
+**Verifikation:** `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` → **alle Gates gruen** (Rehearsal geloggter Opt-out, kein Schema-/Persistenz-Change). Zwei neue api-regression-Schritte; `/api/data-quality/` und `/api/events/` hatten vorher **gar keine** Regressionsabdeckung. ADR 2026-08-05 geschrieben.
+
+**Daraus abgeleiteter Auftrag (Plan abgenommen):** ein **globaler `verifier`-Agent** in `/root/agent-baseline`, der in jedem Projekt gegen einen versionierten Zielkatalog (`docs/verification/zielkatalog.md`) am **laufenden Artefakt** nachweist, statt gruene Exit-Codes zu glauben. Vier PRs: (1) Agent + `verify`-Skill, (2) Zielkatalog in trading-bot-v2 + Dogfooding gegen genau diesen Bug, (3) AGENTS.md-Verankerung in allen sechs byte-identischen Kopien, (4) blockierender Hook an `git push`/`gh pr create`. Plan: `/root/.claude/plans/proud-wobbling-volcano.md`.
+
+**Offen (Node-Konfiguration, braucht Nutzerhand):** auf BC-KI01 ist **`FMP_API_KEY` nicht gesetzt** und **yfinance antwortet nicht**. Fuer AAPL laufen die Achsen `Analysten` und `Fundamentals` auf `n/a`, die Empfehlung steht faktisch auf Technik + News — waehrend die Karte "alle Quellen gewichtet" behauptet. `FMP_API_KEY` ist ohne Node-Zugriff ueber Admin - Plattform-Konfiguration setzbar (verschluesselt at rest, Free-Tier existiert). Ausserdem weiter offen: Readiness-Abfrage der Forward-Collection, Krypto-Achsenluecke, angemeldeter Live-Probelauf (braucht Test-Account, fuer Stufe 3 des Verifikations-Agents jetzt zugesagt).
+
+**Allokierte Ports/Ressourcen: KEINE.** Regressions-Stacks abgeraeumt, Chrome-Profil geloescht. Fremd auf dem geteilten Daemon: `lms-platform-*` + portainer — nichts angefasst.
+
 ## SESSION-ABSCHLUSS 2026-07-30T17:16Z: Quellenpruefung Finviz/Messari/Myfxbook — reine Bewertungssession, kein Code geaendert
 
 **Stand:** `main` @ `811fbb3`, working tree clean bis auf diesen STATE/ADR-Commit, `main == origin/main`. Live `v2026.05.08-1-90-g811fbb3` unveraendert. **Kein Code angefasst, keine Gates gelaufen** — es gab nichts zu verifizieren.
