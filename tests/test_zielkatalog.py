@@ -96,6 +96,63 @@ class ZielkatalogTests(unittest.TestCase):
             f"Kernzeilen ohne Quellenverweis (datei:zeile / ADR / UX-Direktive / §): {ohne_quelle}",
         )
 
+    def test_quellenverweise_zeigen_auf_die_gemeinte_stelle(self):
+        """Ein `datei.md:zeile`-Verweis muss inhaltlich passen, nicht nur existieren.
+
+        Der erste Verifikationslauf hat gezeigt, warum das noetig ist: **alle sieben**
+        Verweise in die Produktvision waren um zwei Zeilen versetzt. TBV2-Z02
+        versprach die Wahrscheinlichkeitsdarstellung und zitierte die Zeile
+        "Technische Chartanalyse". Der Guard sah nur, dass ueberhaupt ein Verweis
+        der Form `datei:zeile` dastand — die haeufigste Art, wie eine Pruefung
+        gruen bleibt, ohne etwas zu pruefen.
+
+        Geprueft wird eine Wortueberlappung zwischen Zielsatz und der zitierten
+        Stelle (plus je eine Nachbarzeile, damit Listen-Unterpunkte zaehlen).
+        """
+        # Kurze und generische Woerter tragen keine Aussage.
+        stopp = {
+            "jede", "jeder", "eine", "einen", "einer", "wenn", "wird", "werden",
+            "nicht", "sind", "haben", "muss", "muessen", "kann", "koennen", "nach",
+            "ueber", "durch", "sich", "dass", "oder", "aber", "auch", "noch",
+            "seine", "ihre", "diese", "dieser", "dieses", "beim", "vom", "zum",
+        }
+
+        def worte(text: str) -> set[str]:
+            text = text.lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+            return {
+                w for w in re.findall(r"[a-z][a-z0-9_-]{5,}", text) if w not in stopp
+            }
+
+        for zeile in self.zeilen:
+            if not re.fullmatch(r"TBV2-Z\d+", zeile[0]):
+                continue
+            treffer = re.search(r"`([\w./-]+\.md):(\d+)", zeile[1])
+            if not treffer:
+                continue  # ADR-, §- und UX-Verweise sind hier nicht pruefbar
+            datei, nummer = treffer.group(1), int(treffer.group(2))
+            with self.subTest(id=zeile[0], quelle=f"{datei}:{nummer}"):
+                # Der Verweis ist relativ zum Dokumentationsbaum gemeint.
+                kandidaten = [
+                    REPO_ROOT / "docs" / "admin" / datei,
+                    REPO_ROOT / datei,
+                    REPO_ROOT / "docs" / datei,
+                ]
+                pfad = next((k for k in kandidaten if k.exists()), None)
+                self.assertIsNotNone(pfad, f"zitierte Datei {datei} nicht gefunden")
+
+                quellzeilen = pfad.read_text(encoding="utf-8").splitlines()
+                self.assertLessEqual(
+                    nummer, len(quellzeilen),
+                    f"{datei} hat nur {len(quellzeilen)} Zeilen, zitiert wird {nummer}",
+                )
+                umfeld = " ".join(quellzeilen[max(0, nummer - 2):nummer + 1])
+                gemeinsam = worte(zeile[1]) & worte(umfeld)
+                self.assertTrue(
+                    gemeinsam,
+                    f"{datei}:{nummer} hat inhaltlich nichts mit dem Zielsatz zu tun. "
+                    f"Dort steht: {quellzeilen[nummer - 1][:90]!r}",
+                )
+
     def test_referenzierte_harnische_existieren(self):
         # Ein Beweisschritt, der auf eine geloeschte Datei zeigt, ist kein Beweis.
         # Faellt die Praemisse weg, meldet sich der Guard, statt still gruen zu bleiben.

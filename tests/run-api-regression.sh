@@ -292,10 +292,10 @@ assert isinstance(social["reddit"].get("subreddits"), list)
 print("research signals + macro context + social sentiment shape ok")
 
 # Data-quality report: the panel grades the bars the analysis page shows.
-# `get_stock_data` never returns empty bars (it falls back to the synthetic
+# get_stock_data never returns empty bars (it falls back to the synthetic
 # placeholder), so "missing" here can only mean the payload contract between
 # endpoint and grader broke — which is exactly what shipped: the grader read
-# `chart_data`, the caller passes `data`, and every real fetch was reported as
+# chart_data, the caller passes data, and every real fetch was reported as
 # "no provider returned data" while the chart rendered fine.
 data_quality = requests.get(
     f"{base}/api/data-quality/AAPL",
@@ -311,7 +311,7 @@ price_history = next(
 assert price_history is not None, "data-quality report has no price_history field"
 
 # Coherence, not a fixed value: what the panel says about the bars must match the
-# bars the chart endpoint actually delivers. A bare `!= "missing"` would pass
+# bars the chart endpoint actually delivers. A bare != "missing" would pass
 # without discriminating power whenever the regression host reaches no provider —
 # the synthetic path was graded correctly even by the broken grader, so such a run
 # proves nothing. The observed mode is printed so a provider-less run is visible
