@@ -513,6 +513,12 @@
         "halt_fomc_within_24h": "An FOMC decision is due within 24 hours.",
         "halt_symbol_beta_exceeds_limit": "The symbol's beta exceeds your portfolio limit."
       }
+    },
+    "zones": {
+      "entry": "Entry",
+      "stop": "Stop",
+      "target": "Target",
+      "atr": "ATR"
     }
   },
   "news": {
@@ -880,5 +886,21 @@
     "placeholder": "Symbol, ISIN or WKN…",
     "loading": "Searching…",
     "empty": "Nothing found for \"{{query}}\"."
+  },
+  "admin": {
+    "users": {
+      "emailLabel": "Email address",
+      "passwordLabel": "Password (min. 8 characters)"
+    }
+  },
+  "chart": {
+    "overlays": "Overlays:",
+    "zones": "Zones:",
+    "levels": "Levels:",
+    "panes": "Panes:",
+    "zonesShow": "Show entry/stop/target",
+    "zonesHide": "Hide entry/stop/target",
+    "levelsShow": "Show {{count}} support/resistance lines",
+    "levelsHide": "Hide {{count}} support/resistance lines"
   }
 }

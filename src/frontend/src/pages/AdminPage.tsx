@@ -627,6 +627,7 @@ function PlatformConfigEditor({
 }
 
 function UsersSection() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
@@ -701,23 +702,33 @@ function UsersSection() {
     <section>
       <h2 className="mb-3 text-lg font-semibold">Users</h2>
       <form onSubmit={handleCreate} className="card mb-4 grid gap-3 sm:grid-cols-4">
-        <input
-          className="input sm:col-span-2"
-          type="email"
-          placeholder="email"
-          required
-          value={newEmail}
-          onChange={(event) => setNewEmail(event.target.value)}
-        />
-        <input
-          className="input"
-          type="password"
-          placeholder="password (min 8)"
-          required
-          minLength={8}
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
+        {/* Beide Felder trugen ihre Semantik nur im placeholder: kein Label,
+            kein htmlFor. Ein Screenreader las damit ein unbeschriftetes
+            Eingabefeld vor, und beim Tippen verschwindet der Placeholder
+            ohnehin. */}
+        <label className="sm:col-span-2 block text-sm">
+          <span className="mb-1 block text-slate-300">{t("admin.users.emailLabel")}</span>
+          <input
+            className="input"
+            type="email"
+            placeholder="email"
+            required
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-300">{t("admin.users.passwordLabel")}</span>
+          <input
+            className="input"
+            type="password"
+            placeholder="password (min 8)"
+            required
+            minLength={8}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+        </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

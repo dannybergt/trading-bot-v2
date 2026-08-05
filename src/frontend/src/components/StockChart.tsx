@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CandlestickSeries,
   ColorType,
@@ -212,6 +213,7 @@ export function StockChart({
   levels?: ChartLevel[] | null;
   trades?: ChartTradeMarker[] | null;
 }) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -558,7 +560,7 @@ export function StockChart({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-400">Overlays:</span>
+        <span className="text-slate-400">{t("chart.overlays")}</span>
         {overlayButtons.map((def) => {
           const active = enabledOverlays.has(def.key);
           return (
@@ -586,7 +588,7 @@ export function StockChart({
         })}
         {zones ? (
           <>
-            <span className="ml-2 text-slate-400">Zones:</span>
+            <span className="ml-2 text-slate-400">{t("chart.zones")}</span>
             <button
               type="button"
               onClick={() => setShowZones((v) => !v)}
@@ -596,13 +598,13 @@ export function StockChart({
                   : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500"
               }`}
             >
-              {showZones ? "Hide" : "Show"} entry/stop/target
+              {showZones ? t("chart.zonesHide") : t("chart.zonesShow")}
             </button>
           </>
         ) : null}
         {levels && levels.length > 0 ? (
           <>
-            <span className="ml-2 text-slate-400">Levels:</span>
+            <span className="ml-2 text-slate-400">{t("chart.levels")}</span>
             <button
               type="button"
               onClick={() => setShowLevels((v) => !v)}
@@ -612,11 +614,13 @@ export function StockChart({
                   : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500"
               }`}
             >
-              {showLevels ? "Hide" : "Show"} S/R ({levels.length})
+              {showLevels
+                ? t("chart.levelsHide", { count: levels.length })
+                : t("chart.levelsShow", { count: levels.length })}
             </button>
           </>
         ) : null}
-        <span className="ml-2 text-slate-400">Panes:</span>
+        <span className="ml-2 text-slate-400">{t("chart.panes")}</span>
         {SUB_PANE_DEFS.map((def) => {
           const active = enabledSubPanes.has(def.key);
           return (

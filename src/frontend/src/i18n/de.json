@@ -513,6 +513,12 @@
         "halt_fomc_within_24h": "Innerhalb von 24 Stunden steht eine FOMC-Entscheidung an.",
         "halt_symbol_beta_exceeds_limit": "Das Beta des Symbols ueberschreitet dein Portfolio-Limit."
       }
+    },
+    "zones": {
+      "entry": "Einstieg",
+      "stop": "Stopp",
+      "target": "Ziel",
+      "atr": "ATR"
     }
   },
   "news": {
@@ -880,5 +886,21 @@
     "placeholder": "Symbol, ISIN oder WKN …",
     "loading": "Wird gesucht …",
     "empty": "Nichts gefunden fuer \"{{query}}\"."
+  },
+  "admin": {
+    "users": {
+      "emailLabel": "E-Mail-Adresse",
+      "passwordLabel": "Passwort (mind. 8 Zeichen)"
+    }
+  },
+  "chart": {
+    "overlays": "Overlays:",
+    "zones": "Zonen:",
+    "levels": "Marken:",
+    "panes": "Bereiche:",
+    "zonesShow": "Einstieg/Stopp/Ziel einblenden",
+    "zonesHide": "Einstieg/Stopp/Ziel ausblenden",
+    "levelsShow": "{{count}} Unterstuetzungs-/Widerstandslinien einblenden",
+    "levelsHide": "{{count}} Unterstuetzungs-/Widerstandslinien ausblenden"
   }
 }
