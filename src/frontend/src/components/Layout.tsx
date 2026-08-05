@@ -146,7 +146,11 @@ export function Layout() {
         ) : null}
       </header>
       <main className={`${SHELL} py-6`}>
-        <ErrorBoundary scope="layout-outlet">
+        {/* key auf den Pfad: eine ErrorBoundary haelt ihren Fehlerzustand, bis
+            sie neu gemountet wird. Ohne den key bleibt nach einem Renderfehler
+            die Fehlerkarte auch dann stehen, wenn der Nutzer auf einen anderen
+            Nav-Link klickt — die Navigation wirkt dann kaputt. */}
+        <ErrorBoundary scope="layout-outlet" key={location.pathname}>
           <Outlet />
         </ErrorBoundary>
       </main>

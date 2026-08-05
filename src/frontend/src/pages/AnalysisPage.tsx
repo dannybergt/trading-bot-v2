@@ -565,6 +565,15 @@ export function AnalysisPage() {
     refetchInterval: 60_000,
   });
 
+  // Diese beiden Hooks standen frueher unterhalb der Early Returns. Sobald
+  // stockQuery.error gesetzt wurde, rendert die Komponente damit weniger Hooks
+  // als im Durchlauf davor — React bricht mit "Rendered fewer hooks than
+  // expected" ab und die ErrorBoundary schluckt die Seite, statt die
+  // vorbereitete Fehlermeldung zu zeigen. Genau der Pfad, der bei einem
+  // Provider-Ausfall regelmaessig eintritt. Hooks gehoeren vor jeden Return.
+  const displayCurrency = useDisplayCurrency();
+  const fxRatesQuery = useFxRates("USD");
+
   if (!decoded) {
     return (
       <p className="text-sm text-slate-400">
@@ -606,8 +615,6 @@ export function AnalysisPage() {
       ? ((lastClose - firstClose) / firstClose) * 100
       : null;
 
-  const displayCurrency = useDisplayCurrency();
-  const fxRatesQuery = useFxRates("USD");
   const nativeCurrency = stock?.info?.currency || "USD";
   const isConverted = nativeCurrency !== displayCurrency;
   const lastCloseConverted =
