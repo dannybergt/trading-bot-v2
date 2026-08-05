@@ -82,7 +82,18 @@ die Liste rendert; Auswahl und Sprung zur Analyse gehoeren zu Stufe 3.
 bewertete nach Einfuegen des Suchschritts das Dashboard statt der Analyse-Seite. Eine Assertion, die von
 der Reihenfolge ihrer Nachbarn abhaengt, ist keine Pruefung.
 
-**Naechster Schritt:** PR 6
+**PR 6 (Erklaerbarkeit) erledigt, Gates gruen, Unit 362 → 365.** Die Analyse-Seite zeigt jetzt auf
+Knopfdruck, **warum die Automatik nicht handelt** — jedes Risiko-Gate und jeder Halt-Ausloeser einzeln
+begruendet. Der Endpunkt dahinter existierte und wurde von keiner Seite aufgerufen. Der Guard liest die
+Gruende per AST aus dem Backend und verlangt fuer jeden einen Satz in beiden Sprachen, in beide
+Richtungen; der UI-Schritt weist zurueck, was als roher Code ankommt (erster Lauf: drei Gruende, alle
+als Satz).
+
+**Bewusst offen aus PR 6:** TBV2-Z06 Lesart (b), das Quellen-Tooltip mit Provider und Zeitstempel an
+jeder Kennzahl. Der Datenbestand liegt im `data_quality_service` bereit, die Verdrahtung an jede
+einzelne Zahl ist eine eigene PR. Steht als offen im Katalog, nicht halb gebaut als erledigt.
+
+**Naechster Schritt:** PR 7 (Fundament: zentrale Formatter, i18n fuer AdminPage/StockChart, A11y)
 PR 4 (Alarme wirksam: Push-Client fehlt komplett, Regeln feuern nur beim Seitenaufruf), PR 5
 (Symbolsuche mit ISIN/WKN — heute ist ein neues Symbol nur per URL-Tippen erreichbar), PR 6
 (Erklaerbarkeit), PR 7 (Formatter/i18n/A11y). Plan: `/root/.claude/plans/tender-snuggling-swan.md`.
