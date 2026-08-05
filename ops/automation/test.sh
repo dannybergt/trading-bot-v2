@@ -25,6 +25,7 @@ docker run --rm \
   -v "${PROJECT_ROOT}/.github/workflows:/app/.github/workflows:ro" \
   -v "${PROJECT_ROOT}/ops/docker/frontend.nginx.conf:/app/ops/docker/frontend.nginx.conf:ro" \
   -v "${PROJECT_ROOT}/src/frontend/src/i18n:/app/src/frontend/src/i18n:ro" \
+  -v "${PROJECT_ROOT}/docs/verification:/app/docs/verification:ro" \
   trading-bot-v2-backend:local \
   python -m unittest discover -s /app/tests -p 'test_*.py'
 
