@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import { useTourVisit } from "../onboarding/useTourVisit";
+import { formatMoney, formatPercent } from "../format/numbers";
 
 type Watchlist = { id: string; name: string };
 
@@ -14,6 +15,7 @@ type ScannerRow = {
   price: number;
   change: number;
   changePercent: number;
+  currency?: string | null;
   assetClass?: string;
   assetLabel?: string;
   market?: string;
@@ -132,17 +134,21 @@ export function ScannerPage() {
                   {row.assetLabel ?? row.assetClass ?? "—"}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  {row.price ? row.price.toFixed(2) : "—"}
+                  {/* Vorher eine nackte Zahl: ohne Waehrung ist ein Kurs kein
+                      Kurs, sondern eine Ziffernfolge. */}
+                  {formatMoney(row.price, row.currency)}
                 </td>
                 <td
                   className={`px-3 py-2 text-right tabular-nums ${changeClass(row.change)}`}
                 >
-                  {row.change ? row.change.toFixed(2) : "—"}
+                  {/* Das Vorzeichen war bisher nur ueber die Farbe kodiert —
+                      bei Farbfehlsichtigkeit also gar nicht. */}
+                  {formatMoney(row.change, row.currency, { signed: true })}
                 </td>
                 <td
                   className={`px-3 py-2 text-right tabular-nums ${changeClass(row.changePercent)}`}
                 >
-                  {row.changePercent ? `${row.changePercent.toFixed(2)}%` : "—"}
+                  {formatPercent(row.changePercent, { signed: true })}
                 </td>
                 <td className="px-3 py-2 text-slate-300">
                   {row.provider ? (

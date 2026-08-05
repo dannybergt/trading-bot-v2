@@ -19,6 +19,7 @@ import { useDisplayCurrency } from "../hooks/useDisplayCurrency";
 import { useTourVisit } from "../onboarding/useTourVisit";
 import { convertMoney, useFxRates } from "../hooks/useFxRates";
 import { TradeGatePanel } from "../components/TradeGatePanel";
+import { formatMoney, formatPercent } from "../format/numbers";
 
 type FeatureContribution = {
   feature: string;
@@ -709,6 +710,7 @@ export function AnalysisPage() {
         prediction={stock?.prediction}
         symbol={decoded}
         confidenceOverall={dataQualityQuery.data?.overall}
+        zoneCurrency={nativeCurrency}
       />
       {/* Warum die Automatik hier nicht kauft. Steht direkt unter der
           Empfehlung, weil genau dort die Frage entsteht. */}
@@ -865,10 +867,14 @@ function PredictionCard({
   prediction,
   symbol,
   confidenceOverall,
+  // Die Karte kannte die Waehrung bisher gar nicht — deshalb standen die
+  // Zonen als nackte Zahlen da, obwohl die Kopfzeile darueber sie nennt.
+  zoneCurrency,
 }: {
   prediction?: Prediction | null;
   symbol?: string;
   confidenceOverall?: "high" | "medium" | "low";
+  zoneCurrency?: string | null;
 }) {
   // Vor dem Early Return: Hooks duerfen nicht hinter einer Bedingung stehen.
   const { t } = useTranslation();
@@ -949,13 +955,32 @@ function PredictionCard({
       {prediction.zones ? (
         <>
           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+            {/* Bis 2026-08-06 standen Entry/Stop/Target/ATR als nackte
+                toFixed(2)-Zahlen da — ohne Waehrung, ohne Bezug zum aktuellen
+                Kurs. Genau die Werte, die die UX-Direktive namentlich nennt. */}
             <ZoneCell
-              label="Entry"
-              value={`${prediction.zones.entryLow.toFixed(2)} – ${prediction.zones.entryHigh.toFixed(2)}`}
+              label={t("analysis.zones.entry")}
+              value={`${formatMoney(prediction.zones.entryLow, zoneCurrency)} – ${formatMoney(
+                prediction.zones.entryHigh,
+                zoneCurrency,
+              )}`}
             />
-            <ZoneCell label="Stop" value={prediction.zones.stopLoss.toFixed(2)} accent="red" />
-            <ZoneCell label="Target" value={prediction.zones.target.toFixed(2)} accent="green" />
-            <ZoneCell label="ATR" value={prediction.zones.atr.toFixed(3)} />
+            <ZoneCell
+              label={t("analysis.zones.stop")}
+              value={formatMoney(prediction.zones.stopLoss, zoneCurrency)}
+              accent="red"
+              delta={deltaToCurrent(prediction.zones.stopLoss, prediction.zones.currentPrice)}
+            />
+            <ZoneCell
+              label={t("analysis.zones.target")}
+              value={formatMoney(prediction.zones.target, zoneCurrency)}
+              accent="green"
+              delta={deltaToCurrent(prediction.zones.target, prediction.zones.currentPrice)}
+            />
+            <ZoneCell
+              label={t("analysis.zones.atr")}
+              value={formatMoney(prediction.zones.atr, zoneCurrency, { digits: 3 })}
+            />
           </div>
           <YieldBreakdown zones={prediction.zones} />
           {symbol ? (
@@ -1214,14 +1239,25 @@ function YieldRow({
   );
 }
 
+/**
+ * Der Vergleichswert, den die UX-Direktive neben Einheit und Vorzeichen
+ * verlangt: wie weit ist diese Marke vom aktuellen Kurs entfernt.
+ */
+function deltaToCurrent(value: number, current: number): number | null {
+  if (!Number.isFinite(value) || !Number.isFinite(current) || current === 0) return null;
+  return ((value - current) / current) * 100;
+}
+
 function ZoneCell({
   label,
   value,
   accent,
+  delta,
 }: {
   label: string;
   value: string;
   accent?: "red" | "green";
+  delta?: number | null;
 }) {
   const cls =
     accent === "red"
@@ -1233,6 +1269,11 @@ function ZoneCell({
     <div className="rounded-md border border-slate-700/40 bg-slate-950/40 px-2 py-1.5">
       <p className="text-[10px] uppercase tracking-wide opacity-60">{label}</p>
       <p className={`mt-0.5 text-sm font-medium tabular-nums ${cls}`}>{value}</p>
+      {delta !== null && delta !== undefined ? (
+        <p className="text-[10px] tabular-nums opacity-60">
+          {formatPercent(delta, { signed: true, digits: 1 })}
+        </p>
+      ) : null}
     </div>
   );
 }

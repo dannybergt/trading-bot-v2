@@ -2072,6 +2072,9 @@ def get_scanner_data(
                     'price': round(float(provider_quote.get("price") or 0), 2),
                     'change': round(float(provider_quote.get("change") or 0), 2),
                     'changePercent': round(float(provider_quote.get("changePercent") or 0), 2),
+                    # Ohne Waehrung ist ein Kurs in der Tabelle nur eine
+                    # Ziffernfolge (UX-Direktive: Werte immer mit Einheit).
+                    'currency': provider_quote.get("currency"),
                     'history': provider_quote.get("history") or [],
                     'provider': provider_snapshot,
                     **asset_response_fields(asset_profile),
@@ -2095,6 +2098,9 @@ def get_scanner_data(
                 'price': round(current_price, 2),
                 'change': round(change, 2),
                 'changePercent': round(change_pct, 2),
+                # Nicht aus provider_quote: die Variable existiert nur im
+                # hist.empty-Zweig. Der Snapshot ist hier immer da.
+                'currency': ((provider_snapshot or {}).get("quote") or {}).get("currency"),
                 'history': sparkline,
                 'provider': provider_snapshot,
                 **asset_response_fields(asset_profile),
