@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HelpDrawer } from "./HelpDrawer";
 import { LanguageToggle } from "./LanguageToggle";
+import { SymbolSearch } from "./SymbolSearch";
 import { VersionBadge } from "./VersionBadge";
 
 type NavLinkSpec = {
@@ -93,6 +94,16 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          {/* Symbolsuche in der Kopfzeile: bis 2026-08-06 war ein Symbol, das
+              noch in keiner Watchlist stand, ausschliesslich ueber manuelles
+              Tippen der Adresszeile erreichbar. Der Endpunkt dahinter loest
+              auch ISIN und WKN auf. */}
+          <div className="order-last w-full min-w-0 sm:order-none sm:w-64 lg:w-72">
+            <SymbolSearch
+              onSelect={(result) => navigate(`/analysis/${encodeURIComponent(result.symbol)}`)}
+              testId="global-symbol-search"
+            />
+          </div>
           <div className="flex shrink-0 items-center gap-3 text-sm text-slate-400">
             <button
               type="button"

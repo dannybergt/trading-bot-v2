@@ -769,7 +769,9 @@
       "partial": "teilweise",
       "unavailable": "nicht verfuegbar",
       "unknown": "k. A."
-    }
+    },
+    "emptyLead": "In dieser Watchlist stehen noch keine Symbole.",
+    "emptyAction": "Auf der Watchlist-Seite hinzufuegen"
   },
   "settings": {
     "title": "Einstellungen",
@@ -841,5 +843,11 @@
         "push_unsupported": "Dieser Browser unterstuetzt kein Web-Push."
       }
     }
+  },
+  "search": {
+    "label": "Symbol, Name, ISIN oder WKN suchen",
+    "placeholder": "Symbol, ISIN oder WKN …",
+    "loading": "Wird gesucht …",
+    "empty": "Nichts gefunden fuer \"{{query}}\"."
   }
 }

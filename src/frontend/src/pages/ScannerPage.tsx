@@ -95,8 +95,13 @@ export function ScannerPage() {
       ) : null}
 
       {sorted.length === 0 && !scannerQuery.isLoading ? (
-        <p className="text-sm text-slate-500">
-          {t("scanner.empty")}
+        // Der Text verwies schon immer auf die Watchlist-Seite, war aber kein
+        // Link — der Nutzer musste den Weg selbst suchen.
+        <p className="text-sm text-slate-500" data-testid="scanner-empty">
+          {t("scanner.emptyLead")}{" "}
+          <Link to="/watchlists" className="text-bergt-green hover:underline">
+            {t("scanner.emptyAction")}
+          </Link>
         </p>
       ) : null}
 

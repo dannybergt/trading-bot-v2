@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
 import { useHashScroll } from "../hooks/useHashScroll";
+import { SymbolSearch } from "../components/SymbolSearch";
 
 type WatchlistItem = {
   symbol: string;
@@ -219,13 +220,23 @@ function WatchlistCard({
       </p>
 
       <form onSubmit={handleAdd} className="mt-3 grid gap-2 sm:grid-cols-3">
-        <input
-          className="input sm:col-span-1"
-          placeholder={t("watchlists.symbolPlaceholder")}
-          value={symbolInput}
-          onChange={(event) => setSymbolInput(event.target.value)}
-          required
-        />
+        {/* Frueher ein reines Freitextfeld: das Backend prueft das Symbol beim
+            Anlegen nicht, ein Tippfehler erzeugte also einen dauerhaft toten
+            Eintrag. Die Suche schlaegt jetzt echte Symbole vor (inklusive
+            ISIN-/WKN-Aufloesung); die Freitexteingabe bleibt moeglich, damit
+            niemand blockiert ist, wenn der Asset-Cache nichts liefert. */}
+        <div className="sm:col-span-1">
+          <SymbolSearch
+            onSelect={(result) => {
+              setSymbolInput(result.symbol);
+              if (!nameInput.trim() && result.name) setNameInput(result.name);
+            }}
+            onInputChange={setSymbolInput}
+            clearOnSelect={false}
+            placeholder={t("watchlists.symbolPlaceholder")}
+            testId={`watchlist-symbol-search-${watchlist.id}`}
+          />
+        </div>
         <input
           className="input sm:col-span-1"
           placeholder={t("watchlists.namePlaceholder")}

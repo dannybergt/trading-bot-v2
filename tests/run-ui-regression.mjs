@@ -603,6 +603,71 @@ async function run() {
     );
     console.log("ui_analysis ok");
 
+    // 7b. Globale Symbolsuche.
+    //
+    // `GET /api/search/{query}` loest auch ISIN und WKN auf und wurde bis
+    // 2026-08-06 von **keiner** Seite aufgerufen: ein Symbol, das in keiner
+    // Watchlist stand, war ausschliesslich durch Tippen der Adresszeile
+    // erreichbar. Geprueft wird der ganze Weg — tippen, Vorschlag bekommen,
+    // auswaehlen, auf der Analyse-Seite landen.
+    await navigate(client, `${FRONTEND_URL}/`);
+    await waitForCondition(
+      client,
+      "global symbol search present in the header",
+      "!!document.querySelector('[data-testid=\"global-symbol-search\"]')",
+      30000,
+    );
+    await client.evaluate(`
+      (() => {
+        const input = document.querySelector('[data-testid="global-symbol-search"]');
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype, "value",
+        ).set;
+        setter.call(input, "VOO");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      })()
+    `);
+    // Die Suche ist entprellt und schlaegt gegen den Asset-Cache nach; ohne
+    // Providerzugang kann die Liste leer bleiben. Deshalb wird zuerst nur
+    // verlangt, dass ueberhaupt ein Ergebnisfeld erscheint.
+    await waitForCondition(
+      client,
+      "search dropdown reacts to typing",
+      "!!document.querySelector('[data-testid=\"global-symbol-search-results\"]')",
+      20000,
+    );
+    const searchOutcome = await client.evaluate(`
+      (() => {
+        const options = Array.from(
+          document.querySelectorAll('[data-testid^="global-symbol-search-option-"]'),
+        );
+        return {
+          count: options.length,
+          first: options[0]?.getAttribute("data-testid") || null,
+        };
+      })()
+    `);
+
+    if (searchOutcome.count > 0) {
+      await client.evaluate(
+        `document.querySelector('[data-testid="${searchOutcome.first}"]').click()`,
+      );
+      await waitForCondition(
+        client,
+        "picking a search result opens the analysis page",
+        "window.location.pathname.startsWith('/analysis/')",
+        20000,
+      );
+      console.log(`ui_symbol_search ok [${searchOutcome.count} suggestions, navigated]`);
+    } else {
+      // Ohne Provider liefert der Asset-Cache nichts. Das ist eine bekannte
+      // Einschraenkung dieser Umgebung und wird als solche gemeldet, statt als
+      // Erfolg zu gelten.
+      console.log(
+        "ui_symbol_search partial [dropdown rendered, no suggestions — asset cache empty without provider access]",
+      );
+    }
+
     // 8a. Wahrscheinlichkeiten muessen zur Datenlage passen (TBV2-Z02, Regel K).
     //
     // Der Befund vom 2026-08-05: auf dem synthetischen Pfad liefert das Backend
@@ -615,6 +680,19 @@ async function run() {
     // diesen synthetischen Fall — die Einschraenkung der Umgebung ist hier
     // ausnahmsweise der Testfall. Geprueft wird trotzdem beidseitig, damit der
     // Schritt auf einem Host MIT Providerzugang nicht still bedeutungslos wird.
+    //
+    // Der Schritt navigiert selbst, statt sich auf den Stand des vorherigen zu
+    // verlassen: als zwischendurch ein Suchschritt eingefuegt wurde, prueften
+    // diese Assertions plotzlich das Dashboard und schlugen fehl. Eine
+    // Assertion, die von der Reihenfolge ihrer Nachbarn abhaengt, ist eine
+    // Falle.
+    await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
+    await waitForCondition(
+      client,
+      "analysis page loaded for the probability check",
+      "(document.body.innerText || '').includes('VOO') && document.querySelectorAll('canvas, svg').length > 0",
+      45000,
+    );
     const probabilityState = await client.evaluate(`
       (() => {
         const text = document.body.innerText || document.body.textContent || "";
