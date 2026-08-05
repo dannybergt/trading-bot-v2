@@ -122,7 +122,12 @@ export function TradeGatePanel({
               <p className="text-xs font-medium text-red-200">
                 {t("analysis.gates.haltTitle")}
               </p>
-              <ul className="mt-1 space-y-1 text-xs text-red-200/90">
+              {/* Eigener Anker: ohne ihn war ein roh durchgereichter
+                  Halt-Code am UI unbewacht (Verifikationsbefund 2026-08-06). */}
+              <ul
+                className="mt-1 space-y-1 text-xs text-red-200/90"
+                data-testid="trade-gate-halts"
+              >
                 {halts.map((trigger) => (
                   <li key={trigger}>
                     {t(`analysis.gates.reason.${trigger}`, { defaultValue: trigger })}

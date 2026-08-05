@@ -1384,12 +1384,15 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
         {breakdown.map((b) => {
           const contrib = b.contribution ?? 0;
           const widthPct = Math.min(100, (Math.abs(contrib) / barMax) * 100);
-          // Aeltere Backends liefern effectiveWeight noch nicht. Dann bleibt
-          // das konfigurierte Gewicht die beste verfuegbare Auskunft — fuer
-          // eine Achse ohne Daten ist sie aber nachweislich 0.
-          const effectiveWeight =
-            b.effectiveWeight ?? (b.available ? b.weight : 0);
+          // Liefert das Backend kein effectiveWeight, wird **nichts**
+          // behauptet. Der Rueckfall auf das konfigurierte Gewicht war ein
+          // stiller Weg zurueck in den Z01-Bug: die Karte haette wieder
+          // "Fundamentals 20 %" neben einer Achse ohne Daten gezeigt, und kein
+          // Beweisschritt haette es gesehen (Verifikationsbefund 2026-08-06).
+          const effectiveWeight = b.effectiveWeight ?? (b.available ? null : 0);
+          const effectiveKnown = effectiveWeight !== null;
           const showBothWeights =
+            effectiveKnown &&
             Math.round(effectiveWeight * 100) !== Math.round(b.weight * 100);
           return (
             <div
@@ -1411,11 +1414,13 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
                 data-testid={`composite-weight-${b.axis}`}
                 title={t("analysis.composite.weightTitle", {
                   configured: Math.round(b.weight * 100),
-                  effective: Math.round(effectiveWeight * 100),
+                  effective: effectiveKnown ? Math.round(effectiveWeight * 100) : "n/a",
                 })}
               >
                 <span className={b.available ? "" : "text-amber-300/70"}>
-                  {Math.round(effectiveWeight * 100)}%
+                  {effectiveKnown
+                    ? `${Math.round(effectiveWeight * 100)}%`
+                    : t("analysis.composite.na")}
                 </span>
                 {showBothWeights ? (
                   <span className="text-slate-700"> ({Math.round(b.weight * 100)}%)</span>
