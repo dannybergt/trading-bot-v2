@@ -206,7 +206,13 @@ export function DashboardPage() {
 
 function OnboardingCard() {
   const { t } = useTranslation();
-  const { steps, completedCount, total, isComplete, requiredOpenCount } = useOnboarding();
+  const { steps, completedCount, total, isComplete, requiredOpenCount, isLoading } =
+    useOnboarding();
+  // Waehrend die drei Abfragen laufen, sind alle Schritte "nicht erledigt".
+  // Ohne diese Zeile blitzte deshalb bei jedem Seitenaufruf kurz
+  // "0 / 4 konfiguriert - 2 Pflicht-Schritte offen" auf, auch bei einem
+  // vollstaendig eingerichteten Konto. Lieber nichts zeigen als das Falsche.
+  if (isLoading) return null;
   if (isComplete) return null;
   const pct = total === 0 ? 0 : (completedCount / total) * 100;
   const openLabels = steps.filter((s) => !s.completed).map((s) => s.label);
@@ -217,17 +223,22 @@ function OnboardingCard() {
       ? t("dashboard.onboarding.requiredOpenOne")
       : t("dashboard.onboarding.requiredOpen", { count: requiredOpenCount });
   return (
-    <section className="card border-bergt-green/40">
+    // Stabile Anker fuer den Beweisschritt zu TBV2-Z05: die Zusage ist "N von M
+    // mit Click-through, und verschwindet bei vollstaendiger Konfiguration".
+    // Ueber Fliesstext war davon nur das Wort "Setup progress" pruefbar.
+    <section className="card border-bergt-green/40" data-testid="onboarding-card">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">{t("dashboard.onboarding.title")}</h2>
           <p className="text-sm text-slate-400">
-            {t("dashboard.onboarding.configured", { completed: completedCount, total })}
+            <span data-testid="onboarding-progress" data-completed={completedCount} data-total={total}>
+              {t("dashboard.onboarding.configured", { completed: completedCount, total })}
+            </span>
             {" · "}
             {requiredText}
           </p>
         </div>
-        <Link to="/onboarding" className="btn btn-primary">
+        <Link to="/onboarding" className="btn btn-primary" data-testid="onboarding-continue">
           {t("dashboard.onboarding.continue")}
         </Link>
       </header>
