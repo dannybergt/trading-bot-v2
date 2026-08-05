@@ -742,6 +742,64 @@ gate_detail = gate_reject.json().get("detail")
 assert isinstance(gate_detail, dict) and gate_detail.get("reason") == "net_target_below_minimum"
 print("paper trading net yield gate reject ok")
 
+# Positivkontrolle zum Gate. Der Zielkatalog fuehrt sie seit dem 2026-08-05
+# als Negativkontrolle auf ("Gebuehr senken => dieselbe Order muss durchgehen"),
+# im Harnisch gab es sie nicht — aufgefallen im Verifikationslauf 2026-08-06.
+# Ohne sie waere ein Gate, das **jede** Order mit Ziel ablehnt, vollstaendig
+# gruen: der Ablehnungsschritt darueber allein hat keine Trennschaerfe.
+gate_pass_settings = requests.put(
+    f"{base}/api/auth/me/portfolio-settings",
+    headers=headers,
+    json={
+        "trade_fee_absolute": 0,
+        "trade_fee_percent": 0,
+        "min_target_yield": 1,
+        "capital_gains_tax_bps": 0,
+        "income_tax_bps": 0,
+    },
+    timeout=30,
+)
+gate_pass_settings.raise_for_status()
+
+gate_accept = requests.post(
+    f"{base}/api/paper-trading/orders",
+    headers=headers,
+    json={
+        "symbol": "AAPL",
+        "side": "buy",
+        "qty": 1,
+        "limitPrice": 100.0,
+        # 2 % brutto gegen 1 % Mindestertrag bei Gebuehr 0 und Steuer 0: die
+        # Marge ist bewusst nicht knapp, damit der Schritt das Gate prueft und
+        # nicht die Rundung.
+        "targetPrice": 102.0,
+        "source": "auto-recommendation",
+    },
+    timeout=30,
+)
+assert gate_accept.status_code == 200, gate_accept.text
+gate_accept_id = gate_accept.json()["id"]
+print("paper trading net yield gate accept ok")
+
+# Aufraeumen und die strengen Werte wiederherstellen, damit die folgenden
+# Schritte dieselbe Ausgangslage vorfinden wie bisher.
+requests.delete(
+    f"{base}/api/paper-trading/orders/{gate_accept_id}", headers=headers, timeout=30
+)
+restore_settings = requests.put(
+    f"{base}/api/auth/me/portfolio-settings",
+    headers=headers,
+    json={
+        "trade_fee_absolute": 1,
+        "trade_fee_percent": 0,
+        "min_target_yield": 5,
+        "capital_gains_tax_bps": 2500,
+        "income_tax_bps": 0,
+    },
+    timeout=30,
+)
+restore_settings.raise_for_status()
+
 # Place an order without a target so the gate is bypassed; the limit is set
 # absurdly high so the latest-close-based fill simulator accepts it whenever
 # any price source returns a value (otherwise the order rests as pending,
