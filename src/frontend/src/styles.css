@@ -14,6 +14,10 @@
     @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition;
     @apply border border-slate-700 bg-slate-900 text-slate-100;
     @apply hover:border-bergt-green/50 hover:text-bergt-green;
+    /* Ohne diesen Ring war der Tastaturfokus auf rund 120 Buttons praktisch
+       unsichtbar: es blieb nur der Browser-Default, den der Tailwind-Reset
+       schluckt. `.input` macht es eine Zeile weiter richtig vor. */
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bergt-green focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
