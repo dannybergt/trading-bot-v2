@@ -193,8 +193,10 @@ def evaluate_symbol_data_quality(
     confidence report.
 
     `research_payload` is the structure returned by `/api/research/{symbol}`.
-    `stock_payload` is what `/api/stock/{symbol}` returns; it carries
-    the chart data + ML prediction. We don't call them here — the
+    `stock_payload` is a market-data payload carrying the price bars plus
+    the `synthetic`/`provider` flags — either the `service.get_stock_data`
+    result (bars under `data`) or the serialised `/api/stock/{symbol}`
+    response (bars under `chart_data`). We don't call them here — the
     caller passes whatever it already has.
     """
     research = research_payload or {}
@@ -204,18 +206,24 @@ def evaluate_symbol_data_quality(
     fields: list[dict[str, Any]] = []
 
     # Chart bars
-    chart_data = (stock or {}).get("chart_data") or []
+    bars = _bar_count(stock)
     if stock.get("synthetic"):
         # No provider returned real bars — the chart is a synthetic random-walk
         # placeholder. Never grade this as FULL/PARTIAL: it must drag the
         # overall confidence down so the user knows the analysis rests on
         # fabricated prices, not live data.
         fields.append(_field("price_history", FALLBACK, "synthetic placeholder — no live provider data"))
-    elif isinstance(chart_data, list) and len(chart_data) >= 30:
+    elif bars >= 30:
         provider = "Alpaca" if (stock.get("provider") or {}).get("source") == "Alpaca" else "yfinance / Alpha Vantage fallback"
         fields.append(_field("price_history", FULL, provider))
-    elif isinstance(chart_data, list) and len(chart_data) > 0:
+    elif bars > 0:
         fields.append(_field("price_history", PARTIAL, "yfinance / Alpha Vantage fallback"))
+    elif stock:
+        # A payload arrived but carried no countable bars under either key.
+        # `get_stock_data` never returns that shape (it falls back to the
+        # synthetic placeholder instead), so this means the payload contract
+        # changed — say so instead of blaming the providers.
+        fields.append(_field("price_history", MISSING, "bar count unavailable in payload"))
     else:
         fields.append(_field("price_history", MISSING, "no provider returned data"))
 
@@ -336,6 +344,27 @@ def evaluate_symbol_data_quality(
         "fields": fields,
         "upgradeHints": upgrades,
     }
+
+
+def _bar_count(stock: dict[str, Any]) -> int:
+    """Number of price bars in the payload, whichever shape it arrived in.
+
+    Two shapes are real and both reach here: `service.get_stock_data`
+    returns the indicator DataFrame under `data`, while
+    `GET /api/stock/{symbol}` serialises that same frame into a list of
+    candles under `chart_data`. Reading only one of them silently graded
+    every real fetch as MISSING — the caller passes the service payload,
+    the check looked for the endpoint payload.
+    """
+    for key in ("data", "chart_data"):
+        candidate = stock.get(key)
+        if candidate is None:
+            continue
+        try:
+            return len(candidate)
+        except TypeError:
+            continue
+    return 0
 
 
 def _field(key: str, confidence: str, provider: str) -> dict[str, Any]:

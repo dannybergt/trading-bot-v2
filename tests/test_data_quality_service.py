@@ -207,5 +207,107 @@ class DataQualityServiceTests(unittest.TestCase):
         self.assertNotEqual(report["overall"], "high")
 
 
+class PriceHistoryWiringTests(unittest.TestCase):
+    """Pin the payload contract between the caller and this service.
+
+    `GET /api/data-quality/{symbol}` passes the raw
+    `service.get_stock_data` result, which carries the bars as a
+    DataFrame under `data`. The grader used to look only for
+    `chart_data` — the key that only exists after `/api/stock/{symbol}`
+    has serialised the frame. Every real fetch therefore graded
+    MISSING ("no provider returned data") while the very same page
+    rendered a full chart, and the false MISSING dragged the overall
+    confidence down to "low". Only the synthetic path stayed correct,
+    so fabricated bars were reported more accurately than real ones.
+    """
+
+    def _bar_keys_of_get_stock_data(self) -> set[str]:
+        """Keys of the dict `MarketDataService.get_stock_data` returns.
+
+        Read from the source instead of hardcoded, so renaming the key
+        there fails this test instead of silently regressing the panel.
+        """
+        import ast
+
+        source = (BACKEND_ROOT / "app" / "services.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "get_stock_data":
+                for inner in ast.walk(node):
+                    if isinstance(inner, ast.Return) and isinstance(inner.value, ast.Dict):
+                        keys = {
+                            k.value
+                            for k in inner.value.keys
+                            if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                        }
+                        if "prediction" in keys:  # the payload, not a nested dict
+                            return keys
+        self.fail("get_stock_data returns no literal dict — contract check is blind")
+
+    def test_service_payload_shape_is_graded_from_real_bars(self):
+        keys = self._bar_keys_of_get_stock_data()
+        bar_keys = keys & {"data", "chart_data"}
+        self.assertTrue(
+            bar_keys,
+            f"get_stock_data carries bars under none of the keys the grader reads: {sorted(keys)}",
+        )
+        for key in sorted(bar_keys):
+            with self.subTest(key=key):
+                report = dq.evaluate_symbol_data_quality(
+                    symbol="AAPL",
+                    asset_class="stock",
+                    research_payload={},
+                    stock_payload={
+                        key: [{"close": 100 + i} for i in range(130)],
+                        "provider": {"source": "Alpaca", "status": "live"},
+                        "synthetic": False,
+                    },
+                )
+                price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+                self.assertEqual(price_field["confidence"], dq.FULL)
+                self.assertEqual(price_field["provider"], "Alpaca")
+
+    def test_dataframe_payload_is_counted(self):
+        # `data` is a pandas DataFrame in production, not a list of dicts.
+        import pandas as pd
+
+        frame = pd.DataFrame({"Close": [100 + i for i in range(130)]})
+        report = dq.evaluate_symbol_data_quality(
+            symbol="AAPL",
+            asset_class="stock",
+            research_payload={},
+            stock_payload={"data": frame, "provider": {"source": "Alpaca"}, "synthetic": False},
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.FULL)
+
+    def test_missing_bars_names_the_payload_not_the_providers(self):
+        # A payload that carries no countable bars is a contract break, not a
+        # provider outage — `get_stock_data` falls back to the synthetic
+        # placeholder rather than returning empty bars.
+        report = dq.evaluate_symbol_data_quality(
+            symbol="AAPL",
+            asset_class="stock",
+            research_payload={},
+            stock_payload={"provider": None, "synthetic": False},
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.MISSING)
+        self.assertIn("payload", price_field["provider"])
+
+    def test_no_payload_still_blames_the_providers(self):
+        # The caller passes None when its own fetch raised; that genuinely is
+        # "no data reached us", so the wording stays provider-facing.
+        report = dq.evaluate_symbol_data_quality(
+            symbol="AAPL",
+            asset_class="stock",
+            research_payload={},
+            stock_payload=None,
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.MISSING)
+        self.assertEqual(price_field["provider"], "no provider returned data")
+
+
 if __name__ == "__main__":
     unittest.main()

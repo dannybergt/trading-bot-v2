@@ -2227,6 +2227,9 @@ def get_symbol_data_quality(
             include_fundamentals=False,
         )
     except Exception:
+        # Losing the bars degrades the report to "no price history"; log why
+        # instead of letting the panel blame the providers for a crash here.
+        logger.exception("data_quality_stock_fetch_failed symbol=%s", canonical)
         stock_payload = None
 
     report = data_quality_service.evaluate_symbol_data_quality(

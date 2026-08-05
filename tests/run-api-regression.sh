@@ -291,6 +291,29 @@ for block in ("stocktwits", "reddit", "combined"):
 assert isinstance(social["reddit"].get("subreddits"), list)
 print("research signals + macro context + social sentiment shape ok")
 
+# Data-quality report: the panel grades the bars the analysis page shows.
+# `get_stock_data` never returns empty bars (it falls back to the synthetic
+# placeholder), so "missing" here can only mean the payload contract between
+# endpoint and grader broke — which is exactly what shipped: the grader read
+# `chart_data`, the caller passes `data`, and every real fetch was reported as
+# "no provider returned data" while the chart rendered fine.
+data_quality = requests.get(
+    f"{base}/api/data-quality/AAPL",
+    headers=headers,
+    timeout=60,
+)
+data_quality.raise_for_status()
+data_quality_payload = data_quality.json()
+price_history = next(
+    (f for f in data_quality_payload["fields"] if f["key"] == "price_history"),
+    None,
+)
+assert price_history is not None, "data-quality report has no price_history field"
+assert price_history["confidence"] != "missing", (
+    f"price_history graded missing although bars were fetched: {price_history}"
+)
+print("data quality price history graded from real bars ok")
+
 crypto_research_full = requests.get(
     f"{base}/api/research/BTC/USD",
     headers=headers,
