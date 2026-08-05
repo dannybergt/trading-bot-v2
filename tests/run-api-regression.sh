@@ -750,6 +750,71 @@ if paper_order["status"] == "pending":
     assert cancel_resp.json()["status"] == "cancelled"
     print("paper trading cancel ok")
 
+# --- Auto-Execution: Risikolimits und Not-Halt ---
+# Beide Endpunkte hatten bis 2026-08-05 gar keine Regressionsabdeckung, waehrend
+# das Frontend sie doppelt serialisiert aufrief und damit dauerhaft 422 bekam.
+auto_limits_get = requests.get(
+    f"{base}/api/auto-execution/limits", headers=headers, timeout=30
+)
+auto_limits_get.raise_for_status()
+assert auto_limits_get.json()["mode"] in {"off", "paper", "live"}
+print("auto-execution limits read ok")
+
+auto_limits_put = requests.put(
+    f"{base}/api/auto-execution/limits",
+    headers=headers,
+    json={
+        "enabled": True,
+        "mode": "paper",
+        "maxPositionSizeUsd": 250,
+        "maxDailyLossUsd": 100,
+    },
+    timeout=30,
+)
+auto_limits_put.raise_for_status()
+auto_limits_payload = auto_limits_put.json()
+assert auto_limits_payload["mode"] == "paper"
+assert auto_limits_payload["enabled"] is True
+assert float(auto_limits_payload["maxPositionSizeUsd"]) == 250
+assert float(auto_limits_payload["maxDailyLossUsd"]) == 100
+print("auto-execution limits update ok")
+
+# Negativkontrolle zum Frontend-Fix: exakt der Body, den der doppelt
+# serialisierende Aufrufer geschickt hat -- ein JSON-String statt eines
+# Objekts. Der Endpunkt muss ihn ablehnen, sonst waere der Fix gar nicht noetig
+# gewesen und dieser Schritt ohne Trennschaerfe.
+auto_limits_double_encoded = requests.put(
+    f"{base}/api/auto-execution/limits",
+    headers={**headers, "Content-Type": "application/json"},
+    data=json.dumps(json.dumps({"mode": "paper", "maxPositionSizeUsd": 250})),
+    timeout=30,
+)
+assert auto_limits_double_encoded.status_code == 422, auto_limits_double_encoded.text
+print("auto-execution limits reject double-encoded body ok")
+
+auto_halt = requests.post(
+    f"{base}/api/auto-execution/halt",
+    headers=headers,
+    json={"reason": "regression_halt"},
+    timeout=30,
+)
+auto_halt.raise_for_status()
+auto_halt_payload = auto_halt.json()
+assert auto_halt_payload["halted"] is True
+assert isinstance(auto_halt_payload["openOrdersAtHalt"], int)
+print("auto-execution halt ok")
+
+# Der Not-Halt muss den Hauptschalter tatsaechlich umlegen, nicht nur
+# quittieren. Der Schritt darueber wurde bewusst mit enabled=True vorbereitet,
+# damit dieser hier eine echte Zustandsaenderung misst und nicht einen ohnehin
+# ausgeschalteten Schalter bestaetigt.
+auto_limits_after_halt = requests.get(
+    f"{base}/api/auto-execution/limits", headers=headers, timeout=30
+)
+auto_limits_after_halt.raise_for_status()
+assert auto_limits_after_halt.json()["enabled"] is False, auto_limits_after_halt.text
+print("auto-execution halt disables master switch ok")
+
 watchlist_remove_etf_item = requests.delete(
     f"{base}/api/watchlists/{watchlist_id}/items/VOO",
     headers=headers,

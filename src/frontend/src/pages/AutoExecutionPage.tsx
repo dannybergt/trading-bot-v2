@@ -60,9 +60,13 @@ export function AutoExecutionPage() {
 
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<Limits>) =>
+      // apiFetch serialisiert den Body selbst (api/client.ts). Ein zusaetzliches
+      // JSON.stringify hier machte den Body zu einem JSON-*String*, waehrend der
+      // Endpunkt ein Objekt erwartet (main.py update_auto_execution_limits) —
+      // jedes Speichern lief in 422.
       apiFetch<Limits>("/api/auto-execution/limits", {
         method: "PUT",
-        body: JSON.stringify(payload),
+        body: payload,
       }),
     onSuccess: (data) => {
       setDraft(data);
@@ -75,9 +79,11 @@ export function AutoExecutionPage() {
 
   const haltMutation = useMutation({
     mutationFn: () =>
+      // Siehe oben: doppelte Serialisierung liess auch den Not-Halt in 422
+      // laufen — der Kill-Switch war damit wirkungslos.
       apiFetch<{ halted: boolean; openOrdersAtHalt: number }>("/api/auto-execution/halt", {
         method: "POST",
-        body: JSON.stringify({ reason: "manual_user_halt" }),
+        body: { reason: "manual_user_halt" },
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["auto-execution-limits"] });
@@ -274,6 +280,7 @@ export function AutoExecutionPage() {
             <input
               type="number"
               className="input"
+              data-testid="auto-execution-max-position-input"
               min={0}
               step={50}
               value={draft.maxPositionSizeUsd}

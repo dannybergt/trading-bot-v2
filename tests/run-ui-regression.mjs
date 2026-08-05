@@ -649,6 +649,67 @@ async function run() {
     );
     console.log("ui_paper_trading ok");
 
+    // 10b. Auto-Execution: Risikolimits speichern.
+    //
+    // Der Grund fuer diesen Schritt (2026-08-05): der Aufrufer serialisierte
+    // den Body doppelt, der Endpunkt antwortete 422 und die Seite zeigte nur
+    // "Request failed: 422". Weder Unit noch API-Regression konnten das sehen —
+    // der Fehler sass zwischen beiden. Geprueft wird deshalb genau die Naht:
+    // klicken, speichern, und den Wert nach einem Reload wiederfinden.
+    await navigate(client, `${FRONTEND_URL}/auto-execution`);
+    await waitForCondition(
+      client,
+      "auto-execution page",
+      "!!document.querySelector('[data-testid=\"auto-execution-save-btn\"]')",
+      30000,
+    );
+
+    // Einen Pflichtwert veraendern, damit der Speichern-Button aktiv wird
+    // (er haengt an isDirty).
+    const probeValue = "1234";
+    await client.evaluate(`
+      (() => {
+        const input = document.querySelector('[data-testid="auto-execution-max-position-input"]');
+        if (!input) throw new Error("max-position input not found");
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype, "value",
+        ).set;
+        setter.call(input, "${probeValue}");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      })()
+    `);
+    await waitForCondition(
+      client,
+      "save button enabled after edit",
+      "!document.querySelector('[data-testid=\"auto-execution-save-btn\"]').disabled",
+      10000,
+    );
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"auto-execution-save-btn\"]').click()",
+    );
+
+    // Die Zusage ist nicht "es stand kurz etwas da", sondern "der Wert ist
+    // gespeichert". Ein 422 haette den Wert nur lokal im Formular gelassen —
+    // nach dem Reload waere der alte Stand zurueck.
+    await waitForCondition(
+      client,
+      "limits save acknowledged without error",
+      "!(document.body.textContent || '').includes('Request failed')",
+      15000,
+    );
+    await navigate(client, `${FRONTEND_URL}/auto-execution`);
+    await waitForCondition(
+      client,
+      "saved limit survives a reload",
+      `(() => {
+        const input = document.querySelector('[data-testid="auto-execution-max-position-input"]');
+        return !!input && String(input.value) === "${probeValue}";
+      })()`,
+      20000,
+    );
+    console.log("ui_auto_execution_limits_persist ok");
+
     // 11. Admin page if first user is admin (registration of a fresh stack
     // makes the first registered user admin per the backend's bootstrap).
     const isAdmin = await client.evaluate(`
