@@ -24,6 +24,7 @@ type BackupListItem = {
 
 export function AdminPage() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   if (!user) {
     return null;
   }
@@ -34,10 +35,8 @@ export function AdminPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold">Administration</h1>
-        <p className="text-sm text-slate-400">
-          Admin-only surface for user lifecycle and platform backups.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("admin.title")}</h1>
+        <p className="text-sm text-slate-400">{t("admin.subtitle")}</p>
       </header>
       <ErrorBoundary variant="section" scope="admin-users">
         <UsersSection />
@@ -84,11 +83,13 @@ const COMPOSITE_AXES: (keyof CompositeWeights)[] = [
   "news",
 ];
 
-const COMPOSITE_AXIS_LABEL: Record<keyof CompositeWeights, string> = {
-  technical: "Technical (ML)",
-  analyst: "Analyst consensus",
-  fundamentals: "Fundamentals",
-  news: "News sentiment",
+// Axis labels live in the i18n bundle (`admin.composite.axis.*`) so the page
+// carries no second, untranslated copy of them.
+const COMPOSITE_AXIS_KEY: Record<keyof CompositeWeights, string> = {
+  technical: "admin.composite.axis.technical",
+  analyst: "admin.composite.axis.analyst",
+  fundamentals: "admin.composite.axis.fundamentals",
+  news: "admin.composite.axis.news",
 };
 
 // Operator control over the composite decision-score weights. The backend
@@ -163,7 +164,9 @@ function CompositeWeightsSection() {
       queryClient.invalidateQueries({ queryKey: ["admin-composite-weights"] });
     },
     onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "save failed"),
+      setError(
+        err instanceof ApiError ? err.message : t("admin.composite.saveFailed"),
+      ),
   });
 
   const calibrateMutation = useMutation({
@@ -178,14 +181,18 @@ function CompositeWeightsSection() {
       queryClient.invalidateQueries({ queryKey: ["admin-composite-readiness"] });
     },
     onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "calibration failed"),
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : t("admin.composite.calibrationFailed"),
+      ),
   });
 
   return (
     <section className="space-y-3" data-testid="admin-composite-weights-section">
       <header>
         <h2 className="flex items-center gap-1.5 text-lg font-medium">
-          Composite decision weights
+          {t("admin.composite.title")}
           <InfoTooltip
             text={t("tooltips.admin.weights")}
             topic="admin"
@@ -193,9 +200,10 @@ function CompositeWeightsSection() {
           />
         </h2>
         <p className="text-sm text-slate-400">
-          Relative weight of each source in the composite BUY/HOLD/SELL verdict.
-          Values are normalised to 100%.{" "}
-          {query.data?.isCustom ? "Custom override active." : "Using defaults."}
+          {t("admin.composite.description")}{" "}
+          {query.data?.isCustom
+            ? t("admin.composite.customActive")
+            : t("admin.composite.usingDefaults")}
         </p>
       </header>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -207,7 +215,7 @@ function CompositeWeightsSection() {
               : 0;
           return (
             <label key={axis} className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">{COMPOSITE_AXIS_LABEL[axis]}</span>
+              <span className="text-slate-300">{t(COMPOSITE_AXIS_KEY[axis])}</span>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -235,7 +243,9 @@ function CompositeWeightsSection() {
           className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           data-testid="composite-weights-save"
         >
-          {saveMutation.isPending ? "Saving…" : "Save weights"}
+          {saveMutation.isPending
+            ? t("admin.composite.saving")
+            : t("admin.composite.save")}
         </button>
         {draft ? (
           <button
@@ -246,7 +256,7 @@ function CompositeWeightsSection() {
             }}
             className="text-sm text-slate-400"
           >
-            Reset
+            {t("admin.composite.reset")}
           </button>
         ) : null}
       </div>
@@ -256,7 +266,7 @@ function CompositeWeightsSection() {
           data-testid="composite-readiness"
         >
           <p className="flex items-center gap-1.5 font-medium text-slate-200">
-            Backtest calibration readiness (forward-collection)
+            {t("admin.composite.readinessTitle")}
             <InfoTooltip
               text={t("tooltips.admin.readiness")}
               topic="admin"
@@ -264,13 +274,16 @@ function CompositeWeightsSection() {
             />
           </p>
           <p className="text-slate-400">
-            {readinessQuery.data.fullAxisLabeled} / {readinessQuery.data.threshold}{" "}
-            full-axis labeled samples ({readinessQuery.data.labeled} labeled of{" "}
-            {readinessQuery.data.total} collected, {readinessQuery.data.horizonDays}
-            -day horizon).{" "}
+            {t("admin.composite.readinessSamples", {
+              fullAxis: readinessQuery.data.fullAxisLabeled,
+              threshold: readinessQuery.data.threshold,
+              labeled: readinessQuery.data.labeled,
+              total: readinessQuery.data.total,
+              horizon: readinessQuery.data.horizonDays,
+            })}{" "}
             {readinessQuery.data.ready
-              ? "Full 4-axis calibration is available."
-              : "Still collecting — analyst/news axes calibrate only once enough labeled data accrues; until then those weights stay policy-set."}
+              ? t("admin.composite.readinessReady")
+              : t("admin.composite.readinessCollecting")}
           </p>
           <div className="mt-2 flex items-center gap-3">
             <button
@@ -280,10 +293,12 @@ function CompositeWeightsSection() {
               className="rounded border border-slate-600 px-3 py-1.5 text-sm disabled:opacity-50"
               data-testid="composite-calibrate"
             >
-              {calibrateMutation.isPending ? "Calibrating…" : "Run calibration"}
+              {calibrateMutation.isPending
+                ? t("admin.composite.calibrating")
+                : t("admin.composite.calibrate")}
             </button>
             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              Writes weights only when it beats the current hit-rate.
+              {t("admin.composite.calibrateNote")}
               <InfoTooltip
                 text={t("tooltips.admin.calibrate")}
                 topic="admin"
@@ -294,15 +309,20 @@ function CompositeWeightsSection() {
           {calibReport ? (
             <p className="mt-2 text-xs text-slate-400" data-testid="composite-calibrate-report">
               {calibReport.applied
-                ? `Applied: ${calibReport.calibratedAxes?.join(", ")} recalibrated — hit-rate ${(
-                    (calibReport.currentHitRate ?? 0) * 100
-                  ).toFixed(1)}% → ${((calibReport.bestHitRate ?? 0) * 100).toFixed(1)}% on ${
-                    calibReport.labeled
-                  } labeled samples.`
-                : `Not applied (${
-                    calibReport.reason ??
-                    (calibReport.improved === false ? "no improvement over current weights" : "—")
-                  }). ${calibReport.labeled ?? 0} labeled samples.`}
+                ? t("admin.composite.calibrateApplied", {
+                    axes: calibReport.calibratedAxes?.join(", "),
+                    from: ((calibReport.currentHitRate ?? 0) * 100).toFixed(1),
+                    to: ((calibReport.bestHitRate ?? 0) * 100).toFixed(1),
+                    labeled: calibReport.labeled,
+                  })
+                : t("admin.composite.calibrateNotApplied", {
+                    reason:
+                      calibReport.reason ??
+                      (calibReport.improved === false
+                        ? t("admin.composite.calibrateNoImprovement")
+                        : t("admin.composite.calibrateUnknownReason")),
+                    labeled: calibReport.labeled ?? 0,
+                  })}
             </p>
           ) : null}
         </div>
@@ -344,6 +364,7 @@ const PROVIDER_TO_MANAGED_KEY: Record<string, string> = {
 };
 
 function DataSourcesSection() {
+  const { t } = useTranslation();
   const query = useQuery({
     queryKey: ["admin-data-sources"],
     queryFn: () => apiFetch<{ providers: DataSourceCatalogueEntry[] }>("/api/admin/data-sources"),
@@ -373,28 +394,24 @@ function DataSourcesSection() {
   return (
     <section className="space-y-3" data-testid="admin-data-sources-section">
       <header>
-        <h2 className="text-lg font-semibold">Data sources</h2>
+        <h2 className="text-lg font-semibold">{t("admin.dataSources.title")}</h2>
         <p className="text-sm text-slate-400">
-          Which providers feed the recommendation engine. Recommended upgrades
-          point at the next sensible tier per provider so you can decide where
-          paid tiers would actually move the needle for buy/sell decisions.
-          Providers with an API key can be configured in place — values are
-          encrypted at rest and a 60s cache picks them up without a restart.
+          {t("admin.dataSources.description")}
         </p>
       </header>
       <div className="card overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="text-slate-500">
             <tr>
-              <th className="py-2">Provider</th>
-              <th>Configured</th>
-              <th>Source</th>
-              <th>Covers</th>
-              <th>Free-tier limit</th>
-              <th>Upgrade</th>
-              <th className="text-right">USD/mo</th>
-              <th>Why upgrade</th>
-              <th className="text-right">Action</th>
+              <th className="py-2">{t("admin.dataSources.colProvider")}</th>
+              <th>{t("admin.dataSources.colConfigured")}</th>
+              <th>{t("admin.dataSources.colSource")}</th>
+              <th>{t("admin.dataSources.colCovers")}</th>
+              <th>{t("admin.dataSources.colFreeTier")}</th>
+              <th>{t("admin.dataSources.colUpgrade")}</th>
+              <th className="text-right">{t("admin.dataSources.colCost")}</th>
+              <th>{t("admin.dataSources.colWhy")}</th>
+              <th className="text-right">{t("admin.dataSources.colAction")}</th>
             </tr>
           </thead>
           <tbody>
@@ -413,7 +430,9 @@ function DataSourcesSection() {
                         entry.configured ? "text-bergt-green" : "text-amber-300"
                       }
                     >
-                      {entry.configured ? "yes" : "no"}
+                      {entry.configured
+                        ? t("admin.dataSources.yes")
+                        : t("admin.dataSources.no")}
                     </span>
                   </td>
                   <td className="text-slate-400">
@@ -435,14 +454,16 @@ function DataSourcesSection() {
                         className="btn"
                         onClick={() => setEditKey(managedKey)}
                       >
-                        Configure
+                        {t("admin.dataSources.configure")}
                       </button>
                     ) : entry.key === "alpaca" ? (
                       <span className="text-xs text-slate-500">
-                        per-user (Settings)
+                        {t("admin.dataSources.perUserSettings")}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500">no key</span>
+                      <span className="text-xs text-slate-500">
+                        {t("admin.dataSources.noKey")}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -452,9 +473,7 @@ function DataSourcesSection() {
         </table>
       </div>
       <p className="text-xs text-slate-500">
-        If every recommended upgrade were activated for currently-configured
-        providers, the additional monthly cost would be approximately
-        <span className="ml-1 font-mono text-slate-200">${monthlyTotal}</span>.
+        {t("admin.dataSources.monthlyTotal", { amount: `$${monthlyTotal}` })}
       </p>
       {editKey ? (
         <PlatformConfigEditor
@@ -476,6 +495,7 @@ function PlatformConfigEditor({
   currentStatus: PlatformConfigItem | undefined;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");
   const [testResult, setTestResult] = useState<{
@@ -529,15 +549,17 @@ function PlatformConfigEditor({
         onClick={(e) => e.stopPropagation()}
       >
         <header>
-          <h3 className="text-lg font-semibold">Configure {configKey}</h3>
+          <h3 className="text-lg font-semibold">
+            {t("admin.platformConfig.title", { key: configKey })}
+          </h3>
           <p className="text-xs text-slate-500">
-            Current source:{" "}
+            {t("admin.platformConfig.currentSource")}{" "}
             <span className="font-mono text-slate-300">
-              {currentStatus?.source ?? "unconfigured"}
+              {currentStatus?.source ?? t("admin.platformConfig.unconfigured")}
             </span>
             {currentStatus?.lastUpdatedAt ? (
               <>
-                {" · last set "}
+                {` · ${t("admin.platformConfig.lastSet")} `}
                 <span className="font-mono text-slate-300">
                   {new Date(currentStatus.lastUpdatedAt).toLocaleString()}
                 </span>
@@ -546,18 +568,16 @@ function PlatformConfigEditor({
           </p>
         </header>
         <p className="text-xs text-slate-400">
-          Stored encrypted in the database (Fernet / APP_ENCRYPTION_KEY).
-          Read order: DB &gt; environment variable &gt; unconfigured.
-          Saving a new value invalidates the 60s cache so the next provider
-          call sees it immediately. "Test" probes the actual upstream
-          provider with the value below — does not persist anything.
+          {t("admin.platformConfig.explainer")}
         </p>
         <label className="block text-sm">
-          <span className="text-slate-300">New value</span>
+          <span className="text-slate-300">
+            {t("admin.platformConfig.newValue")}
+          </span>
           <input
             className="input mt-1 w-full"
             type="password"
-            placeholder="paste value…"
+            placeholder={t("admin.platformConfig.valuePlaceholder")}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             autoFocus
@@ -569,17 +589,21 @@ function PlatformConfigEditor({
               testResult.ok ? "text-bergt-green" : "text-red-300"
             }`}
           >
-            test: {testResult.detail}
+            {t("admin.platformConfig.testResult", { detail: testResult.detail })}
           </p>
         ) : null}
         {saveMutation.error ? (
           <p className="text-xs text-red-300">
-            save: {(saveMutation.error as ApiError).message}
+            {t("admin.platformConfig.saveError", {
+              detail: (saveMutation.error as ApiError).message,
+            })}
           </p>
         ) : null}
         {deleteMutation.error ? (
           <p className="text-xs text-red-300">
-            unset: {(deleteMutation.error as ApiError).message}
+            {t("admin.platformConfig.unsetError", {
+              detail: (deleteMutation.error as ApiError).message,
+            })}
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
@@ -589,7 +613,9 @@ function PlatformConfigEditor({
             disabled={!value || saveMutation.isPending}
             onClick={() => saveMutation.mutate(value)}
           >
-            {saveMutation.isPending ? "Saving…" : "Save"}
+            {saveMutation.isPending
+              ? t("admin.platformConfig.saving")
+              : t("admin.platformConfig.save")}
           </button>
           <button
             type="button"
@@ -605,7 +631,9 @@ function PlatformConfigEditor({
               });
             }}
           >
-            {testMutation.isPending ? "Testing…" : "Save & test"}
+            {testMutation.isPending
+              ? t("admin.platformConfig.testing")
+              : t("admin.platformConfig.saveAndTest")}
           </button>
           {currentStatus?.source === "db" ? (
             <button
@@ -614,11 +642,13 @@ function PlatformConfigEditor({
               disabled={deleteMutation.isPending}
               onClick={() => deleteMutation.mutate()}
             >
-              {deleteMutation.isPending ? "Unsetting…" : "Unset (fall back to env)"}
+              {deleteMutation.isPending
+                ? t("admin.platformConfig.unsetting")
+                : t("admin.platformConfig.unset")}
             </button>
           ) : null}
           <button type="button" className="btn ml-auto" onClick={onClose}>
-            Cancel
+            {t("admin.platformConfig.cancel")}
           </button>
         </div>
       </div>
@@ -690,17 +720,15 @@ function UsersSection() {
   }
 
   function handleResetPassword(userId: number) {
-    const pwd = window.prompt("New password (min 8 chars):");
+    const pwd = window.prompt(t("admin.users.promptPassword"));
     if (!pwd || pwd.length < 8) return;
-    const alsoMfa = window.confirm(
-      "Also reset MFA? Click OK to clear MFA secret, Cancel to keep MFA.",
-    );
+    const alsoMfa = window.confirm(t("admin.users.promptResetMfa"));
     resetPassword.mutate({ userId, newPassword: pwd, resetMfa: alsoMfa });
   }
 
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold">Users</h2>
+      <h2 className="mb-3 text-lg font-semibold">{t("admin.users.title")}</h2>
       <form onSubmit={handleCreate} className="card mb-4 grid gap-3 sm:grid-cols-4">
         {/* Beide Felder trugen ihre Semantik nur im placeholder: kein Label,
             kein htmlFor. Ein Screenreader las damit ein unbeschriftetes
@@ -711,7 +739,7 @@ function UsersSection() {
           <input
             className="input"
             type="email"
-            placeholder="email"
+            placeholder={t("admin.users.emailPlaceholder")}
             required
             value={newEmail}
             onChange={(event) => setNewEmail(event.target.value)}
@@ -722,7 +750,7 @@ function UsersSection() {
           <input
             className="input"
             type="password"
-            placeholder="password (min 8)"
+            placeholder={t("admin.users.passwordPlaceholder")}
             required
             minLength={8}
             value={newPassword}
@@ -735,11 +763,13 @@ function UsersSection() {
             checked={newIsAdmin}
             onChange={(event) => setNewIsAdmin(event.target.checked)}
           />
-          Admin
+          {t("admin.users.adminLabel")}
         </label>
         <div className="sm:col-span-4 flex items-center gap-3">
           <button type="submit" className="btn btn-primary" disabled={createUser.isPending}>
-            {createUser.isPending ? "Creating…" : "Create user"}
+            {createUser.isPending
+              ? t("admin.users.creating")
+              : t("admin.users.create")}
           </button>
           {createUser.error ? (
             <span className="text-sm text-red-300">
@@ -753,12 +783,12 @@ function UsersSection() {
         <table className="min-w-full divide-y divide-slate-800 text-sm">
           <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
             <tr>
-              <th className="px-3 py-2 text-left">ID</th>
-              <th className="px-3 py-2 text-left">Email</th>
-              <th className="px-3 py-2 text-left">Role</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">MFA</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <th className="px-3 py-2 text-left">{t("admin.users.colId")}</th>
+              <th className="px-3 py-2 text-left">{t("admin.users.colEmail")}</th>
+              <th className="px-3 py-2 text-left">{t("admin.users.colRole")}</th>
+              <th className="px-3 py-2 text-left">{t("admin.users.colStatus")}</th>
+              <th className="px-3 py-2 text-left">{t("admin.users.colMfa")}</th>
+              <th className="px-3 py-2 text-right">{t("admin.users.colActions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -766,7 +796,11 @@ function UsersSection() {
               <tr key={u.id}>
                 <td className="px-3 py-2 tabular-nums">{u.id}</td>
                 <td className="px-3 py-2">{u.email}</td>
-                <td className="px-3 py-2">{u.is_admin ? "Admin" : "Member"}</td>
+                <td className="px-3 py-2">
+                  {u.is_admin
+                    ? t("admin.users.roleAdmin")
+                    : t("admin.users.roleMember")}
+                </td>
                 <td className="px-3 py-2">
                   <span
                     className={`rounded-full border px-2 py-0.5 text-xs ${
@@ -775,10 +809,14 @@ function UsersSection() {
                         : "border-red-700/50 bg-red-900/30 text-red-200"
                     }`}
                   >
-                    {u.is_active ? "Active" : "Inactive"}
+                    {u.is_active
+                      ? t("admin.users.statusActive")
+                      : t("admin.users.statusInactive")}
                   </span>
                 </td>
-                <td className="px-3 py-2">{u.mfa_enabled ? "On" : "Off"}</td>
+                <td className="px-3 py-2">
+                  {u.mfa_enabled ? t("admin.users.mfaOn") : t("admin.users.mfaOff")}
+                </td>
                 <td className="px-3 py-2 text-right space-x-2">
                   <button
                     type="button"
@@ -786,14 +824,14 @@ function UsersSection() {
                     disabled={resetMfa.isPending || !u.mfa_enabled}
                     onClick={() => resetMfa.mutate(u.id)}
                   >
-                    Reset MFA
+                    {t("admin.users.resetMfa")}
                   </button>
                   <button
                     type="button"
                     className="btn"
                     onClick={() => handleResetPassword(u.id)}
                   >
-                    Set password
+                    {t("admin.users.setPassword")}
                   </button>
                   <button
                     type="button"
@@ -803,7 +841,9 @@ function UsersSection() {
                     }
                     disabled={setStatus.isPending}
                   >
-                    {u.is_active ? "Deactivate" : "Activate"}
+                    {u.is_active
+                      ? t("admin.users.deactivate")
+                      : t("admin.users.activate")}
                   </button>
                 </td>
               </tr>
@@ -816,6 +856,7 @@ function UsersSection() {
 }
 
 function BackupsSection() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const backupsQuery = useQuery({
     queryKey: ["admin-backups"],
@@ -835,7 +876,7 @@ function BackupsSection() {
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
     if (!response.ok) {
-      window.alert(`Download failed: ${response.status}`);
+      window.alert(t("admin.backups.downloadFailed", { status: response.status }));
       return;
     }
     const blob = await response.blob();
@@ -851,7 +892,7 @@ function BackupsSection() {
 
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold">Backups</h2>
+      <h2 className="mb-3 text-lg font-semibold">{t("admin.backups.title")}</h2>
       <div className="card mb-4 flex items-center gap-3">
         <button
           type="button"
@@ -859,7 +900,9 @@ function BackupsSection() {
           onClick={() => createBackup.mutate()}
           disabled={createBackup.isPending}
         >
-          {createBackup.isPending ? "Creating…" : "Create manual backup"}
+          {createBackup.isPending
+            ? t("admin.backups.creating")
+            : t("admin.backups.create")}
         </button>
         {createBackup.error ? (
           <span className="text-sm text-red-300">
@@ -885,12 +928,12 @@ function BackupsSection() {
               className="btn"
               onClick={() => handleDownload(backup.filename)}
             >
-              Download
+              {t("admin.backups.download")}
             </button>
           </li>
         ))}
         {backupsQuery.data && backups.length === 0 ? (
-          <p className="text-sm text-slate-500">No backups yet.</p>
+          <p className="text-sm text-slate-500">{t("admin.backups.empty")}</p>
         ) : null}
       </ul>
     </section>
@@ -898,13 +941,15 @@ function BackupsSection() {
 }
 
 function ExportSection() {
+  const { t } = useTranslation();
+
   async function handleExport() {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const response = await fetch("/api/admin/export", {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) {
-      window.alert(`Export failed: ${response.status}`);
+      window.alert(t("admin.export.failed", { status: response.status }));
       return;
     }
     const blob = await response.blob();
@@ -923,14 +968,11 @@ function ExportSection() {
 
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold">Export</h2>
+      <h2 className="mb-3 text-lg font-semibold">{t("admin.export.title")}</h2>
       <div className="card flex flex-wrap items-center gap-3">
-        <p className="text-sm text-slate-400">
-          Streams the full snapshot (users, watchlists, alert rules, alert
-          events, push subs) as JSON.
-        </p>
+        <p className="text-sm text-slate-400">{t("admin.export.description")}</p>
         <button type="button" className="btn btn-primary" onClick={handleExport}>
-          Download platform export
+          {t("admin.export.download")}
         </button>
       </div>
     </section>

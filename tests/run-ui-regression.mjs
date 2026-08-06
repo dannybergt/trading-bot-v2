@@ -1164,6 +1164,33 @@ async function run() {
       } catch (error) {
         console.log(`ui_admin best_effort_skipped reason="${(error.message || String(error)).slice(0, 120)}"`);
       }
+
+      // 11b-2. Deutsche Fassung der Admin-Seite. Bewusst NICHT best-effort:
+      // die Seite rendert direkt, und `test_admin_page_i18n.py` haelt die
+      // Quelle schon frei von festem Text — hier wird nachgewiesen, dass das
+      // Bundle die Seite zur Laufzeit auch wirklich erreicht.
+      //
+      // Vier Zusagen aus vier verschiedenen Sektionen, alle unbedingt
+      // gerendert. Eine einzelne uebersetzte Ueberschrift kann den Schritt
+      // damit nicht tragen — genau der Fehler, an dem `ui_metric_sources`
+      // am 2026-08-06 auf dem CI-Runner haengen blieb.
+      await client.evaluate("window.localStorage.setItem('language', 'de')");
+      await navigate(client, `${FRONTEND_URL}/admin`);
+      for (const needle of [
+        "Nur für Administratoren",
+        "Nutzer anlegen",
+        "Gewichte der Gesamtentscheidung",
+        "Sicherung manuell erstellen",
+      ]) {
+        await waitForCondition(
+          client,
+          `german admin copy: ${needle}`,
+          `(document.body.innerText || document.body.textContent || '').includes(${JSON.stringify(needle)})`,
+          20000,
+        );
+      }
+      await client.evaluate("window.localStorage.setItem('language', 'en')");
+      console.log("ui_admin_i18n_german ok");
     } else {
       console.log("ui_admin skipped_non_admin");
     }
