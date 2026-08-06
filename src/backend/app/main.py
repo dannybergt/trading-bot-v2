@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import List, Optional
 import uuid
 
@@ -2774,9 +2774,18 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
                 query_upper = ticker
 
         canonical_query = canonicalize_symbol(query_upper)
-        
+
+        # Laufzeit je Abschnitt. Die Suche hing im Regressionslauf ueber 30s,
+        # und ohne diese Marken war nicht zu sagen, welcher Abschnitt es war.
+        stage_started = monotonic()
+
         all_assets = alpaca.get_all_assets()
-        logger.debug("symbol_search_assets_loaded query=%s asset_count=%s", query_upper, len(all_assets))
+        logger.info(
+            "symbol_search_stage query=%s stage=assets seconds=%.2f count=%s",
+            query_upper,
+            monotonic() - stage_started,
+            len(all_assets),
+        )
         
         # Simple fuzzy search
         results = []
@@ -2796,7 +2805,14 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
         top_results = results[:8]
 
         if not top_results:
+            fallback_started = monotonic()
             fallback_result = get_search_fallback_result(query_upper)
+            logger.info(
+                "symbol_search_stage query=%s stage=fallback seconds=%.2f hit=%s",
+                query_upper,
+                monotonic() - fallback_started,
+                bool(fallback_result),
+            )
             return [fallback_result] if fallback_result else []
         
         # 2. Enrich search results with ISIN using yfinance (in parallel for speed)
@@ -2810,9 +2826,16 @@ def search_symbols(query: str, current_user: User = Depends(get_current_user)):
             if isin and isin != '-':
                 r['isin'] = isin
 
+        enrich_started = monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             executor.map(fetch_isin, top_results)
-            
+        logger.info(
+            "symbol_search_stage query=%s stage=isin_enrichment seconds=%.2f count=%s",
+            query_upper,
+            monotonic() - enrich_started,
+            len(top_results),
+        )
+
         return top_results
     except Exception:
         logger.exception("symbol_search_failed query=%s", query)

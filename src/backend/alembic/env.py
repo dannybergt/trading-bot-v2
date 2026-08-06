@@ -3,6 +3,7 @@
 Reads `DATABASE_URL` from the same env that the app uses, so migrations always
 run against the active database.
 """
+import logging
 from logging.config import fileConfig
 
 from alembic import context
@@ -17,7 +18,20 @@ from app import models  # noqa: F401
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
-if config.config_file_name is not None:
+# Logging nur konfigurieren, wenn Alembic eigenstaendig laeuft (CLI).
+#
+# `init_db()` fuehrt die Migration **im Anwendungsprozess** aus. `fileConfig`
+# setzt dort per Default `disable_existing_loggers=True` und ersetzt zusaetzlich
+# die Root-Handler durch die Konsole aus `alembic.ini` (Level WARN, Textformat).
+# Ergebnis war: ab dem Ende des Starts protokollierte die Anwendung **gar
+# nichts** mehr — keine Request-IDs, keine Warnungen, kein JSON. Nur Bibliotheken
+# mit eigenem Logger (yfinance) waren noch zu sehen, weil sie erst nach diesem
+# Aufruf entstanden. Gemessen am 2026-08-06: ein erfolgreicher Login und eine
+# erfolgreiche Suche erzeugten null Logzeilen.
+#
+# Hat die Anwendung ihr Logging schon eingerichtet (Root hat Handler), bleibt es
+# unangetastet; im CLI-Fall (keine Handler) gilt weiter `alembic.ini`.
+if config.config_file_name is not None and not logging.getLogger().handlers:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
