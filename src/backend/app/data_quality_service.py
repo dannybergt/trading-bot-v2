@@ -23,6 +23,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from app import metric_sources
+
 # Confidence vocabulary.
 FULL = "full"          # Live data from the primary provider for this field.
 PARTIAL = "partial"    # Data present but from a fallback provider.
@@ -242,9 +244,9 @@ def evaluate_symbol_data_quality(
     fundamentals = research.get("fundamentals") or {}
     fundamentals_filled = sum(1 for value in fundamentals.values() if value not in (None, 0, ""))
     if fundamentals_filled >= 4:
-        fields.append(_field("fundamentals", FULL, _fundamentals_source(fundamentals)))
+        fields.append(_field("fundamentals", FULL, _fundamentals_source(fundamentals, research)))
     elif fundamentals_filled > 0:
-        fields.append(_field("fundamentals", PARTIAL, _fundamentals_source(fundamentals)))
+        fields.append(_field("fundamentals", PARTIAL, _fundamentals_source(fundamentals, research)))
     else:
         fields.append(_field("fundamentals", MISSING, "no provider returned fundamentals"))
 
@@ -337,11 +339,23 @@ def evaluate_symbol_data_quality(
     overall = _overall_confidence(fields)
     upgrades = _build_upgrade_hints(asset_class_normalized, fields)
 
+    # Herkunft je angezeigter Kennzahl (TBV2-Z06 b). Bewusst getrennt von
+    # `fields`: die Vertrauensnote bewertet, die Herkunftskarte benennt.
+    # Beide lesen dieselben Payloads, und `test_metric_sources.py` haelt
+    # sie gegeneinander, damit die Karte und das Tooltip nicht zwei
+    # verschiedene Antworten auf dieselbe Frage geben.
+    sources = metric_sources.build_source_map(
+        asset_class=asset_class,
+        research_payload=research_payload,
+        stock_payload=stock_payload,
+    )
+
     return {
         "symbol": symbol,
         "assetClass": asset_class,
         "overall": overall,
         "fields": fields,
+        "sources": sources,
         "upgradeHints": upgrades,
     }
 
@@ -371,7 +385,18 @@ def _field(key: str, confidence: str, provider: str) -> dict[str, Any]:
     return {"key": key, "confidence": confidence, "provider": provider}
 
 
-def _fundamentals_source(fundamentals: dict[str, Any]) -> str:
+def _fundamentals_source(
+    fundamentals: dict[str, Any],
+    research: dict[str, Any] | None = None,
+) -> str:
+    # Welches Glied der Kette geantwortet hat, weiss nur `get_ticker_info`.
+    # Seit die Antwort als `fundamentalsSource` im Research-Payload steht,
+    # ist sie hier die erste Wahl — vorher stand hier fuer jeden FMP- und
+    # Twelve-Data-Treffer faelschlich "yfinance", weil der Payload die
+    # Herkunftsflags gar nicht mitfuehrte.
+    explicit = (research or {}).get("fundamentalsSource")
+    if explicit:
+        return str(explicit)
     # Heuristic: if fields look like the FMP-shaped subset (twelve_data_source / fmp_source flags
     # would have been merged into the dict at MarketDataService level), label accordingly.
     if fundamentals.get("twelve_data_source"):

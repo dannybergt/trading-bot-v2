@@ -93,6 +93,26 @@ export function formatNumber(
   }).format(value);
 }
 
+/**
+ * Zeitpunkt einer Quelle, in der Genauigkeit, in der er belegt ist.
+ *
+ * Ein reines Datum (`2026-06-30`, etwa ein Bilanzstichtag) darf nicht als
+ * `30.06.2026, 00:00` erscheinen — die Uhrzeit stuende dort, ohne dass sie
+ * jemand gemessen hat. Datumswerte bleiben deshalb Datum, Zeitstempel
+ * bleiben Zeitstempel.
+ */
+export function formatSourceStamp(value: string | null | undefined): string {
+  if (!value) return "—";
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+  if (!dateOnly) return formatDateTime(value);
+  const date = new Date(`${value.trim()}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(currentLocale(), {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 /** Datum/Zeit in der gewaehlten Oberflaechensprache, nicht der des Browsers. */
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return "—";

@@ -902,5 +902,22 @@
     "zonesHide": "Hide entry/stop/target",
     "levelsShow": "Show {{count}} support/resistance lines",
     "levelsHide": "Hide {{count}} support/resistance lines"
+  },
+  "sources": {
+    "label": "Source",
+    "none": "no source answered",
+    "kind": {
+      "data": "as of",
+      "fetch": "retrieved",
+      "trained": "model trained",
+      "unknown": "timestamp unknown"
+    },
+    "explain": {
+      "data": "The timestamp is the data's own as-of date, as dated by the provider.",
+      "fetch": "The timestamp is when we retrieved the data, not the data's own as-of date. This provider does not date these values.",
+      "trained": "The timestamp is when the model was trained. The prediction itself is recomputed from current prices on every request.",
+      "unknown": "This source supplies no timestamp. None is shown rather than guessing one.",
+      "none": "No provider returned data for this section."
+    }
   }
 }

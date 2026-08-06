@@ -225,6 +225,9 @@ class CoinGeckoService:
                 "subscribers": _safe_float(developer.get("subscribers")),
                 "commitCount4Weeks": _safe_float(developer.get("commit_count_4_weeks")),
             },
+            # CoinGecko datiert seinen eigenen Stand — durchreichen statt
+            # ihn spaeter im Frontend mit dem Abrufzeitpunkt zu verwechseln.
+            "lastUpdated": payload.get("last_updated") or None,
             "sentimentVotesUpPct": _safe_float(payload.get("sentiment_votes_up_percentage")),
             "sentimentVotesDownPct": _safe_float(payload.get("sentiment_votes_down_percentage")),
         }

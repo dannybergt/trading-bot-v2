@@ -2245,6 +2245,19 @@ def get_symbol_research(
         "priceToBook": ticker_info.get("priceToBook"),
     }
 
+    # Welches Glied der Stammdaten-Kette geantwortet hat. Die Flags stehen
+    # nur im rohen `ticker_info`; der Auszug oben fuehrt sie bewusst nicht
+    # mit (sie wuerden als gefuellte Felder mitgezaehlt). Ohne diese Angabe
+    # nannte die Datenqualitaets-Karte fuer jeden FMP- und Twelve-Data-
+    # Treffer faelschlich "yfinance".
+    fundamentals_source = None
+    if ticker_info.get("twelve_data_source"):
+        fundamentals_source = "Twelve Data"
+    elif ticker_info.get("fmp_source"):
+        fundamentals_source = "FMP"
+    elif ticker_info:
+        fundamentals_source = "yfinance"
+
     research_depth = (
         service.fmp.normalized_research_depth(asset_profile["symbol"])
         if service.fmp.configured and not asset_profile.get("isCrypto")
@@ -2329,6 +2342,8 @@ def get_symbol_research(
         "quote": provider_quote,
         "research": provider_research,
         "fundamentals": fundamentals,
+        "fundamentalsSource": fundamentals_source,
+        "fundamentalsFetchedAt": service.ticker_info_fetched_at(asset_profile["symbol"]),
         "fundamentalsDetail": fundamentals_detail,
         "researchDepth": research_depth,
         "researchSignals": research_signals,

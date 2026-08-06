@@ -1,5 +1,6 @@
 import copy
 import logging
+from datetime import datetime, timezone
 from time import monotonic
 
 import pandas as pd
@@ -186,9 +187,30 @@ class MarketDataService:
     def _set_cached_payload(self, cache: dict[str, dict], key: str, value, ttl_seconds: int):
         cache[key] = {
             "expires_at": monotonic() + ttl_seconds,
+            # Wanduhrzeit des tatsaechlichen Abrufs. `expires_at` haengt an
+            # `monotonic()` und ist damit fuer eine Anzeige unbrauchbar; der
+            # Herkunftshinweis auf der Analyse-Seite braucht aber genau
+            # diesen Zeitpunkt, und er muss den *ersten* Abruf nennen, nicht
+            # den Moment, in dem der Cache gelesen wurde.
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
             "value": copy.deepcopy(value),
         }
         return copy.deepcopy(value)
+
+    def _cached_fetched_at(self, cache: dict[str, dict], key: str) -> str | None:
+        entry = cache.get(key)
+        if not entry or entry["expires_at"] <= monotonic():
+            return None
+        return entry.get("fetched_at")
+
+    def ticker_info_fetched_at(self, symbol: str) -> str | None:
+        """Zeitpunkt, zu dem die Stammdaten fuer dieses Symbol geholt wurden.
+
+        `None`, sobald der Cache abgelaufen ist — dann ist der Zeitpunkt
+        unbekannt, und die Oberflaeche sagt genau das, statt einen
+        plausiblen zu erfinden.
+        """
+        return self._cached_fetched_at(self._ticker_info_cache, canonicalize_symbol(symbol))
 
     def get_asset_reference(self, symbol: str):
         if not self.alpaca:

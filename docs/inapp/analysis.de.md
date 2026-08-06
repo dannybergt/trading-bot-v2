@@ -24,6 +24,25 @@ Die tiefste Single-Symbol-Flaeche. Holt jedes Signal, das wir zum Symbol haben, 
 - **Holdings** — fuer ETFs: Top-Holdings mit Gewichtung.
 - **News** — aggregierte News mit VADER-Sentiment pro Item.
 
+## Woher die Zahlen kommen
+
+Jede Kennzahlen-Sektion traegt oben eine Zeile "Quelle: ..." — den Anbieter, der
+geantwortet hat, und den Zeitpunkt, auf den sich die Werte beziehen. Der
+Zeitpunkt nennt immer seine Bedeutung, weil das drei verschiedene Aussagen sind:
+
+- **Datenstand** — der Anbieter datiert den Wert selbst (letzter Kursbalken,
+  Meldungsdatum, Einreichungsdatum eines Filings, Bilanzstichtag).
+- **abgerufen** — der Anbieter datiert nichts; genannt wird der Zeitpunkt, zu
+  dem wir geholt haben. Betrifft Stammdaten, Optionskette und Sektorvergleich.
+- **Modell trainiert** — Zeitpunkt des letzten Trainings. Die Prognose selbst
+  wird bei jedem Aufruf aus den aktuellen Kursen neu gerechnet.
+- **Zeitpunkt unbekannt** — es gibt keinen belegbaren Zeitpunkt. Dann steht das
+  da, statt eine plausibel aussehende Zahl zu zeigen.
+
+Steht "keine Quelle geantwortet", hat fuer diesen Abschnitt kein Anbieter
+geliefert. Die Datenqualitaets-Karte ganz oben fasst dasselbe fuer die ganze
+Seite zusammen.
+
 ## Wie Empfehlungen gegated werden
 
 Eine Buy-Empfehlung ist nur dann "actionable", wenn der projizierte NETTO-Return nach Broker-Gebuehren und Kapitalertragssteuer dein `min_target_yield` ueberschreitet. Die Yield-Aufschluesselungskarte zeigt gross / fees / tax / net.

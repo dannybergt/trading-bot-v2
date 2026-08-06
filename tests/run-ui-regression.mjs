@@ -810,6 +810,118 @@ async function run() {
       `ui_trade_gates ok [${gateState.reasons.length} reason(s), all rendered as sentences]`,
     );
 
+    // 8a3. Herkunft jeder Kennzahl: Provider und Zeitstempel (TBV2-Z06 b).
+    //
+    // Die Zusage lautet "jede angezeigte Kennzahl nennt Provider und
+    // Zeitstempel". Ein Kasten, der da ist, belegt das nicht — belegt ist es
+    // erst, wenn (a) jede sichtbare Kennzahlen-Sektion einen Hinweis traegt,
+    // (b) dessen Text tatsaechlich einen Anbieter nennt und einen Zeitpunkt
+    // *oder* offen sagt, dass es keinen gibt, und (c) die genannten Anbieter
+    // mit dem uebereinstimmen, was das Backend fuer dasselbe Symbol meldet.
+    //
+    // Ohne (c) waere der sichtbare Text ein Koeder: er koennte im Frontend
+    // erfunden sein und stuende trotzdem gruen im Protokoll.
+    await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
+    await waitForCondition(
+      client,
+      "metric source tips present",
+      "document.querySelectorAll('[data-testid=\"source-tip\"]').length > 0",
+      20000,
+    );
+    const sourceState = await client.evaluate(`
+      (async () => {
+        const tips = Array.from(
+          document.querySelectorAll('[data-testid="source-tip"]'),
+        ).map((node) => ({
+          key: node.getAttribute("data-source-key"),
+          summary: (node.getAttribute("data-source-summary") || "").trim(),
+          rendered: (node.textContent || "").trim(),
+        }));
+        // Jede sichtbare Sektion mit einer Ueberschrift muss einen Hinweis
+        // tragen. Zwei Ausnahmen, beide mit Grund:
+        //   - die Datenqualitaets-Karte ist selbst der Herkunftsbericht,
+        //   - die Gate-Kette zeigt keine Kennzahlen, sondern begruendet jede
+        //     Ablehnung einzeln (das ist TBV2-Z06 (d), eigener Beweisschritt).
+        const exemptSections = ["data-quality-section", "trade-gate-panel"];
+        const sectionsWithoutTip = Array.from(document.querySelectorAll("section"))
+          .filter((section) => {
+            if (section.querySelector('[data-testid="source-tip"]')) return false;
+            if (exemptSections.includes(section.getAttribute("data-testid"))) return false;
+            return !!section.querySelector("h2");
+          })
+          .map((section) => (section.querySelector("h2").textContent || "").trim());
+
+        const token = localStorage.getItem("access_token");
+        const response = await fetch("/api/data-quality/VOO", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const report = response.ok ? await response.json() : null;
+        return { tips, sectionsWithoutTip, report };
+      })()
+    `);
+
+    if (sourceState.tips.length < 5) {
+      throw new Error(
+        `only ${sourceState.tips.length} metric source tip(s) rendered — expected one per metric section`,
+      );
+    }
+    if (sourceState.sectionsWithoutTip.length > 0) {
+      throw new Error(
+        `metric section(s) without a source statement: ${sourceState.sectionsWithoutTip.join(", ")}`,
+      );
+    }
+    for (const tip of sourceState.tips) {
+      if (!tip.summary || tip.summary !== tip.rendered) {
+        throw new Error(
+          `source tip for "${tip.key}" does not display what it claims (attribute "${tip.summary}", rendered "${tip.rendered}")`,
+        );
+      }
+      if (/undefined|null|NaN|Invalid Date/.test(tip.summary)) {
+        throw new Error(`source tip for "${tip.key}" renders a placeholder: "${tip.summary}"`);
+      }
+      // Entweder Anbieter + Zeitpunkt, oder eine ehrliche Fehlanzeige.
+      const named = tip.summary.includes("·");
+      const honestlyEmpty =
+        /no source answered|keine Quelle geantwortet/.test(tip.summary);
+      if (!named && !honestlyEmpty) {
+        throw new Error(
+          `source tip for "${tip.key}" neither names a source nor says none answered: "${tip.summary}"`,
+        );
+      }
+    }
+    // (c) Die angezeigten Anbieter stammen wirklich aus dem Backend.
+    if (!sourceState.report || !Array.isArray(sourceState.report.sources)) {
+      throw new Error("/api/data-quality did not return a source map to check the page against");
+    }
+    const summaryBlob = sourceState.tips.map((tip) => tip.summary).join(" | ");
+    const mismatched = sourceState.report.sources
+      .filter((entry) => entry.available && entry.provider)
+      .filter((entry) => !summaryBlob.includes(entry.provider))
+      .map((entry) => `${entry.key}=${entry.provider}`);
+    if (mismatched.length > 0) {
+      throw new Error(
+        `backend names provider(s) the page never shows: ${mismatched.join(", ")}`,
+      );
+    }
+    // Das Tooltip erklaert die Bedeutung des Zeitstempels und ist nicht bloss
+    // eine Wiederholung der Zeile darueber.
+    const explanation = await client.evaluate(`
+      (() => {
+        const tip = document.querySelector('[data-testid="source-tip"]');
+        tip.click();
+        const tooltip = tip.parentElement.querySelector('[role="tooltip"]');
+        return tooltip ? (tooltip.textContent || "").trim() : "";
+      })()
+    `);
+    if (!explanation || explanation.length < 20) {
+      throw new Error(`source tip opened no explanation (got "${explanation}")`);
+    }
+    const availableCount = sourceState.report.sources.filter((entry) => entry.available).length;
+    const datedCount = sourceState.report.sources.filter((entry) => entry.asOf).length;
+    console.log(
+      `ui_metric_sources ok [${sourceState.tips.length} tip(s), ${availableCount} source(s) answered, ${datedCount} dated]`,
+    );
+
     // 8b. Macro-Context-Section renders on the analysis page regardless of
     // symbol (computed from VIX/^TNX/DXY, not the analyzed symbol). Best-
     // effort because the underlying yfinance probes for the index symbols

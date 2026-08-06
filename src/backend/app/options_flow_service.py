@@ -225,6 +225,11 @@ def _build_snapshot(
         "topCalls": _top_strikes(calls, n=3),
         "topPuts": _top_strikes(puts, n=3),
         "putCallSignal": _classify_pc_signal(pc_volume_ratio, pc_oi_ratio),
+        # Abrufzeitpunkt, im gecachten Payload mitgefuehrt: die Optionskette
+        # traegt selbst keinen Stand (`expiry` liegt in der Zukunft und ist
+        # keiner), und der Herkunftshinweis auf der Analyse-Seite darf den
+        # Moment des Cache-Treffers nicht als Datenstand ausgeben.
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 

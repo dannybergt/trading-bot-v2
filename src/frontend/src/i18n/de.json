@@ -902,5 +902,22 @@
     "zonesHide": "Einstieg/Stopp/Ziel ausblenden",
     "levelsShow": "{{count}} Unterstuetzungs-/Widerstandslinien einblenden",
     "levelsHide": "{{count}} Unterstuetzungs-/Widerstandslinien ausblenden"
+  },
+  "sources": {
+    "label": "Quelle",
+    "none": "keine Quelle geantwortet",
+    "kind": {
+      "data": "Datenstand",
+      "fetch": "abgerufen",
+      "trained": "Modell trainiert",
+      "unknown": "Zeitpunkt unbekannt"
+    },
+    "explain": {
+      "data": "Der genannte Zeitpunkt ist der Stand der Daten selbst, wie der Anbieter ihn datiert.",
+      "fetch": "Der genannte Zeitpunkt ist der Abruf beim Anbieter, nicht der Stand der Daten. Der Anbieter datiert diese Werte nicht.",
+      "trained": "Der genannte Zeitpunkt ist das Training des Modells. Die Prognose selbst wird bei jedem Aufruf neu aus den aktuellen Kursen gerechnet.",
+      "unknown": "Diese Quelle liefert keinen Zeitpunkt. Es wird bewusst keiner angezeigt, statt einen zu schaetzen.",
+      "none": "Fuer diesen Abschnitt hat kein Anbieter Daten geliefert."
+    }
   }
 }

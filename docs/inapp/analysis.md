@@ -24,6 +24,24 @@ The deepest single-symbol surface. Pulls every signal we have for the symbol and
 - **Holdings** — for ETFs, top holdings with weight.
 - **News** — aggregated news with VADER sentiment per item.
 
+## Where the numbers come from
+
+Every metric section carries a "Source: ..." line — which provider answered and
+the point in time the values refer to. The timestamp always states what it
+means, because those are three different claims:
+
+- **as of** — the provider dates the value itself (last price bar, article
+  date, filing date, fiscal period end).
+- **retrieved** — the provider dates nothing; what is shown is when we fetched.
+  Applies to company master data, the options chain, and sector strength.
+- **model trained** — when the model was last trained. The prediction itself is
+  recomputed from current prices on every request.
+- **timestamp unknown** — there is no verifiable timestamp. That is stated
+  rather than showing a plausible-looking number.
+
+"no source answered" means no provider returned data for that section. The
+data-quality card at the top summarises the same thing for the whole page.
+
 ## How recommendations are gated
 
 A buy-side recommendation is only "actionable" when the projected NET return after broker fees and capital-gains tax clears your `min_target_yield`. The yield breakdown card spells out gross / fees / tax / net.

@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { ApiError, apiFetch } from "../api/client";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { InfoTooltip } from "../components/InfoTooltip";
+import { SourceMapProvider, SourceTip } from "../components/SourceTip";
+import type { MetricSource } from "../components/SourceTip";
 import {
   StockChart,
   type ChartCandle,
@@ -128,6 +130,8 @@ type DataQualityReport = {
   assetClass?: string;
   overall: "high" | "medium" | "low";
   fields: DataQualityField[];
+  /** Herkunft je Kennzahlen-Sektion (TBV2-Z06 b). */
+  sources?: MetricSource[];
   upgradeHints: DataQualityUpgrade[];
 };
 
@@ -631,6 +635,7 @@ export function AnalysisPage() {
       : lastClose;
 
   return (
+    <SourceMapProvider sources={dataQualityQuery.data?.sources}>
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
@@ -648,6 +653,9 @@ export function AnalysisPage() {
               {[stock.exchange, stock.market].filter(Boolean).join(" · ")}
             </p>
           ) : null}
+          <p className="mt-1">
+            <SourceTip sourceKey="price_history" />
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {lastClose != null ? (
@@ -766,6 +774,7 @@ export function AnalysisPage() {
       <HoldingsSection research={research?.research} />
       <NewsSection news={research?.news} />
     </div>
+    </SourceMapProvider>
   );
 }
 
@@ -915,6 +924,7 @@ function PredictionCard({
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium">
           ML signal: {dir} ({(confidence * 100).toFixed(1)}% confidence)
+          <span className="ml-2"><SourceTip sourceKey="prediction" /></span>
         </p>
         <div className="flex items-center gap-2 text-xs opacity-80">
           {confidenceOverall ? (
@@ -1290,9 +1300,12 @@ function PatternsCard({ patterns }: { patterns: ChartPattern[] }) {
   if (!patterns.length) return null;
   return (
     <section className="card">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-        Detected patterns
-      </h2>
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Detected patterns
+        </h2>
+        <SourceTip sourceKey="price_history" />
+      </header>
       <ul className="mt-2 flex flex-wrap gap-2">
         {patterns.map((p, idx) => (
           <li
@@ -1344,6 +1357,7 @@ function CompositeVerdictCard({ composite }: { composite?: CompositeScore | null
             testId="tip-composite-verdict"
           />
         </h2>
+        <SourceTip sourceKey="composite" />
         <span className="text-xs text-slate-500">
           {/* Die Unterzeile behauptete pauschal "alle Quellen gewichtet" —
               auch dann, wenn zwei der vier Achsen gar keine Daten hatten. */}
@@ -1466,7 +1480,10 @@ function AnalystConsensusCard({
 }) {
   const { t } = useTranslation();
   if (!consensus) return null;
-  const { stance, recommendation, recommendationMean, analystCount, targetMean, targetUpsidePct, source } =
+  // `consensus.source` wird hier bewusst nicht mehr gelesen: den Anbieter
+  // nennt jetzt <SourceTip>, gespeist aus `metric_sources`. Zwei Stellen fuer
+  // denselben Namen laufen frueher oder spaeter auseinander.
+  const { stance, recommendation, recommendationMean, analystCount, targetMean, targetUpsidePct } =
     consensus;
   if (!stance && targetMean == null) return null;
 
@@ -1505,9 +1522,7 @@ function AnalystConsensusCard({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
           {t("analysis.analyst.title")}
         </h2>
-        {source ? (
-          <span className="text-xs text-slate-500">{t("analysis.analyst.source", { source })}</span>
-        ) : null}
+        <SourceTip sourceKey="analyst_consensus" />
       </header>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         {recLabel ? <span className={`font-semibold ${stanceClass}`}>{recLabel}</span> : null}
@@ -1572,6 +1587,7 @@ function FundamentalsSection({
     <section className="card">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">Fundamentals</h2>
+        <SourceTip sourceKey="fundamentals" />
         {provider?.status ? (
           <span
             className={`rounded-full border px-2 py-0.5 text-xs ${providerClass(
@@ -1690,9 +1706,7 @@ function FundamentalsDetailSection({
     <section className="card" data-testid="analysis-fundamentals-detail">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">{t("analysis.fundamentalsDetail.title")}</h2>
-        <span className="text-xs text-slate-500">
-          {t("analysis.fundamentalsDetail.source", { source: detail.source || "FMP" })}
-        </span>
+        <SourceTip sourceKey="fundamentals_detail" />
       </header>
       {identifiers.length > 0 ? (
         <div>
@@ -1748,7 +1762,7 @@ function ResearchDepthSection({
     <section className="card">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">Research depth</h2>
-        <span className="text-xs text-slate-500">via FMP</span>
+        <SourceTip sourceKey="research_depth" />
       </header>
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         {rating ? <RatingCard rating={rating} /> : null}
@@ -1927,6 +1941,20 @@ function ModelPerformanceSection({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
           {t("analysis.modelPerformance.title")}
         </h2>
+        {/* Eigener Endpunkt (`/api/backtest`), deshalb nicht aus der
+            Herkunftskarte: die Guetezahlen stammen aus dem
+            Walk-Forward-Lauf desselben Modells. */}
+        <p className="mt-1">
+          <SourceTip
+            source={{
+              key: "model_performance",
+              provider: "Walk-Forward-Backtest (lokales Modell)",
+              available: true,
+              asOf: modelTrainedAt ?? null,
+              asOfKind: modelTrainedAt ? "trained" : "unknown",
+            }}
+          />
+        </p>
         <p className="text-xs text-slate-500">
           {t("analysis.modelPerformance.subtitle", {
             count: backtest.samples,
@@ -2054,6 +2082,7 @@ function ResearchSignalsSection({ signals }: { signals: ResearchSignals | undefi
           {t("analysis.researchSignals.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.researchSignals.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="research_signals" /></p>
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">
@@ -2249,6 +2278,7 @@ function EarningsCallsSection({ calls }: { calls: EarningsCall[] | undefined }) 
           {t("analysis.earningsCalls.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.earningsCalls.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="earnings_calls" /></p>
       </header>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -2332,6 +2362,7 @@ function CryptoMetricsSection({ metrics }: { metrics: CryptoMetrics | null | und
           {t("analysis.cryptoMetrics.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.cryptoMetrics.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="crypto_metrics" /></p>
       </header>
       <dl className="grid gap-3 md:grid-cols-3">
         <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
@@ -2446,6 +2477,7 @@ function SocialSentimentSection({ social }: { social: SocialSentiment | null | u
           {t("analysis.socialSentiment.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.socialSentiment.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="social_sentiment" /></p>
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">
@@ -2617,6 +2649,7 @@ function OptionsFlowSection({ flow }: { flow: OptionsFlow | null | undefined }) 
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
             {t("analysis.optionsFlow.title")}
           </h2>
+          <p className="mt-1"><SourceTip sourceKey="options_flow" /></p>
           <p className="text-xs text-slate-500">
             {t("analysis.optionsFlow.subtitleExpiry", {
               expiry: flow.expiry,
@@ -2725,6 +2758,7 @@ function SectorStrengthSection({
           {t("analysis.sectorStrength.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.sectorStrength.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="sector_context" /></p>
         {sector.sectorEtf ? (
           <p className="text-xs text-slate-500">
             {t("analysis.sectorStrength.matchedSectorEtf", {
@@ -2833,6 +2867,7 @@ function SecFilingsSection({
           {t("analysis.secFilings.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.secFilings.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="sec_filings" /></p>
       </header>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -2964,6 +2999,7 @@ function MacroContextSection({
           {t("analysis.macroContext.title")}
         </h2>
         <p className="text-xs text-slate-500">{t("analysis.macroContext.subtitle")}</p>
+        <p className="mt-1"><SourceTip sourceKey="macro_context" /></p>
       </header>
       <dl className="grid gap-3 sm:grid-cols-4">
         {items.map(([label, instr]) => {
@@ -3051,9 +3087,15 @@ function EventsSection({
     <section className="card">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">{t("analysis.events.title")}</h2>
-        {provider?.source ? (
-          <span className="text-xs text-slate-500">via {provider.source}</span>
-        ) : null}
+        <SourceTip
+          source={{
+            key: "events",
+            provider: provider?.source ?? null,
+            available: !!provider?.source,
+            asOf: null,
+            asOfKind: "unknown",
+          }}
+        />
       </header>
       <div className="mt-3 grid gap-4 lg:grid-cols-3">
         <EarningsTable rows={earnings} />
@@ -3206,7 +3248,10 @@ function HoldingsSection({
   if (holdings.length === 0) return null;
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Top holdings</h2>
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold">Top holdings</h2>
+        <SourceTip sourceKey="holdings" />
+      </header>
       <ul className="mt-2 space-y-1 text-sm">
         {holdings.slice(0, 10).map((holding, idx) => (
           <li
@@ -3244,6 +3289,7 @@ function NewsSection({ news }: { news: ResearchPayload["news"] }) {
     <section className="card">
       <header className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">News</h2>
+        <SourceTip sourceKey="news" />
         <span
           className={`rounded-full border px-2 py-0.5 text-xs ${sentimentClass(
             news.aggregateLabel,

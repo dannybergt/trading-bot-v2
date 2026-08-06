@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
+from datetime import datetime, timezone
 from time import monotonic
 from typing import Any
 
@@ -110,6 +111,11 @@ class SectorService:
             "sectorEtf": sector_etf,
             "relativeStrength": relative,
             "correlation": correlation_block,
+            # Abrufzeitpunkt, im gecachten Payload mitgefuehrt. Die
+            # Relativstaerke wird aus Schlusskursen ohne Datumsspalte
+            # gerechnet — einen Datenstand koennen wir hier nicht
+            # behaupten, den Abrufzeitpunkt schon.
+            "fetchedAt": datetime.now(timezone.utc).isoformat(),
         }
         self._cache[key] = {"expires_at": monotonic() + CACHE_TTL_SECONDS, "value": payload}
         return deepcopy(payload)
