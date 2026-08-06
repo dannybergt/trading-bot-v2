@@ -54,6 +54,7 @@ FastAPI-Backend + Nginx-Frontend (Vite/React-Bundle, Quellstand fehlt) als AI-ge
 - `SKIP_BUILD=1 bash tests/run-ui-regression.sh` (braucht Chrome lokal)
 - bei Persistenzaenderungen: `IMAGE_TAG=<tag> bash tests/run-upgrade-rehearsal.sh`
 - bei Push-/VAPID-Aenderungen: `bash tests/run-push-config-smoke.sh`
+- bei Aenderungen an Hintergrundschleifen oder Nebenlaeufigkeit: `bash tests/run-event-loop-latency-probe.sh` — stellt die Bedingung her (Scanner-Erstlauf vorgezogen, Symbole geseedet) und misst `/api/health`, waehrend die Schleifen arbeiten. Laeuft **nicht** in `verify-branch.sh` mit.
 
 ## Konventionen
 

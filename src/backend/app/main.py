@@ -30,6 +30,7 @@ from app.alpaca_stream import alpaca_stream
 from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_user, get_current_user
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
+from app.background import run_cycle, shutdown as shutdown_background_executor
 from app.backup_service import BackupService, backup_scheduler_task
 from app import audit_service, auto_execution, backtest_service, data_quality_service, docs_service
 from app.coingecko_service import get_coingecko_service
@@ -94,6 +95,10 @@ ALERT_RULE_EVAL_INTERVAL_SECONDS = int(os.getenv("ALERT_RULE_EVAL_INTERVAL_SECON
 ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS = int(os.getenv("ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS", "120"))
 PAPER_ORDER_FILL_INTERVAL_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INTERVAL_SECONDS", "180"))
 PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS = int(os.getenv("PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS", "60"))
+# Ueber ENV steuerbar, damit eine Pruefung den ersten Scannerlauf herstellen
+# kann, statt 60 Sekunden auf ihn zu warten (tests/run-event-loop-latency-probe.sh).
+AUTO_SCANNER_INITIAL_DELAY_SECONDS = int(os.getenv("AUTO_SCANNER_INITIAL_DELAY_SECONDS", "60"))
+AUTO_SCANNER_INTERVAL_SECONDS = int(os.getenv("AUTO_SCANNER_INTERVAL_SECONDS", str(60 * 15)))
 ML_RETRAIN_INTERVAL_SECONDS = int(os.getenv("ML_RETRAIN_INTERVAL_SECONDS", "3600"))
 ML_RETRAIN_INITIAL_DELAY_SECONDS = int(os.getenv("ML_RETRAIN_INITIAL_DELAY_SECONDS", "300"))
 AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS = int(
@@ -981,82 +986,97 @@ def get_watchlist_record_or_404(db: Session, user: User, watchlist_id: str) -> W
 
 # --- APP SETUP ---
 # --- BACKGROUND SCANNER ---
+def _auto_scanner_cycle():
+    logger.debug("auto_scanner_cycle_started")
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter(User.is_active == True).all()
+        if not users:
+            logger.debug("auto_scanner_skipped_no_active_users")
+        else:
+            unique_symbols = set()
+            for user in users:
+                for watchlist in get_user_watchlist_records(db, user):
+                    for item in watchlist.items:
+                        unique_symbols.add(item.symbol)
+
+            for sym in unique_symbols:
+                try:
+                    res = service.get_stock_data(sym, include_fundamentals=False)
+                    pred = res.get('prediction')
+                    df = res.get('data')
+
+                    if not pred or df is None or df.empty:
+                        continue
+
+                    base_direction = pred.get('direction')
+                    conf = pred.get('confidence', 0)
+
+                    # Only alert on strong signals
+                    if conf >= 0.75 and base_direction in ['UP', 'DOWN']:
+                        latest = df.iloc[-1]
+                        close_price = float(latest['Close'])
+                        atr = float(latest.get('ATR', 0))
+                        expected_gain_pct = ((atr * 1.5) / close_price) * 100 if close_price > 0 else 0
+
+                        for user in users:
+                            min_yield = float(user.min_target_yield)
+                            fee_pct = float(user.trade_fee_percent)
+                            fee_abs_pct = (float(user.trade_fee_absolute) / close_price) * 100 if close_price > 0 else 0
+                            req_yield = min_yield + fee_pct + fee_abs_pct
+
+                            final_direction = base_direction
+                            if base_direction == 'UP' and expected_gain_pct < req_yield:
+                                final_direction = 'HOLD'
+
+                            if final_direction in ['UP', 'DOWN']:
+                                action = "BUY" if final_direction == 'UP' else "SELL"
+                                action_icon = "🟢" if action == "BUY" else "🔴"
+                                PushService.send_notification_to_user(db, user.id, {
+                                    "title": f"NexusPulse {action_icon} {action} {sym}",
+                                    "body": f"Strong {action} signal ({int(conf*100)}% conf). Expected Yield: {expected_gain_pct:.1f}%. Required margin: {req_yield:.1f}%",
+                                    "url": f"/analysis/{sym}"
+                                })
+                                logger.info(
+                                    "auto_scanner_alert_sent",
+                                    extra={
+                                        "user_id": user.id,
+                                        "action": action,
+                                        "symbol": sym,
+                                    },
+                                )
+                except Exception:
+                    logger.exception("auto_scanner_symbol_failed symbol=%s", sym)
+    finally:
+        db.close()
+
+
 async def auto_scanner_task():
     logger.info("auto_scanner_started")
     # Wait for the system to boot up fully before first scan
-    await asyncio.sleep(60)
+    await asyncio.sleep(AUTO_SCANNER_INITIAL_DELAY_SECONDS)
     
     while True:
-        try:
-            logger.debug("auto_scanner_cycle_started")
-            db = SessionLocal()
-            try:
-                users = db.query(User).filter(User.is_active == True).all()
-                if not users:
-                    logger.debug("auto_scanner_skipped_no_active_users")
-                else:
-                    unique_symbols = set()
-                    for user in users:
-                        for watchlist in get_user_watchlist_records(db, user):
-                            for item in watchlist.items:
-                                unique_symbols.add(item.symbol)
+        await run_cycle("auto_scanner", _auto_scanner_cycle)
+        await asyncio.sleep(AUTO_SCANNER_INTERVAL_SECONDS)
 
-                    for sym in unique_symbols:
-                        try:
-                            res = service.get_stock_data(sym, include_fundamentals=False)
-                            pred = res.get('prediction')
-                            df = res.get('data')
 
-                            if not pred or df is None or df.empty:
-                                continue
-
-                            base_direction = pred.get('direction')
-                            conf = pred.get('confidence', 0)
-
-                            # Only alert on strong signals
-                            if conf >= 0.75 and base_direction in ['UP', 'DOWN']:
-                                latest = df.iloc[-1]
-                                close_price = float(latest['Close'])
-                                atr = float(latest.get('ATR', 0))
-                                expected_gain_pct = ((atr * 1.5) / close_price) * 100 if close_price > 0 else 0
-
-                                for user in users:
-                                    min_yield = float(user.min_target_yield)
-                                    fee_pct = float(user.trade_fee_percent)
-                                    fee_abs_pct = (float(user.trade_fee_absolute) / close_price) * 100 if close_price > 0 else 0
-                                    req_yield = min_yield + fee_pct + fee_abs_pct
-
-                                    final_direction = base_direction
-                                    if base_direction == 'UP' and expected_gain_pct < req_yield:
-                                        final_direction = 'HOLD'
-
-                                    if final_direction in ['UP', 'DOWN']:
-                                        action = "BUY" if final_direction == 'UP' else "SELL"
-                                        action_icon = "🟢" if action == "BUY" else "🔴"
-                                        PushService.send_notification_to_user(db, user.id, {
-                                            "title": f"NexusPulse {action_icon} {action} {sym}",
-                                            "body": f"Strong {action} signal ({int(conf*100)}% conf). Expected Yield: {expected_gain_pct:.1f}%. Required margin: {req_yield:.1f}%",
-                                            "url": f"/analysis/{sym}"
-                                        })
-                                        logger.info(
-                                            "auto_scanner_alert_sent",
-                                            extra={
-                                                "user_id": user.id,
-                                                "action": action,
-                                                "symbol": sym,
-                                            },
-                                        )
-                        except Exception:
-                            logger.exception("auto_scanner_symbol_failed symbol=%s", sym)
-            finally:
-                db.close()
-                
-        except Exception:
-            logger.exception("auto_scanner_cycle_failed")
-            
-        # Scan every 15 minutes
-        await asyncio.sleep(60 * 15)
-
+def _paper_order_fill_cycle():
+    db = SessionLocal()
+    try:
+        filled = paper_trading.dispatch_pending_orders(
+            db,
+            service.get_latest_close,
+            asset_class_resolver=_asset_class_resolver,
+            avg_daily_volume_provider=service.get_avg_daily_volume,
+        )
+        if filled:
+            logger.info(
+                "paper_order_fill_task_cycle_completed",
+                extra={"filled_orders": filled},
+            )
+    finally:
+        db.close()
 
 async def paper_order_fill_task():
     logger.info(
@@ -1066,27 +1086,82 @@ async def paper_order_fill_task():
     await asyncio.sleep(PAPER_ORDER_FILL_INITIAL_DELAY_SECONDS)
 
     while True:
-        try:
-            db = SessionLocal()
-            try:
-                filled = paper_trading.dispatch_pending_orders(
-                    db,
-                    service.get_latest_close,
-                    asset_class_resolver=_asset_class_resolver,
-                    avg_daily_volume_provider=service.get_avg_daily_volume,
-                )
-                if filled:
-                    logger.info(
-                        "paper_order_fill_task_cycle_completed",
-                        extra={"filled_orders": filled},
-                    )
-            finally:
-                db.close()
-        except Exception:
-            logger.exception("paper_order_fill_task_cycle_failed")
-
+        await run_cycle("paper_order_fill", _paper_order_fill_cycle)
         await asyncio.sleep(PAPER_ORDER_FILL_INTERVAL_SECONDS)
 
+
+def _ml_retrain_cycle():
+    from app import ml_persistence
+    from app.models import WatchlistItem as WatchlistItemRecord
+
+    db = SessionLocal()
+    try:
+        watchlist_symbols = {
+            str(item.symbol).upper()
+            for item in db.query(WatchlistItemRecord).all()
+            if item.symbol
+        }
+        persisted_symbols = {row["symbol"] for row in ml_persistence.list_models()}
+        candidates = sorted(watchlist_symbols | persisted_symbols)
+        refreshed = 0
+        for symbol in candidates:
+            try:
+                loaded = ml_persistence.load_predictor(symbol, lambda: __import__("app.ml_models", fromlist=["PricePredictor"]).PricePredictor())
+            except Exception:
+                loaded = None
+            metadata = loaded[1] if loaded else None
+            ml_models_mod = __import__(
+                "app.ml_models", fromlist=["MODEL_FEATURE_COLS"]
+            )
+            if (
+                metadata is not None
+                and not ml_persistence.is_stale(metadata)
+                and ml_persistence.features_compatible(
+                    metadata, ml_models_mod.MODEL_FEATURE_COLS
+                )
+            ):
+                continue
+            try:
+                stock = service.get_stock_data(
+                    symbol,
+                    period="6mo",
+                    interval="1d",
+                    user=None,
+                    include_news=False,
+                    include_fundamentals=False,
+                )
+            except Exception:
+                logger.exception("ml_retrain_fetch_failed symbol=%s", symbol)
+                continue
+            df = stock.get("data") if isinstance(stock, dict) else None
+            if df is None or df.empty:
+                continue
+            # Re-running get_or_train_predictor inside a fresh-fetch
+            # path persists the new model as a side effect because
+            # the in-memory cache for that symbol is now stale.
+            service._predictor_cache.pop(symbol, None)
+            service._get_or_train_predictor(symbol, df)
+            refreshed += 1
+        if refreshed:
+            logger.info(
+                "ml_retrain_task_cycle_completed",
+                extra={"refreshed_symbols": refreshed, "total_candidates": len(candidates)},
+            )
+        # Forward-collection labeling (2d-3): fill realised outcomes for
+        # matured composite snapshots. Bounded per cycle (rate limits).
+        try:
+            from app import composite_snapshots
+
+            labeled = composite_snapshots.label_due_snapshots(db, service, limit=15)
+            if labeled:
+                logger.info(
+                    "composite_snapshot_labeling_cycle",
+                    extra={"labeled": labeled},
+                )
+        except Exception:
+            logger.exception("composite_snapshot_labeling_failed")
+    finally:
+        db.close()
 
 async def ml_retrain_task():
     """Periodically refresh stale per-symbol predictors in the background.
@@ -1097,9 +1172,6 @@ async def ml_retrain_task():
     first-`/api/stock/{symbol}` latency hit when the user opens an
     analysis page after a long quiet period.
     """
-    from app import ml_persistence
-    from app.models import WatchlistItem as WatchlistItemRecord
-
     logger.info(
         "ml_retrain_task_started interval_seconds=%s",
         ML_RETRAIN_INTERVAL_SECONDS,
@@ -1107,80 +1179,50 @@ async def ml_retrain_task():
     await asyncio.sleep(ML_RETRAIN_INITIAL_DELAY_SECONDS)
 
     while True:
-        try:
-            db = SessionLocal()
-            try:
-                watchlist_symbols = {
-                    str(item.symbol).upper()
-                    for item in db.query(WatchlistItemRecord).all()
-                    if item.symbol
-                }
-                persisted_symbols = {row["symbol"] for row in ml_persistence.list_models()}
-                candidates = sorted(watchlist_symbols | persisted_symbols)
-                refreshed = 0
-                for symbol in candidates:
-                    try:
-                        loaded = ml_persistence.load_predictor(symbol, lambda: __import__("app.ml_models", fromlist=["PricePredictor"]).PricePredictor())
-                    except Exception:
-                        loaded = None
-                    metadata = loaded[1] if loaded else None
-                    ml_models_mod = __import__(
-                        "app.ml_models", fromlist=["MODEL_FEATURE_COLS"]
-                    )
-                    if (
-                        metadata is not None
-                        and not ml_persistence.is_stale(metadata)
-                        and ml_persistence.features_compatible(
-                            metadata, ml_models_mod.MODEL_FEATURE_COLS
-                        )
-                    ):
-                        continue
-                    try:
-                        stock = service.get_stock_data(
-                            symbol,
-                            period="6mo",
-                            interval="1d",
-                            user=None,
-                            include_news=False,
-                            include_fundamentals=False,
-                        )
-                    except Exception:
-                        logger.exception("ml_retrain_fetch_failed symbol=%s", symbol)
-                        continue
-                    df = stock.get("data") if isinstance(stock, dict) else None
-                    if df is None or df.empty:
-                        continue
-                    # Re-running get_or_train_predictor inside a fresh-fetch
-                    # path persists the new model as a side effect because
-                    # the in-memory cache for that symbol is now stale.
-                    service._predictor_cache.pop(symbol, None)
-                    service._get_or_train_predictor(symbol, df)
-                    refreshed += 1
-                if refreshed:
-                    logger.info(
-                        "ml_retrain_task_cycle_completed",
-                        extra={"refreshed_symbols": refreshed, "total_candidates": len(candidates)},
-                    )
-                # Forward-collection labeling (2d-3): fill realised outcomes for
-                # matured composite snapshots. Bounded per cycle (rate limits).
-                try:
-                    from app import composite_snapshots
-
-                    labeled = composite_snapshots.label_due_snapshots(db, service, limit=15)
-                    if labeled:
-                        logger.info(
-                            "composite_snapshot_labeling_cycle",
-                            extra={"labeled": labeled},
-                        )
-                except Exception:
-                    logger.exception("composite_snapshot_labeling_failed")
-            finally:
-                db.close()
-        except Exception:
-            logger.exception("ml_retrain_task_cycle_failed")
-
+        await run_cycle("ml_retrain", _ml_retrain_cycle)
         await asyncio.sleep(ML_RETRAIN_INTERVAL_SECONDS)
 
+
+def _auto_execution_paper_loop_cycle():
+    db = SessionLocal()
+    try:
+        # Strict allowlist: only users explicitly on `mode=paper`.
+        # Even if a future bug somehow stored "live" in the column,
+        # this loop never picks them up — and the live-mode branch
+        # below would still refuse to place anything because the
+        # paper_trading.place_order path is the only thing wired in.
+        eligible_users = (
+            db.query(User)
+            .join(AutoExecutionLimitsRecord, AutoExecutionLimitsRecord.user_id == User.id)
+            .filter(
+                AutoExecutionLimitsRecord.enabled == True,  # noqa: E712
+                AutoExecutionLimitsRecord.mode == "paper",
+            )
+            .all()
+        )
+        if not eligible_users:
+            logger.debug("auto_execution_paper_loop_no_eligible_users")
+        else:
+            fred_calendar: dict | None = None
+            try:
+                fred_calendar = get_fred_service().normalized_macro_calendar()
+            except Exception:
+                logger.exception("auto_execution_paper_loop_fred_lookup_failed")
+
+            for user in eligible_users:
+                try:
+                    # Frueher `await asyncio.to_thread(...)`: die Nutzerarbeit lag
+                    # damit zwar neben dem Loop, die DB-Abfrage und der
+                    # FRED-Aufruf darueber aber weiterhin darauf. Jetzt laeuft
+                    # der ganze Zyklus in einem Hintergrund-Thread, der Aufruf
+                    # ist dort direkt und bleibt wie vorher sequenziell.
+                    _run_auto_execution_paper_for_user(db, user, fred_calendar)
+                except Exception:
+                    logger.exception(
+                        "auto_execution_paper_loop_user_failed user_id=%s", user.id
+                    )
+    finally:
+        db.close()
 
 async def auto_execution_paper_loop_task():
     """Auto-paper-trading loop.
@@ -1201,8 +1243,6 @@ async def auto_execution_paper_loop_task():
     - No reentrant work for symbols the user already has an open paper
       order on (paper_order_fill_task handles fills separately).
     """
-    from app.models import WatchlistItem as WatchlistItemRecord
-
     logger.info(
         "auto_execution_paper_loop_started interval_seconds=%s",
         AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS,
@@ -1210,49 +1250,7 @@ async def auto_execution_paper_loop_task():
     await asyncio.sleep(AUTO_EXECUTION_PAPER_LOOP_INITIAL_DELAY_SECONDS)
 
     while True:
-        try:
-            db = SessionLocal()
-            try:
-                # Strict allowlist: only users explicitly on `mode=paper`.
-                # Even if a future bug somehow stored "live" in the column,
-                # this loop never picks them up — and the live-mode branch
-                # below would still refuse to place anything because the
-                # paper_trading.place_order path is the only thing wired in.
-                eligible_users = (
-                    db.query(User)
-                    .join(AutoExecutionLimitsRecord, AutoExecutionLimitsRecord.user_id == User.id)
-                    .filter(
-                        AutoExecutionLimitsRecord.enabled == True,  # noqa: E712
-                        AutoExecutionLimitsRecord.mode == "paper",
-                    )
-                    .all()
-                )
-                if not eligible_users:
-                    logger.debug("auto_execution_paper_loop_no_eligible_users")
-                else:
-                    fred_calendar: dict | None = None
-                    try:
-                        fred_calendar = get_fred_service().normalized_macro_calendar()
-                    except Exception:
-                        logger.exception("auto_execution_paper_loop_fred_lookup_failed")
-
-                    for user in eligible_users:
-                        try:
-                            await asyncio.to_thread(
-                                _run_auto_execution_paper_for_user,
-                                db,
-                                user,
-                                fred_calendar,
-                            )
-                        except Exception:
-                            logger.exception(
-                                "auto_execution_paper_loop_user_failed user_id=%s", user.id
-                            )
-            finally:
-                db.close()
-        except Exception:
-            logger.exception("auto_execution_paper_loop_cycle_failed")
-
+        await run_cycle("auto_execution_paper_loop", _auto_execution_paper_loop_cycle)
         await asyncio.sleep(AUTO_EXECUTION_PAPER_LOOP_INTERVAL_SECONDS)
 
 
@@ -1453,6 +1451,17 @@ def evaluate_alert_rules_for_all_users(db: Session) -> int:
     return created_total
 
 
+def _alert_rule_evaluation_cycle():
+    db = SessionLocal()
+    try:
+        created = evaluate_alert_rules_for_all_users(db)
+        logger.info(
+            "alert_rule_evaluator_cycle_completed",
+            extra={"created_events": created},
+        )
+    finally:
+        db.close()
+
 async def alert_rule_evaluation_task():
     logger.info(
         "alert_rule_evaluator_started interval_seconds=%s",
@@ -1461,21 +1470,20 @@ async def alert_rule_evaluation_task():
     await asyncio.sleep(ALERT_RULE_EVAL_INITIAL_DELAY_SECONDS)
 
     while True:
-        try:
-            db = SessionLocal()
-            try:
-                created = evaluate_alert_rules_for_all_users(db)
-                logger.info(
-                    "alert_rule_evaluator_cycle_completed",
-                    extra={"created_events": created},
-                )
-            finally:
-                db.close()
-        except Exception:
-            logger.exception("alert_rule_evaluator_cycle_failed")
-
+        await run_cycle("alert_rule_evaluation", _alert_rule_evaluation_cycle)
         await asyncio.sleep(ALERT_RULE_EVAL_INTERVAL_SECONDS)
 
+
+def _watchlist_alert_dispatch_cycle():
+    db = SessionLocal()
+    try:
+        dispatched = dispatch_configured_watchlist_alerts(db)
+        logger.info(
+            "watchlist_alert_dispatcher_cycle_completed",
+            extra={"dispatched_alerts": dispatched},
+        )
+    finally:
+        db.close()
 
 async def watchlist_alert_dispatch_task():
     logger.info(
@@ -1486,19 +1494,7 @@ async def watchlist_alert_dispatch_task():
     await asyncio.sleep(WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS)
 
     while True:
-        try:
-            db = SessionLocal()
-            try:
-                dispatched = dispatch_configured_watchlist_alerts(db)
-                logger.info(
-                    "watchlist_alert_dispatcher_cycle_completed",
-                    extra={"dispatched_alerts": dispatched},
-                )
-            finally:
-                db.close()
-        except Exception:
-            logger.exception("watchlist_alert_dispatcher_cycle_failed")
-
+        await run_cycle("watchlist_alert_dispatch", _watchlist_alert_dispatch_cycle)
         await asyncio.sleep(WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS)
 
 # Initialize database on startup
@@ -1535,6 +1531,9 @@ async def on_startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     logger.info("application_shutdown_started")
+    # Nicht auf laufende Zyklen warten: ein haengender Provider-Aufruf darf
+    # das Beenden des Containers nicht blockieren.
+    shutdown_background_executor(wait=False)
     await alpaca_stream.stop()
 
 

@@ -1,5 +1,35 @@
 # Current Focus
 
+## 2026-08-06 (2): Der Server steht nicht mehr still — Hintergrundschleifen vom Event-Loop genommen
+
+**Freigegeben vom Nutzer**, nachdem der Befund mit Messwerten vorlag. Die Ursache war praeziser als
+zuerst vermutet: nicht ein erschoepfter Threadpool, sondern der **Event-Loop selbst**. Alle sieben
+periodischen Schleifen waren `async def` und fuhren ihren Zyklus vollstaendig blockierend —
+Provider-HTTP je Symbol, Datenbank, XGBoost-Training. Solange ein Zyklus lief, nahm der Prozess
+keine einzige Anfrage an.
+
+**Behoben:** neues `app/background.py` mit eigenem `ThreadPoolExecutor`
+(`BACKGROUND_WORKER_THREADS`, Default 4) und `await run_cycle(name, fn)`. Jede Schleife hat ihren
+Zyklus jetzt als synchrone Funktion. Eigener Pool statt `asyncio.to_thread`, damit
+Hintergrundarbeit die Request-Bearbeitung nicht verdraengen kann und die Poolgroesse zugleich die
+Obergrenze fuer gleichzeitige Zyklen ist.
+
+**Gemessen, nicht behauptet:** `tests/run-event-loop-latency-probe.sh` stellt die Bedingung her
+(Scanner-Erstlauf vorgezogen, fuenf Symbole geseedet) und pingt waehrend der Zyklen `/api/health` —
+einen Endpunkt ohne jede Provider-Arbeit.
+**Nachher: 147 Pings, Median 10 ms, Maximum 90 ms. Vorher, dieselbe Sonde gegen ein Image vom Stand
+davor: Maximum 19,06 s.**
+
+**Grenze, ausdruecklich:** die Sonde laeuft nicht in `verify-branch.sh` mit — sie braucht ~90s und
+einen eigenen Stack. Sie ist ein Werkzeug, kein Dauer-Gate. Der statische Waechter
+`tests/test_background_loops_off_the_event_loop.py` laeuft dagegen in jeder Kette mit und verhindert,
+dass die naechste Schleife den Defekt neu baut.
+
+**Was das fuer die "Flakiness" heisst:** die im STATE seit Wochen als Zufall gefuehrten Abbrueche
+(`scanner page heading`, `paper trading order placed`-ReadTimeout) haben damit eine plausible
+gemeinsame Ursache. Belegt ist das nicht — belegt ist nur, dass die Bedingung, unter der sie
+auftraten, jetzt nicht mehr entsteht. Ob sie wiederkommen, zeigen die naechsten Laeufe.
+
 ## 2026-08-06: Quellen an jeder Kennzahl (TBV2-Z06 b) — und zwei Defekte, die dabei auffielen
 
 **Auftrag:** "mach sinnvoll weiter" nach dem Session-Ritual. Gewaehlt: die einzige der offenen

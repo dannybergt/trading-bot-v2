@@ -32,6 +32,8 @@ BACKUP_DIR = Path(os.getenv("BACKUP_DIR", Path(__file__).parent.parent / "data" 
 BACKUP_INTERVAL_SECONDS = int(os.getenv("BACKUP_INTERVAL_SECONDS", "3600"))
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 BACKUP_SCHEMA_VERSION = 1
+from app.background import run_cycle
+
 logger = logging.getLogger(__name__)
 
 
@@ -642,16 +644,23 @@ class BackupService:
         db.commit()
 
 
+def _scheduled_backup_cycle() -> None:
+    db = SessionLocal()
+    try:
+        BackupService.create_backup(db, label="scheduled")
+    except Exception:
+        logger.exception("Scheduled backup failed")
+    finally:
+        db.close()
+
+
 async def backup_scheduler_task():
     if BACKUP_INTERVAL_SECONDS <= 0:
         return
 
     while True:
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
-        db = SessionLocal()
-        try:
-            BackupService.create_backup(db, label="scheduled")
-        except Exception:
-            logger.exception("Scheduled backup failed")
-        finally:
-            db.close()
+        # Ein Dump laeuft ueber Datenbank und Dateisystem und darf den
+        # Event-Loop nicht anhalten — waehrend eines Backups waere sonst die
+        # ganze Anwendung nicht erreichbar.
+        await run_cycle("scheduled_backup", _scheduled_backup_cycle)
