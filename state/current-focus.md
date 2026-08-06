@@ -1,5 +1,56 @@
 # Current Focus
 
+## 2026-08-06 (5): Die Admin-Seite spricht Deutsch — und ein Waechter, der die Quelle liest statt eines Bildes
+
+**Gewaehlt** nach dem Session-Ritual: die letzte offene Verletzung der **verbindlichen** UX-Direktive
+("DE/EN parallel"). Die AdminPage hatte 938 Zeilen und genau **zwei** `t()`-Aufrufe — zwei
+Formularlabels. Alles andere, inklusive der drei Browserdialoge (unter anderem die Passwort-Abfrage),
+stand fest auf Englisch.
+
+**Gebaut (`75ff448`, Branch `feature/adminpage-uebersetzung`):** vollstaendiger `admin`-Namespace in
+beiden Bundles (~110 Schluessel), Seite durchgaengig verdrahtet, Achsenbeschriftungen aus der
+Konstanten-Map ins Bundle verschoben.
+
+**Der Punkt, der mehr wert ist als die Uebersetzung — warum der Waechter statisch ist:** die
+ui-regression sieht **einen** Datenzustand (so benannt am 2026-08-06 (3)). Der
+Konfigurations-Dialog oeffnet nur nach einem Klick, die Kalibrierungs-Meldung nur nach einem Lauf,
+der Leerzustand der Sicherungen nur ohne Sicherungen. Eine deutsche Ueberschrift auf `/admin` haette
+also die Ueberschrift bewiesen, nicht die Seite. `tests/test_admin_page_i18n.py` liest deshalb die
+Quelle und verlangt fuer **jeden** sichtbaren Textknoten, jedes sichtbare Attribut und jeden
+Browserdialog einen Weg durch `t()` — plus die Gegenprobe, dass jeder referenzierte Schluessel in
+beiden Bundles gefuellt existiert.
+
+**Negativkontrolle gefahren:** gegen den Stand von `main` fallen alle vier Zusicherungen und nennen
+die tatsaechlichen Fundstellen (`'Administration'`, `'Admin-only surface for…'`,
+`('placeholder', 'paste value…')`, `"New password (min 8 chars):"`, `5 not greater than 50`).
+
+**Dazu ein blockierender** Regressionsschritt `ui_admin_i18n_german` mit vier Zusagen aus vier
+Sektionen — eine einzelne uebersetzte Ueberschrift kann ihn nicht tragen. Bewusst **nicht**
+best-effort wie der benachbarte `ui_admin`.
+
+**Nebenbefund, mitkorrigiert:** die In-App-Hilfe zu `/admin` fuehrte eine **Audit-Events-Ansicht,
+die es in der Oberflaeche nicht gibt**, nannte den Sicherungs-Knopf falsch ("Create snapshot" statt
+"Create manual backup") und kannte Datenquellen, Gewichte und Plattform-Konfiguration nicht. Beide
+Sprachfassungen nachgezogen.
+
+**Verifikation:** `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` gruen (kein
+Persistenz-/Schema-Change, geloggter Opt-out). Unit **392 -> 396**, api-regression passed,
+ui-regression passed inkl. `ui_admin_i18n_german ok`. Danach Images **neu gebaut und Unit-Gate
+erneut gefahren**, weil die Doku-Aenderung nach dem ersten Build entstand — das getestete Artefakt
+soll der Baum sein.
+
+**Beobachtung am Rande, die einen offenen Punkt bestaetigt:** der Abschlussbanner von
+`verify-branch.sh` meldet `@ faeab1c` — den Commit von `main`, obwohl der **Arbeitsbaum** geprueft
+wurde. Genau der seit dem 2026-08-05 offene Punkt "`build.sh` stempelt das Repo statt des gebauten
+Baums", hier im eigenen Lauf sichtbar geworden.
+
+**Allokierte Ports/Ressourcen: KEINE.** Regressionsstacks abgeraeumt. Fremd laufend und **nicht
+angefasst**: `lms-platform` (8080, 55432, 56379, 59000/1, 51025, 58025) und `portainer` (8001, 9543).
+
+**Unveraendert offen:** die GitHub-CI bricht Jobs vor dem ersten Schritt ab (Kontingent/Budget, beim
+Nutzer); die stillen Handelsschwellen-Defaults (§13, gehoert dem Menschen); Stufe 3 (Test-Account,
+VAPID, `FMP_API_KEY` auf BC-KI01); `build.sh`-Stempel; 43+ Harnisch-Schritte ohne Zielzeile.
+
 ## 2026-08-06 (4): Z10-Luecke geschlossen, CVEs im Schwesterprojekt, und eine CI, die nicht laeuft
 
 **Erledigt in dieser Runde (Reihenfolge vom Nutzer freigegeben):**
