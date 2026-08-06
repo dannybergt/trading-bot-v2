@@ -250,10 +250,54 @@ if mode == "seed":
         headers,
     )
     assert member_payload["email"] == member_email
+    # Genau die Tabellenklasse, an der der Restore am 2026-08-05 zerbrach:
+    # `auto_execution_limits` fehlte in der Loeschliste vor
+    # `db.query(User).delete()` -> Fremdschluesselverletzung -> 500. Aufgefallen
+    # ist das erst, als die API-Regression solche Zeilen zum ersten Mal
+    # ueberhaupt erzeugte. Das Rehearsal hat sie bis heute nie erzeugt und
+    # konnte den Bruch deshalb strukturell nicht sehen.
+    rule_payload = request(
+        "POST",
+        "/api/alerts/rules",
+        {
+            "watchlistId": created_watchlist["id"],
+            "symbol": custom_symbol,
+            "name": "Rehearsal price watch",
+            "ruleType": "price_above",
+            "threshold": 4242,
+        },
+        headers,
+    )
+    assert float(rule_payload["threshold"]) == 4242, rule_payload
+
+    # Limit-Order, bewusst ohne `targetPrice`: eine Order mit Ziel liefe in das
+    # Net-Yield-Gate, und ein Limit weit unter Markt bleibt offen, ohne dass
+    # ein Anbieter befragt werden muss.
+    order_payload = request(
+        "POST",
+        "/api/paper-trading/orders",
+        {"symbol": custom_symbol, "side": "buy", "qty": 3, "limitPrice": 1.23},
+        headers,
+    )
+    assert order_payload["symbol"] == custom_symbol, order_payload
+
+    limits_payload = request(
+        "PUT",
+        "/api/auto-execution/limits",
+        {
+            "enabled": True,
+            "mode": "paper",
+            "maxPositionSizeUsd": 250,
+            "maxDailyLossUsd": 100,
+        },
+        headers,
+    )
+    assert limits_payload["mode"] == "paper", limits_payload
+
     export_payload = request("GET", "/api/admin/export", headers=headers)
     exported_emails = {user["email"] for user in export_payload["data"]["users"]}
     assert exported_emails == {admin_email, member_email}
-    print("seed ok")
+    print("seed ok [+ alert rule, paper order, auto-execution limits]")
 elif mode == "verify":
     headers = login(admin_email, admin_password)
     watchlists = request("GET", "/api/watchlists", headers=headers)
@@ -266,13 +310,32 @@ elif mode == "verify":
     exported_emails = {user["email"] for user in export_payload["data"]["users"]}
     assert exported_emails == {admin_email, member_email}
 
+    # Die drei Tabellen, die der Restore frueher zerbrach bzw. still verlor.
+    # `/api/alerts/rules` liefert `{"items": [...]}`, `/api/paper-trading/orders`
+    # liefert `{"orders": [...]}`. Beim ersten Lauf stand hier eine Annahme
+    # ueber die Form statt der Form selbst — die Schluessel sind nachgelesen.
+    rules = request("GET", "/api/alerts/rules", headers=headers)["items"]
+    rehearsal_rules = [rule for rule in rules if rule["name"] == "Rehearsal price watch"]
+    assert len(rehearsal_rules) == 1, rules
+    assert float(rehearsal_rules[0]["threshold"]) == 4242, rehearsal_rules[0]
+
+    order_list = request("GET", "/api/paper-trading/orders", headers=headers)["orders"]
+    rehearsal_orders = [order for order in order_list if order["symbol"] == custom_symbol]
+    assert len(rehearsal_orders) >= 1, order_list
+    assert float(rehearsal_orders[0]["qty"]) == 3, rehearsal_orders[0]
+
+    limits = request("GET", "/api/auto-execution/limits", headers=headers)
+    assert limits["enabled"] is True, limits
+    assert limits["mode"] == "paper", limits
+    assert float(limits["maxPositionSizeUsd"]) == 250, limits
+
     member_login = request(
         "POST",
         "/api/auth/login",
         {"email": member_email, "password": member_password},
     )
     assert member_login["mfa_required"] is False
-    print("verify ok")
+    print("verify ok [+ alert rule, paper order, auto-execution limits]")
 else:
     raise SystemExit(f"Unsupported mode: {mode}")
 PY

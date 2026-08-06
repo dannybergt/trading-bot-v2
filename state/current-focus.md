@@ -1,5 +1,34 @@
 # Current Focus
 
+## 2026-08-06 (4): Z10-Luecke geschlossen, CVEs im Schwesterprojekt, und eine CI, die nicht laeuft
+
+**Erledigt in dieser Runde (Reihenfolge vom Nutzer freigegeben):**
+
+1. **CVEs in lms-platform** (PR #64): 29 bekannte Schwachstellen in 6 Paketen -> `pip-audit` meldet nichts
+   mehr. Dazu zwei HIGH aus dem **Image**, zurueckverfolgt bis `pip/_vendor/vendor.txt` — pips eigene
+   mitgelieferte Kopien von `msgpack` und `setuptools`. `pip` und `wheel` sind jetzt aus dem
+   Laufzeit-Image entfernt statt per Ignore-Liste unsichtbar gemacht; mit Trivy gemessen **2 HIGH -> 0**,
+   Rauchtest danach unveraendert gruen. Weil `starlette` ueber einen Major springt, zusaetzlich am
+   laufenden Prozess geprueft (Migration, Start, fuenf Endpunkte, Security-Header).
+2. **CI-Alter geprueft** — mit Korrektur an der eigenen Aussage: die Luecke betrifft den `ci`-Workflow
+   auf `main` in lms-platform (letzter Lauf 16. Mai), nicht die Repos generell. Nexura und
+   trading-bot-v2 sind aktuell.
+3. **Z10-Luecke geschlossen:** das Rehearsal seedet und prueft jetzt Alarmregel, Paper-Order und
+   Auto-Execution-Limits mit ihren Werten, in beiden `verify`-Durchlaeufen. Negativkontrolle:
+   Seed abgeschaltet -> `AssertionError: []`. Volle Kette **inklusive Rehearsal-Gate** gruen.
+
+**Abgrenzung, die dazugehoert:** das Rehearsal restauriert ueber **pg_dump**. Der App-Import, in dem
+die Fremdschluesselverletzung vom 2026-08-05 sass, wird von der api-regression abgedeckt — nicht hier.
+
+**Offen und nicht von hier loesbar: die GitHub-CI laeuft nicht.** In beiden Repos werden Jobs
+**abgebrochen, bevor ein Schritt laeuft** (`validate: cancelled`, `Python lint + type + tests:
+cancelled`); ein Lauf davor starb an `Failed to resolve action download info — Service Unavailable`.
+Ueber die Abrechnungs-API sind keine belastbaren Zahlen zu bekommen (`410 moved`, Nachfolger meldet
+null Posten). **Beim Nutzer:** Actions-Kontingent und Budget pruefen. Jeder betroffene Stand ist
+lokal vollstaendig geprueft.
+
+**Allokierte Ports/Ressourcen: KEINE.** Rehearsal-Stacks (18150/18160) und alle Sonden abgeraeumt.
+
 ## 2026-08-06 (3): CI auf `main` war rot — der eigene Beweisschritt hat den eigenen blinden Fleck gefunden
 
 **Stand:** `main` war nach dem Merge der Herkunftshinweise rot. Nicht wegen eines Produktfehlers,
