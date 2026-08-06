@@ -44,8 +44,21 @@ soll der Baum sein.
 wurde. Genau der seit dem 2026-08-05 offene Punkt "`build.sh` stempelt das Repo statt des gebauten
 Baums", hier im eigenen Lauf sichtbar geworden.
 
-**Allokierte Ports/Ressourcen: KEINE.** Regressionsstacks abgeraeumt. Fremd laufend und **nicht
-angefasst**: `lms-platform` (8080, 55432, 56379, 59000/1, 51025, 58025) und `portainer` (8001, 9543).
+**Allokierte Ports/Ressourcen: KEINE.** Regressionsstacks abgeraeumt, keine eigenen Container mehr
+aktiv, 18xxx frei. Fremd laufend und **nicht angefasst**: `lms-platform` (8080, 55432, 56379,
+59000/1, 51025, 58025) und `portainer` (8001, 9543).
+
+**Nachtrag zur CI-Lage (2026-08-06T18:15Z), der die Einschaetzung von Runde (4) praezisiert:** die
+Laeufe fuer `93ed1e8` wurden sehr wohl **erzeugt** und standen zunaechst nur lange in der
+Warteschlange — `gh run list` zeigte sie in dieser Zeit nicht an, die API (`/actions/runs`) schon.
+`ci` ist inzwischen **gruen durchgelaufen**; `publish` und `codeql` standen beim Sessionende noch auf
+`queued`. Der vorherige `ci`-Lauf (`31119471631`, Commit `faeab1c`) starb an
+`The job was not acquired by Runner of type hosted even after multiple attempts` — also an der
+Runner-Zuteilung, nicht an einem Schritt des Workflows. Die Formulierung "Jobs werden abgebrochen,
+bevor ein Schritt laeuft" bleibt richtig, die daraus gezogene Folgerung "die CI laeuft nicht" war zu
+weit: sie laeuft, nur verzoegert und unzuverlaessig zugeteilt. Actions sind serverseitig aktiv
+(`{"enabled":true}`), das Repo ist oeffentlich. **Beim Nutzer** bleibt die Frage nach Kontingent und
+Budget offen — belegbar ist von hier aus nur die Zuteilungsverzoegerung.
 
 **Unveraendert offen:** die GitHub-CI bricht Jobs vor dem ersten Schritt ab (Kontingent/Budget, beim
 Nutzer); die stillen Handelsschwellen-Defaults (§13, gehoert dem Menschen); Stufe 3 (Test-Account,
