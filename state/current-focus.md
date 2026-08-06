@@ -1,5 +1,27 @@
 # Current Focus
 
+## 2026-08-06 (3): CI auf `main` war rot — der eigene Beweisschritt hat den eigenen blinden Fleck gefunden
+
+**Stand:** `main` war nach dem Merge der Herkunftshinweise rot. Nicht wegen eines Produktfehlers,
+sondern weil `ui_metric_sources` auf dem CI-Runner eine Sektion ohne Quellenangabe fand, die hier
+lokal gar nicht rendert: den **Leerzustand der Termine**. `EventsSection` hat zwei Rueckgabezweige;
+der Waechter fragte nur, ob `<SourceTip` in der Komponente **vorkommt** — eine Komponente mit zwei
+Zweigen, von denen einer den Hinweis traegt, bestand das.
+
+**Behoben:** der Leerzustand traegt jetzt selbst einen Hinweis, und der Waechter zaehlt Zweige
+statt Vorkommen (`so viele <section>, so viele <SourceTip>`). Negativkontrolle gegen den Stand von
+`main`: `EventsSection: 2 <section>, nur 1 <SourceTip>`.
+
+**Die Lehre, die mehr wert ist als der Fix:** der erste Versuch war ein zweiter ui-regression-
+Durchlauf mit einem Krypto-Symbol, um den Leerzustand herzustellen. Er lief **gruen**. Erst eine
+zusaetzliche Zusicherung — "hat dieser Durchlauf den Leerzustand ueberhaupt gesehen?" — zeigte:
+nein, nie. Der Durchlauf haette dauerhaft bestaetigt, was er nie geprueft hat. Zurueckgenommen.
+Ein Beweisschritt, der seine Bedingung nicht herstellen kann, gehoert nicht in den Harnisch,
+sondern dorthin, wo sie pruefbar ist.
+
+**Eigenschaft der ui-regression, ab jetzt benannt:** sie sieht **einen** Datenzustand. Was nur unter
+anderer Datenlage rendert, ist strukturell nicht abgedeckt.
+
 ## 2026-08-06 (2): Der Server steht nicht mehr still — Hintergrundschleifen vom Event-Loop genommen
 
 **Freigegeben vom Nutzer**, nachdem der Befund mit Messwerten vorlag. Die Ursache war praeziser als

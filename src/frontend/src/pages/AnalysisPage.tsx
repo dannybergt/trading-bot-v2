@@ -3074,7 +3074,23 @@ function EventsSection({
     if (reasonKey) {
       return (
         <section className="card" data-testid="events-empty">
-          <h2 className="text-lg font-semibold">{t("analysis.events.title")}</h2>
+          <header className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold">{t("analysis.events.title")}</h2>
+            {/* Auch der Leerzustand nennt seine Herkunft. Er rendert genau
+                dann, wenn ein Anbieter einen Grund geliefert hat — die Frage
+                "wer sagt das?" stellt sich hier eher mehr als beim Vollbild.
+                Gefunden hat die Luecke der eigene Beweisschritt, aber erst in
+                der CI: lokal ohne Providerzugang rendert dieser Zweig nicht. */}
+            <SourceTip
+              source={{
+                key: "events",
+                provider: provider?.source ?? null,
+                available: !!provider?.source,
+                asOf: null,
+                asOfKind: "unknown",
+              }}
+            />
+          </header>
           <p className="mt-2 text-xs text-slate-500" data-testid="events-empty-reason">
             {t(`analysis.events.${reasonKey}`)}
           </p>

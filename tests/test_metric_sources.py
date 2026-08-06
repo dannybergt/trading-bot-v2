@@ -85,6 +85,34 @@ class SourceMapContractTests(unittest.TestCase):
             f"Backend nicht kennt (das Tooltip bliebe leer): {unknown}",
         )
 
+    def test_every_rendered_branch_states_its_source(self):
+        """Nicht "die Komponente enthaelt irgendwo einen Hinweis".
+
+        `EventsSection` hat **zwei** Rueckgabezweige — den Leerzustand mit
+        Begruendung und die volle Tabelle. Der Leerzustand trug keinen
+        Hinweis, und der alte Guard sah das nicht: er fragte nur, ob
+        `<SourceTip` im Rumpf **vorkommt**. Aufgefallen ist es erst in der CI,
+        wo dieser Zweig unter anderer Datenlage rendert.
+
+        Deshalb wird gezaehlt: so viele `<section` eine Komponente oeffnet, so
+        viele Herkunftshinweise muss sie mindestens haben.
+        """
+        bodies = _component_bodies(_page_source())
+        offenders = []
+        for name, body in bodies.items():
+            if name in SOURCE_TIP_EXEMPT:
+                continue
+            sections = body.count("<section")
+            tips = body.count("<SourceTip")
+            if tips < sections:
+                offenders.append(f"{name}: {sections} <section>, nur {tips} <SourceTip>")
+        self.assertEqual(
+            [],
+            offenders,
+            "Rueckgabezweig ohne Herkunftshinweis (TBV2-Z06 b). Jede gerenderte "
+            f"Sektion nennt ihre Quelle, auch der Leerzustand: {offenders}",
+        )
+
     def test_every_metric_section_states_its_source(self):
         bodies = _component_bodies(_page_source())
         self.assertGreater(len(bodies), 15, "Die Sektionen der Analyse-Seite wurden nicht erkannt")

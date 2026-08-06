@@ -821,6 +821,13 @@ async function run() {
     //
     // Ohne (c) waere der sichtbare Text ein Koeder: er koennte im Frontend
     // erfunden sein und stuende trotzdem gruen im Protokoll.
+    // Nur ein Symbol. Ein Durchlauf mit einem Krypto-Symbol war der Versuch,
+    // den Leerzustand der Termine herzustellen — er rendert in dieser
+    // Umgebung aber nicht (gemessen: die Zusicherung "events-empty gerendert"
+    // fiel). Ein Durchlauf, der seinen Zweig nie sieht, ist gruen und wertlos;
+    // die Abdeckung dieses Zweigs liegt deshalb im statischen Waechter
+    // `tests/test_metric_sources.py`, der jede `<section>` je Komponente
+    // zaehlt statt nur ihr Vorkommen.
     await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
     await waitForCondition(
       client,
