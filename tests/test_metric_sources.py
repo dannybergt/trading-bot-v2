@@ -165,6 +165,40 @@ class SourceEntryInvariantTests(unittest.TestCase):
         self.assertIsNone(price["provider"])
         self.assertIsNone(price["asOf"])
 
+    def test_synthetic_path_names_no_source_for_model_output(self):
+        # Gefunden vom ui-regression-Lauf am 2026-08-06: die Karte nannte fuer
+        # Prognose und Composite eine Quelle, obwohl beide auf erfundenen
+        # Balken rechneten. Das ist dieselbe Luege wie beim Kursverlauf.
+        entries = ms.build_source_map(
+            asset_class="stock",
+            research_payload={},
+            stock_payload={
+                "synthetic": True,
+                "chart_data": [{"date": "2026-08-04"}],
+                "prediction": {"direction": "HOLD", "modelTrainedAt": "2026-08-01T04:00:00+00:00"},
+                "composite": {"verdict": "hold"},
+            },
+        )
+        by_key = {entry["key"]: entry for entry in entries}
+        for key in ("price_history", "prediction", "composite"):
+            with self.subTest(key=key):
+                self.assertFalse(by_key[key]["available"])
+                self.assertIsNone(by_key[key]["provider"])
+
+    def test_holdings_needs_actual_holdings_not_just_a_dict(self):
+        empty = ms.build_source_map(
+            asset_class="etf",
+            research_payload={"research": {"netAssets": 1234}},
+            stock_payload={},
+        )
+        filled = ms.build_source_map(
+            asset_class="etf",
+            research_payload={"research": {"holdings": [{"symbol": "AAPL", "weight": 0.07}]}},
+            stock_payload={},
+        )
+        self.assertFalse(next(e for e in empty if e["key"] == "holdings")["available"])
+        self.assertTrue(next(e for e in filled if e["key"] == "holdings")["available"])
+
     def test_list_shaped_bars_do_not_crash_the_map(self):
         # `getattr(value, "index")` trifft an einer Liste die *Methode*
         # `list.index` — der Zugriff starb dort an `len(...)`. Aufgefallen

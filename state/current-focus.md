@@ -1,5 +1,77 @@
 # Current Focus
 
+## 2026-08-06: Quellen an jeder Kennzahl (TBV2-Z06 b) — und zwei Defekte, die dabei auffielen
+
+**Auftrag:** "mach sinnvoll weiter" nach dem Session-Ritual. Gewaehlt: die einzige der offenen
+Zeilen, die ohne Zutun des Nutzers baubar war — TBV2-Z06 Lesart (b), der Quellenhinweis mit
+Provider und Zeitstempel an jeder Kennzahl.
+
+**Gebaut (Branch `feature/quellen-an-jeder-kennzahl`):** neuer `app/metric_sources.py` als die *eine*
+Quelle fuer "wer hat geantwortet und wann". Siebzehn Sektionen der Analyse-Seite tragen jetzt einen
+sichtbaren Hinweis (kein verstecktes Icon — die UX-Direktive verbietet versteckte Pfade), gespeist
+ausschliesslich aus dem Backend. Der Zeitpunkt nennt **immer seine Bedeutung**: Datenstand,
+abgerufen oder Modell trainiert. Wo ein Anbieter keinen Zeitpunkt liefert, steht "Zeitpunkt
+unbekannt" statt einer plausibel aussehenden Zahl (Regel K). Zwei handgeschriebene Provider-Namen
+im Frontend (`via FMP`, die Analysten-Quellenzeile) sind entfallen — zwei Darstellungen derselben
+Tatsache laufen frueher oder spaeter auseinander.
+
+**Nebenbei einen stillen Falschausweis behoben:** die Datenqualitaets-Karte nannte fuer jeden
+FMP- und Twelve-Data-Treffer "yfinance", weil der Research-Payload die Herkunftsflags der Kette gar
+nicht mitfuehrte. Jetzt steht `fundamentalsSource` im Payload und die Karte nennt das Glied, das
+wirklich geantwortet hat.
+
+**Zwei Defekte auf `main`, die die Kette aufgedeckt hat — beide nicht von dieser Arbeit verursacht:**
+
+1. **Die Anwendung protokollierte zur Laufzeit gar nichts** (behoben, gemergt als `7480e15`).
+   Ein erfolgreicher Login und eine erfolgreiche Suche erzeugten **null** Logzeilen. Ursache:
+   `init_db()` faehrt Alembic im Anwendungsprozess, `env.py` rief `fileConfig(...)` mit dem Default
+   `disable_existing_loggers=True` — das schaltet `app.*` und `uvicorn.*` fuer die restliche
+   Prozesslaufzeit ab und ersetzt die Root-Handler durch die WARN-Textkonsole aus `alembic.ini`.
+   `project-status.md` fuehrt "HTTP-Logs tragen Request-ID" seit dem 2026-05-08 als **gesichert
+   verifiziert**; wirksam war das seitdem in keinem Deployment, das beim Start migriert. Nachweis am
+   Artefakt: vorher drei Logger im Containerlog, danach neun, inkl. `uvicorn.access` und 7x
+   `request_id`. Wachtest mit gefahrener Negativkontrolle (drei Tests rot, `captured: []`).
+
+2. **Der Server steht periodisch komplett still** (NICHT behoben, §13 beim Menschen).
+   `GET /api/search/BTC/USD` lief in der api-regression zweimal auf unveraendertem `main` in den
+   30s-Timeout. Isoliert antwortet der Endpunkt in 3-6s, nach provider-lastigen Aufrufen in 85-90s.
+   Entscheidend: waehrend der 85,6s-Anfrage brauchte **`/api/health` bis zu 21,7 Sekunden** — ein
+   Endpunkt ohne jede Provider-Arbeit. Die Anfragen warten also nicht auf einen Anbieter, sondern
+   auf einen freien Worker: die Hintergrundschleifen (Scanner, Alarm-Dispatcher, ML-Retrain,
+   Paper-Fill) und die Request-Bearbeitung teilen sich denselben begrenzten Threadpool.
+   Die Abhilfe aendert das Nebenlaeufigkeitsmodell — das ist eine Architekturentscheidung.
+   **Vermutung, die dazu passt:** die bisher als "Flakiness" abgelegten Abbrueche
+   (`scanner page heading`, `paper trading order placed`-ReadTimeout) sind dieselbe Klasse.
+
+**Beweisschritte:** Unit `tests/test_metric_sources.py` (17 Tests: Sektion ohne Hinweis, unbekannter
+Schluessel, Zeitstempel ohne Bedeutung, Widerspruch zur Vertrauensnote) und ui-regression
+`ui_metric_sources` — der prueft nicht, dass ein Kasten da ist, sondern dass **jede gerenderte**
+Kennzahlen-Sektion einen Hinweis traegt, dass der sichtbare Text dem Attribut entspricht und dass
+**jeder vom Backend genannte Anbieter auf der Seite auch vorkommt** (sonst koennte der Text im
+Frontend erfunden sein). Negativkontrollen gefahren: Hinweis entfernt -> 2 Tests rot mit Nennung der
+Sektion; `available` geloegen -> 2 rot mit Zitat beider Aussagen; Bedeutung des Zeitstempels
+entfernt -> 1 rot mit Nennung des Schluessels.
+
+**Der neue UI-Schritt hat sich im ersten Lauf selbst bezahlt gemacht:** er fiel, weil ich eine
+willkuerliche Schwelle ("mindestens fuenf Hinweise") gesetzt hatte, die die Regressionsumgebung auf
+dem synthetischen Pfad gar nicht erfuellen kann — dort rendert nur eine Kennzahlen-Sektion. Jetzt
+misst er Abdeckung statt einer erfundenen Zahl, und die Zahl steht in der Erfolgszeile, damit ein
+Schrumpfen auffaellt.
+
+**Grenze, ausdruecklich im Katalog benannt:** fuer die Stammdaten-Kette, die Optionskette und die
+Sektor-Relativstaerke ist der genannte Zeitpunkt der **Abruf**, nicht der Datenstand — diese
+Anbieter datieren ihre Werte nicht. In der Regressionsumgebung laeuft die Seite ausserdem im
+synthetischen Modus; dass der Hinweis einen **echten** Anbieternamen zeigt, ist dort nicht
+pruefbar und gehoert zu Stufe 3.
+
+**Offen, unveraendert:** Stufe-3-Lauf (Test-Account, VAPID, `FMP_API_KEY` beim Nutzer), Entscheidung
+zu den stillen Handelsschwellen-Defaults, Z10-Rehearsal-Abdeckung, `build.sh` stempelt das Repo,
+43+ Harnisch-Schritte ohne Zielzeile, AdminPage-Uebersetzung.
+
+**Allokierte Ports/Ressourcen: KEINE.** Regressionsstacks (181xx) und die Diagnose-Sonden liefen
+unter eigenen Namen und sind abgeraeumt. Fremd auf dem geteilten Daemon: `lms-platform-*`,
+`portainer`, `nex-im-store-test` — nicht angefasst.
+
 ## SESSION-ABSCHLUSS 2026-08-05T23:40Z: Welle "leichter, benutzerfreundlicher, funktionaler" — 8 PRs, Verifikationslauf, 4 eigene Fehler gefunden und behoben
 
 **Stand:** `main`, working tree clean. Der gesamte Inhalt dieser Session ist gepusht (`17536a8`, CI/codeql/publish gruen); allein dieser Abschluss-Commit liegt lokal, weil das Ritual bewusst nicht pusht. Unit **335 → 365**, api-regression **+11 Schritte**, ui-regression **+5 Schritte**. Acht PRs, jede einzeln durch die volle Gate-Kette, jeder neue Beweisschritt mit gefahrener Negativkontrolle.

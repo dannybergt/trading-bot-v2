@@ -104,7 +104,11 @@ def build_source_map(
         )
 
     # --- Prognose und Composite -----------------------------------------
-    prediction = stock.get("prediction") if isinstance(stock.get("prediction"), dict) else {}
+    # Auf dem synthetischen Pfad rechnet das Modell auf erfundenen Balken. Eine
+    # Quelle zu nennen waere dort dieselbe Luege wie beim Kursverlauf darueber:
+    # das Modell hat gerechnet, aber auf nichts.
+    synthetic = bool(stock.get("synthetic"))
+    prediction = stock.get("prediction") if isinstance(stock.get("prediction"), dict) and not synthetic else {}
     trained_at = prediction.get("modelTrainedAt") if prediction else None
     entries.append(
         _entry(
@@ -116,7 +120,7 @@ def build_source_map(
         )
     )
 
-    composite = stock.get("composite") if isinstance(stock.get("composite"), dict) else {}
+    composite = stock.get("composite") if isinstance(stock.get("composite"), dict) and not synthetic else {}
     composite_as_of = _last_bar_timestamp(stock) if composite else None
     entries.append(
         _entry(
@@ -309,7 +313,12 @@ def build_source_map(
 
     # --- ETF-Bestaende und Nachrichten ------------------------------------
     holdings = research.get("research") or {}
-    holdings_available = bool(isinstance(holdings, dict) and holdings)
+    # Nicht "das Dict ist nicht leer": die Sektion rendert erst, wenn es
+    # wirklich Bestaende gibt. Sonst nennt die Karte eine Quelle fuer etwas,
+    # das nirgends steht.
+    holdings_available = bool(
+        isinstance(holdings, dict) and isinstance(holdings.get("holdings"), list) and holdings["holdings"]
+    )
     entries.append(
         _entry(
             "holdings",

@@ -851,18 +851,34 @@ async function run() {
           })
           .map((section) => (section.querySelector("h2").textContent || "").trim());
 
+        const renderedMetricSections = Array.from(document.querySelectorAll("section")).filter(
+          (section) =>
+            !!section.querySelector("h2") &&
+            !exemptSections.includes(section.getAttribute("data-testid")),
+        ).length;
+
         const token = localStorage.getItem("access_token");
         const response = await fetch("/api/data-quality/VOO", {
           headers: { Authorization: "Bearer " + token },
         });
         const report = response.ok ? await response.json() : null;
-        return { tips, sectionsWithoutTip, report };
+        return { tips, sectionsWithoutTip, renderedMetricSections, report };
       })()
     `);
 
-    if (sourceState.tips.length < 5) {
+    // Keine absolute Zahl: auf dem synthetischen Pfad rendern die meisten
+    // Sektionen gar nicht, und eine Schwelle von "mindestens fuenf" haette
+    // hier eine Anforderung erfunden, die die Umgebung nicht erfuellen kann.
+    // Gemessen wird stattdessen die Abdeckung — jede Sektion, die *da* ist,
+    // nennt ihre Quelle — und die Zahl steht in der Erfolgszeile, damit ein
+    // Schrumpfen auffaellt statt still zu passieren.
+    if (sourceState.tips.length === 0) {
+      throw new Error("no metric source tip rendered at all");
+    }
+    if (sourceState.tips.length < sourceState.renderedMetricSections) {
       throw new Error(
-        `only ${sourceState.tips.length} metric source tip(s) rendered — expected one per metric section`,
+        `${sourceState.renderedMetricSections} metric section(s) rendered but only ` +
+          `${sourceState.tips.length} source tip(s)`,
       );
     }
     if (sourceState.sectionsWithoutTip.length > 0) {
@@ -889,26 +905,49 @@ async function run() {
         );
       }
     }
-    // (c) Die angezeigten Anbieter stammen wirklich aus dem Backend.
+    // (c) Jeder auf der Seite genannte Anbieter stammt wirklich aus dem
+    // Backend — das ist die Richtung, auf die es ankommt: ein im Frontend
+    // erfundener Name waere sonst gruen.
+    //
+    // Die umgekehrte Richtung ("jeder Backend-Eintrag steht auch auf der
+    // Seite") war der erste Versuch und hat das Falsche verlangt: eine
+    // Sektion, die mangels Daten gar nicht rendert, zeigt zu Recht keine
+    // Quelle. Der Lauf vom 2026-08-06 hat das aufgedeckt — und dabei drei
+    // echte Fehler in der Karte selbst mitgenommen (Prognose und Composite
+    // nannten auf dem synthetischen Pfad eine Quelle, die Bestaende eine fuer
+    // eine leere Liste).
     if (!sourceState.report || !Array.isArray(sourceState.report.sources)) {
       throw new Error("/api/data-quality did not return a source map to check the page against");
     }
-    const summaryBlob = sourceState.tips.map((tip) => tip.summary).join(" | ");
-    const mismatched = sourceState.report.sources
-      .filter((entry) => entry.available && entry.provider)
-      .filter((entry) => !summaryBlob.includes(entry.provider))
-      .map((entry) => `${entry.key}=${entry.provider}`);
-    if (mismatched.length > 0) {
+    const backendProviders = new Set(
+      sourceState.report.sources.filter((entry) => entry.provider).map((entry) => entry.provider),
+    );
+    const invented = sourceState.tips
+      .filter((tip) => tip.summary.includes("·"))
+      .filter((tip) => ![...backendProviders].some((provider) => tip.summary.includes(provider)))
+      .map((tip) => `${tip.key}: ${tip.summary}`);
+    if (invented.length > 0) {
       throw new Error(
-        `backend names provider(s) the page never shows: ${mismatched.join(", ")}`,
+        `page shows provider text the backend never sent: ${invented.join(" | ")}`,
       );
     }
     // Das Tooltip erklaert die Bedeutung des Zeitstempels und ist nicht bloss
     // eine Wiederholung der Zeile darueber.
+    await client.evaluate(
+      "document.querySelector('[data-testid=\"source-tip\"]').click()",
+    );
+    // Nach dem Klick rendert React erst im naechsten Durchlauf. Synchron
+    // danach zu lesen liefert immer den leeren Zustand — der erste Lauf des
+    // Schritts ist genau darueber gefallen.
+    await waitForCondition(
+      client,
+      "source tip explanation opens",
+      "!!document.querySelector('[data-testid=\"source-tip\"]').parentElement.querySelector('[role=\"tooltip\"]')",
+      5000,
+    );
     const explanation = await client.evaluate(`
       (() => {
         const tip = document.querySelector('[data-testid="source-tip"]');
-        tip.click();
         const tooltip = tip.parentElement.querySelector('[role="tooltip"]');
         return tooltip ? (tooltip.textContent || "").trim() : "";
       })()
@@ -918,8 +957,20 @@ async function run() {
     }
     const availableCount = sourceState.report.sources.filter((entry) => entry.available).length;
     const datedCount = sourceState.report.sources.filter((entry) => entry.asOf).length;
+    // Ehrlichkeit ueber die eigene Trennschaerfe: ohne Providerzugang laeuft
+    // die Seite im synthetischen Modus, dort nennt kein Hinweis einen echten
+    // Anbieter mit Zeitpunkt. Geprueft ist dann nur die Abdeckung und dass
+    // nichts erfunden wird — nicht die Zusage selbst. Das meldet der Schritt
+    // als `partial`, statt es als vollen Nachweis zu verbuchen.
+    const namedWithStamp = sourceState.tips.filter((tip) => tip.summary.includes("·")).length;
+    const verdict = namedWithStamp > 0 ? "ok" : "partial";
+    const note =
+      namedWithStamp > 0
+        ? `${namedWithStamp} tip(s) name a provider and a timestamp`
+        : "no provider answered in this environment — coverage proven, the naming itself is not";
     console.log(
-      `ui_metric_sources ok [${sourceState.tips.length} tip(s), ${availableCount} source(s) answered, ${datedCount} dated]`,
+      `ui_metric_sources ${verdict} [${sourceState.tips.length} tip(s) on ${sourceState.renderedMetricSections} ` +
+        `rendered section(s), ${availableCount} source(s) answered, ${datedCount} dated; ${note}]`,
     );
 
     // 8b. Macro-Context-Section renders on the analysis page regardless of
