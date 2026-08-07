@@ -1,5 +1,65 @@
 # Current Focus
 
+## 2026-08-07 (1): Ein Pruefschritt, der sich selbst uebersprungen hat — und die Zusage darunter, die den Fehlerfall nicht sah
+
+**Gewaehlt** nach dem Session-Ritual, vom Nutzer freigegeben: die im STATE benannte Weichstelle
+`ui_admin` — der Schritt fing seine eigenen Fehler in einem `try`/`catch` ab und meldete sie als
+`best_effort_skipped`, also als etwas, das einen Lauf nicht rot macht. Das `catch` stammt aus der
+Zeit, als die AdminPage per `React.lazy` geladen wurde.
+
+**Der eigentliche Befund liegt eine Ebene tiefer und ist der Grund, warum das Entfernen des `catch`
+allein nichts gebracht haette.** Die Begruendung des Schritts stand als Kommentar daneben: "wenn
+`.map()` auf dem Objekt fehlschlaegt, killt React den ganzen Tree und das Heading verschwindet".
+Das war einmal richtig und stimmt seit den **Sektions-ErrorBoundaries** in `AdminPage.tsx` nicht
+mehr. Ein Absturz tauscht heute nur die betroffene Sektion gegen die Fallback-Karte; Ueberschrift und
+Nachbarsektionen bleiben stehen.
+
+**Negativkontrolle gefahren** (echter `throw` im Render der Nutzer-Sektion, Frontend neu gebaut,
+Lauf gefahren) — und sie hat den Verdacht bestaetigt: im Fehlerfall waren **alle drei** alten
+Zusagen weiterhin erfuellt. `'Administration'` steht ausserhalb der Boundaries;
+`querySelector('table')` fand die Tabelle der **Datenquellen**-Sektion; `'Backups'` stand unberuehrt
+da. Der Schritt haette `ui_admin ok` gemeldet, waehrend die Sektion tot war — das `catch` haette
+dafuer nicht einmal greifen muessen. Nur das Konsolen-Gate am Ende haette den Lauf noch gerettet,
+und das auch nur, weil die Boundary ihren Fehler protokolliert.
+
+**Gebaut (`d0d44af`, Branch `fix/ui-admin-blockierend`):** `catch` entfernt (Schritt blockierend);
+Users-/Backups-/Export-Sektion bekommen die `data-testid`, die Composite und Data-Sources laengst
+hatten; die Tabellen-Zusage ist auf `[data-testid="admin-users-section"] table` verengt; und neu
+zugesichert wird, dass **keine** Sektion in ihrer Fallback-Karte steht. Damit das ueberhaupt
+aussagekraeftig sein kann, traegt die Fallback-Karte jetzt ihren `scope` im DOM — sie *ersetzt* die
+abgestuerzte Sektion, deren eigener Testid ist im Fehlerfall also gerade weg.
+
+**Zweimal gemessen statt einmal:** die Fallback-Zusage laeuft nach dem ersten Render und nach dem
+Datenladen. Der erste Lauf der Negativkontrolle scheiterte zwar korrekt, aber erst nach 20 s im
+Timeout der naechsten Zusage und mit der Meldung "Timed out waiting for condition: admin users
+table" — wahr, aber sie nennt weder Ursache noch Sektion. Mit dem fruehen Aufruf steht jetzt
+`admin page (first render): 1 section(s) rendered their error boundary fallback instead of content:
+admin-users` im Log.
+
+**Verifikation:** `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` **alle Gates gruen** (kein
+Persistenz-/Schema-Change, geloggter Opt-out). Unit 396, api-regression passed, ui-regression passed
+mit `ui_admin ok`. Negativkontrolle in beiden Fassungen gefahren, Exit 1.
+
+**Beobachtung, die ich nicht wegerklaere:** ein Zwischenlauf fiel an `ui_scanner` — einem Schritt,
+den diese Aenderung nicht beruehrt. Im Compose-Log steht die Ursache: yfinance antwortete mit
+`429 Too Many Requests`, ein `/api/watchlists/<id>/alerts` brauchte dadurch **22,5 s**. Diese
+Umgebung hat also zeitweise echten Netzzugang, und dann haengt die Laufzeit der ui-regression an
+fremden Anbietern. Das erklaert auch, warum `ui_metric_sources` zwischen Laeufen zwischen
+"1 tip on 0 sections" und "2 tips on 1 section" schwankt. **Nicht mitgefixt** — gehoert nicht zu
+diesem Auftrag, steht als offener Punkt.
+
+**Wieder im eigenen Lauf gesehen:** der Abschlussbanner meldet `@ fe78609`, den Commit von `main`,
+obwohl der Arbeitsbaum geprueft wurde — der seit 2026-08-05 offene `build.sh`-Stempel-Punkt.
+
+**Allokierte Ports/Ressourcen: KEINE.** Regressionsstacks abgeraeumt (18090/18094 wieder frei).
+Fremd laufend und **nicht angefasst**: `lms-platform` (8080, 55432, 56379, 59000/1, 51025, 58025)
+und `portainer` (8001, 9543).
+
+**Unveraendert offen:** `ui_macro_context` faengt seine Fehler weiterhin best-effort ab (bewusst
+nicht mit angefasst); die GitHub-CI-Zuteilung; die stillen Handelsschwellen-Defaults (§13, gehoert
+dem Menschen); Stufe 3 (Test-Account, VAPID, `FMP_API_KEY` auf BC-KI01); `build.sh`-Stempel;
+43+ Harnisch-Schritte ohne Zielzeile.
+
 ## 2026-08-06 (5): Die Admin-Seite spricht Deutsch — und ein Waechter, der die Quelle liest statt eines Bildes
 
 **Gewaehlt** nach dem Session-Ritual: die letzte offene Verletzung der **verbindlichen** UX-Direktive
