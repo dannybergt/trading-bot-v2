@@ -43,6 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <DefaultErrorFallback
           variant={this.props.variant ?? "page"}
+          scope={this.props.scope}
           reset={this.reset}
         />
       );
@@ -51,11 +52,17 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+// `scope` steht bewusst auch im DOM, nicht nur in der Konsolenzeile: die
+// Fallback-Karte *ersetzt* die abgestuerzte Sektion, damit verschwindet deren
+// eigener `data-testid`. Ohne den Scope am Fallback kann ein Pruefschritt zwar
+// sehen, dass *etwas* kaputt ist, aber nicht sagen, was.
 function DefaultErrorFallback({
   variant,
+  scope,
   reset,
 }: {
   variant: Variant;
+  scope?: string;
   reset: () => void;
 }) {
   const { t } = useTranslation();
@@ -64,6 +71,7 @@ function DefaultErrorFallback({
       <div
         role="alert"
         data-testid="error-boundary-section"
+        data-scope={scope}
         className="rounded-md border border-amber-500/40 bg-amber-900/10 p-4 text-sm text-amber-100"
       >
         <p className="font-medium">{t("errorBoundary.sectionTitle")}</p>
@@ -84,6 +92,7 @@ function DefaultErrorFallback({
     <div
       role="alert"
       data-testid="error-boundary-page"
+      data-scope={scope}
       className="card border-amber-500/40 bg-amber-900/10 p-6"
     >
       <h2 className="text-lg font-semibold text-amber-200">

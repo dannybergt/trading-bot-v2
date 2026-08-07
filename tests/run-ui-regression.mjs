@@ -1136,34 +1136,80 @@ async function run() {
 
     if (isAdmin) {
       // AdminPage rendert direkt (kein React.lazy mehr) — Runtime-Errors hier
-      // sind echte Bugs, kein Suspense-Race. Wir assertieren das Backups-Panel
-      // explizit, weil dort schon ein Schema-Drift ({items: [...]}) gerendert
-      // werden muss; wenn `.map()` auf dem Objekt fehlschlaegt, killt React
-      // den ganzen Tree und das Heading verschwindet wieder.
-      try {
-        await navigate(client, `${FRONTEND_URL}/admin`);
-        await waitForCondition(
-          client,
-          "admin page heading",
-          "(document.body.textContent || '').includes('Administration')",
-          30000,
-        );
-        await waitForCondition(
-          client,
-          "admin users table",
-          "!!document.querySelector('table')",
-          20000,
-        );
-        await waitForCondition(
-          client,
-          "admin backups section",
-          "(document.body.textContent || '').includes('Backups')",
-          10000,
-        );
-        console.log("ui_admin ok");
-      } catch (error) {
-        console.log(`ui_admin best_effort_skipped reason="${(error.message || String(error)).slice(0, 120)}"`);
-      }
+      // sind echte Bugs, kein Suspense-Race. Der Schritt ist deshalb
+      // **blockierend**; das frueher hier stehende `try`/`catch` mit
+      // `best_effort_skipped` stammte aus der Lazy-Zeit und hat seitdem jeden
+      // Fehler dieses Schritts als Erfolg des Laufs durchgehen lassen.
+      //
+      // Wichtiger als das Entfernen des `catch` ist, was hier zugesichert wird.
+      // Die alte Begruendung ("wenn `.map()` fehlschlaegt, killt React den
+      // ganzen Tree und das Heading verschwindet") stimmt seit den
+      // Sektions-ErrorBoundaries in `AdminPage.tsx` **nicht mehr**: ein Absturz
+      // der Nutzer-Sektion tauscht nur diese eine Sektion gegen die
+      // Fallback-Karte, waehrend Ueberschrift und die anderen Sektionen stehen
+      // bleiben. `document.querySelector('table')` fand in dem Fall weiterhin
+      // die Tabelle der Datenquellen-Sektion — der Schritt waere gruen
+      // geblieben, obwohl die Sektion tot war, die er zu pruefen vorgibt.
+      //
+      // Darum: die Sektionen einzeln ueber ihre `data-testid` ansprechen und
+      // zusichern, dass **keine** Sektion in ihrem Fallback steht.
+      //
+      // Diese Zusicherung laeuft zweimal — einmal direkt nach dem ersten
+      // Render, einmal nach dem Datenladen. Der fruehe Aufruf rettet die
+      // Diagnose: stuerzt eine
+      // Sektion schon beim Rendern ab, liefe man sonst zuerst in den 20s-Timeout
+      // der naechsten positiven Zusage und bekaeme "Timed out waiting for
+      // condition: admin users table" zu lesen — wahr, aber es nennt weder die
+      // Ursache noch die betroffene Sektion. Der spaete Aufruf bleibt noetig,
+      // weil eine Sektion auch erst nach ihrem Datenladen abstuerzen kann.
+      const assertNoBrokenAdminSection = async (stage) => {
+        const broken = await client.evaluate(`
+          Array.from(
+            document.querySelectorAll(
+              '[data-testid="error-boundary-section"], [data-testid="error-boundary-page"]',
+            ),
+          ).map((node) => node.getAttribute('data-scope') || 'unnamed-scope')
+        `);
+        if (Array.isArray(broken) && broken.length) {
+          throw new Error(
+            `admin page (${stage}): ${broken.length} section(s) rendered their error ` +
+              `boundary fallback instead of content: ${broken.join(", ")}`,
+          );
+        }
+      };
+
+      await navigate(client, `${FRONTEND_URL}/admin`);
+      await waitForCondition(
+        client,
+        "admin page heading",
+        "(document.body.textContent || '').includes('Administration')",
+        30000,
+      );
+      await assertNoBrokenAdminSection("first render");
+      await waitForCondition(
+        client,
+        "admin users table",
+        "!!document.querySelector('[data-testid=\"admin-users-section\"] table')",
+        20000,
+      );
+      // Das Backups-Panel muss einen Schema-Drift ({items: [...]}) rendern —
+      // wenn `.map()` auf dem Objekt fehlschlaegt, faengt die Sektionsgrenze das
+      // ab und die Zusicherung unten schlaegt an.
+      await waitForCondition(
+        client,
+        "admin backups section",
+        "!!document.querySelector('[data-testid=\"admin-backups-section\"]')",
+        10000,
+      );
+      await waitForCondition(
+        client,
+        "admin export section",
+        "!!document.querySelector('[data-testid=\"admin-export-section\"]')",
+        10000,
+      );
+      // Zweiter Durchgang, nachdem alle Sektionen ihre Daten hatten.
+      await assertNoBrokenAdminSection("after data load");
+      console.log("ui_admin ok");
 
       // 11b-2. Deutsche Fassung der Admin-Seite. Bewusst NICHT best-effort:
       // die Seite rendert direkt, und `test_admin_page_i18n.py` haelt die
