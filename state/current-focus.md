@@ -1,5 +1,73 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-08-11T18:05Z (2): Vier Aussagen, die im Anfragepfad Geld gekostet haben
+
+**Stand:** `main` auf `e90104f`, working tree clean, `ci`/`codeql`/`validate` fuer alle vier PRs
+gruen. Unit **407 -> 435**.
+
+| PR | Merge | Inhalt |
+| --- | --- | --- |
+| #25 | `0ca8f54` | Kein Stammdatenabruf, den der Aufrufer ausgeschlossen hat + gespeicherte Anlageklasse (Migration 0014) |
+| #26 | `f02b83e` | Jeder Harnisch-Schritt ist eingeordnet, die Zahl wird nachgerechnet |
+| #27 | `1a28696` | i18n-Guard sieht bedingte Zweige; Dashboard uebersetzt |
+| #28 | `e90104f` | Handelsschwellen-Vorgaben gelten nicht mehr als Auswahl (Migration 0015) |
+
+**Der rote Faden dieser Sitzung:** dreimal war eine **Zahl oder Bedingung ueber den eigenen
+Pruefstand** unwahr, und einmal ein Anbieteraufruf, den niemand bestellt hatte. In keinem Fall war
+die Kette rot.
+
+**Vier Befunde, die ohne die Arbeit unsichtbar geblieben waeren:**
+1. `get_stock_data` holte die Stammdaten (yfinance `.info` — der Aufruf, der unter Drosselung `429`
+   liefert) **auch bei `include_fundamentals=False`**. Gemessen im Alarm-Pfad: 5 Aufrufe pro
+   Aktien-Symbol, danach 3, yfinance-Stammdaten 1 -> 0. Das ist die Ursache hinter den 22,5 s vom
+   2026-08-07, die PR #23 nur in der Wirkung begrenzt hatte.
+2. Die Anlageklasse — sie entscheidet, welcher Anbieter die Kurshistorie liefert — wurde **pro
+   Anfrage** geraten, entweder ueber diesen Aufruf oder ueber den **Anzeigenamen** des Eintrags
+   (`ETF_HINT_PATTERNS` enthaelt `"fund"`; ein Eintrag namens "Fundgrube" wurde zum ETF). Beides
+   gefunden vom `reviewer`, beides am Code reproduziert.
+3. Die Notiz "43 von 75 Harnisch-Schritten bewachen keine Zielzeile" stand seit dem 2026-08-05 als
+   Fliesstext und war still auf **72 von 87** gewachsen.
+4. Der i18n-Guard entfernte vor der Pruefung jeden `{...}`-Ausdruck — und damit jeden bedingt
+   gerenderten Zweig, in dem der meiste Text steht. Er meldete auf der AdminPage **null** Treffer;
+   ueber alle Seiten lagen **165** feste Literale, davon 129 auf der Analyse-Seite.
+5. Ein frisch registriertes Konto galt als "Trading defaults konfiguriert", weil die DB-Vorgaben
+   ungleich Null sind. Es handelte gegen eine 1-%-Schwelle, die niemand gewaehlt hatte.
+
+**Vier eigene Fehler, jeder von einer Kontrolle gefunden, keiner vom Nachdenken:**
+(a) Ein Testfall gab dem Aufruf ein **ETF**-Profil mit — die Nachschaerfung greift aber nur bei
+`stock`; der Fall war auch ohne den Schutz gruen und belegte nichts. (b) Die Aufloesung der
+Anlageklasse lag zuerst **im Alarm-Feed** (das Unit-Gate brach) und danach **beim Anlegen eines
+Eintrags** (die api-Regression fiel an einer Zeitueberschreitung) — beide Male hatte ich den
+Anbieteraufruf zurueckgeholt, den die Arbeit beseitigen soll. (c) In einem Test lief `create_all`
+vor dem Import von `app.models`; der alphabetisch erste Fall fand keine Tabelle.
+
+**Allokierte Ports/Ressourcen: KEINE.** 18090/18094/181xx frei, keine eigenen Container aktiv.
+Fremd laufend und **nicht angefasst**: `nexura-*` (8090, 8000, 6380, 9000/1, 5433), `lms-platform`
+(8080, 55432, 56379, 59000/1, 51025, 58025), `portainer` (8001, 9543).
+
+**Wartet auf den Nutzer (§13):**
+- **Stufe 3 unveraendert**: Test-Account (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD`), VAPID-Schluessel,
+  `FMP_API_KEY` auf BC-KI01. Ohne sie bleiben TBV2-Z01, der Realdatenzweig von Z02/Z07, Z13, die
+  Symbolsuche und der Push-Empfang dauerhaft unbewiesen.
+- **Neu: vier Vorschlaege fuer Zielzeilen** in `docs/verification/schritte-ohne-zielzeile.md` (V1
+  Alarm-Feed, V2 Not-Aus der Automatik, V3 abgelaufene Sitzung, V4 Symbolsuche). Der Zielsatz
+  gehoert dem Menschen; der Agent traegt ihn nicht selbst ein. **V1 ist der gewichtigste:** sechs
+  Schritte bewachen den Alarm-Feed, gemessen wird gegen nichts.
+- **Erledigt und damit aus dieser Liste heraus:** die stillen Handelsschwellen-Defaults (PR #28).
+
+**Annahmen, die widerrufen werden koennen:**
+- Die Migration 0015 setzt den Bestaetigungszeitpunkt nur fuer Nutzer, deren Werte von den Vorgaben
+  abweichen. Wer bewusst exakt `1/0/1/0/0` gewaehlt hat, wird einmal erneut gefragt.
+- Die Anlageklasse wird ausschliesslich in der Hintergrundschleife aufgeloest. Ein neuer
+  Watchlist-Eintrag verhaelt sich bis zum naechsten Scanner-Durchlauf wie vor der Spalte.
+
+**Naechster sinnvoller Schritt:** die **Analyse-Seite uebersetzen** — 129 feste Literale, der
+groesste verbliebene Posten der UX-Direktive, jetzt erstmals gezaehlt statt vergessen. Sie steht
+mit Grund in `OFFENE_SEITEN` von `tests/test_page_i18n.py`. Danach: `period="2y"` fehlt in
+`days_map` (`services.py`), der Backtest bekommt dadurch `limit=130` statt ~500 Bars — Bestandsfehler,
+im Review von PR #25 gefunden und dort bewusst nicht mitgenommen.
+
+
 ## 2026-08-11 (3): Der Stempel, der den falschen Commit nannte — seit dem 05.08. offen, dreimal im eigenen Lauf gesehen
 
 **Gewaehlt** nach dem Merge von PR #23: der `build.sh`-Stempel. Er stand seit dem 2026-08-05 als offener Punkt
