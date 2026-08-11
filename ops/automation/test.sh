@@ -20,6 +20,8 @@ done
 docker run --rm \
   -v "${PROJECT_ROOT}/tests:/app/tests:ro" \
   -v "${PROJECT_ROOT}/ops/docker/backend.Dockerfile:/app/ops/docker/backend.Dockerfile:ro" \
+  -v "${PROJECT_ROOT}/ops/automation/version.sh:/app/ops/automation/version.sh:ro" \
+  -v "${PROJECT_ROOT}/ops/automation/build.sh:/app/ops/automation/build.sh:ro" \
   -v "${PROJECT_ROOT}/docker-compose.yml:/app/docker-compose.yml:ro" \
   -v "${PROJECT_ROOT}/.env.example:/app/.env.example:ro" \
   -v "${PROJECT_ROOT}/.github/workflows:/app/.github/workflows:ro" \
