@@ -20,11 +20,11 @@ if [[ -d "${PROJECT_ROOT}/.git" && -d "${PROJECT_ROOT}/.githooks" ]]; then
   fi
 fi
 
-# Version metadata baked into both images (ENV + OCI labels). Derived from git
-# so CI and local builds carry the exact commit; overridable via env.
-GIT_SHA="${GIT_SHA:-$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)}"
-BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-APP_VERSION="${APP_VERSION:-$(git -C "${PROJECT_ROOT}" describe --tags --always 2>/dev/null || echo dev)}"
+# Version metadata baked into both images (ENV + OCI labels). Gebaut wird der
+# Arbeitsbaum, nicht HEAD — weicht er ab, traegt der Stempel `-dirty`, sonst
+# behauptet das Image einen Commit, der so nie gebaut wurde.
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/ops/automation/version.sh"
 echo "Build version: ${APP_VERSION} (${GIT_SHA}) @ ${BUILD_TIME}"
 
 docker build \
