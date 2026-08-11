@@ -919,8 +919,10 @@ function BackupsSection() {
             <div>
               <p className="font-medium">{backup.filename}</p>
               <p className="text-xs text-slate-500">
-                {(backup.size_bytes / 1024).toFixed(1)} KB ·{" "}
-                {new Date(backup.modified_at).toLocaleString()}
+                {t("admin.backups.sizeAndDate", {
+                  size: (backup.size_bytes / 1024).toFixed(1),
+                  date: new Date(backup.modified_at).toLocaleString(),
+                })}
               </p>
             </div>
             <button

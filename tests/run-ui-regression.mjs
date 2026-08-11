@@ -1081,6 +1081,10 @@ async function run() {
       ["/watchlists", "Listen werden pro Nutzer gespeichert"],
       ["/settings", "Zwei-Faktor-Authentifizierung"],
       ["/scanner", "Aktueller Stand der gewaehlten Watchlist"],
+      // Seit 2026-08-11: die Tracked-Assets-Karte stand fest auf Englisch, und
+      // die Quellpruefung konnte sie nicht sehen, weil ihr Text in bedingt
+      // gerenderten Zweigen liegt. Hier steht sie am laufenden Artefakt.
+      ["/", "Beobachtete Werte"],
     ]) {
       await navigate(client, `${FRONTEND_URL}${path}`);
       await waitForCondition(
@@ -1277,7 +1281,7 @@ async function run() {
       console.log("ui_admin ok");
 
       // 11b-2. Deutsche Fassung der Admin-Seite. Bewusst NICHT best-effort:
-      // die Seite rendert direkt, und `test_admin_page_i18n.py` haelt die
+      // die Seite rendert direkt, und `test_page_i18n.py` haelt die
       // Quelle schon frei von festem Text — hier wird nachgewiesen, dass das
       // Bundle die Seite zur Laufzeit auch wirklich erreicht.
       //

@@ -108,7 +108,20 @@
       "allRequiredDone": "alle Pflicht-Schritte erledigt",
       "continue": "Einrichtung fortsetzen",
       "stillOpen": "Noch offen: {{labels}}"
-    }
+    },
+    "tracked": {
+      "title": "Beobachtete Werte",
+      "subtitle": "Watchlist „{{name}}“ · {{count}} Symbole",
+      "subtitleOne": "Watchlist „{{name}}“ · 1 Symbol",
+      "empty": "Keine Symbole.",
+      "assetMix": "Verteilung nach Anlageklasse",
+      "topTags": "Häufigste Tags",
+      "provider": "Anbieter: {{status}}"
+    },
+    "newsTicker": {
+      "title": "News-Ticker"
+    },
+    "alertsLoadFailed": "Alarme konnten nicht geladen werden: {{message}}"
   },
   "onboarding": {
     "headline": "Willkommen — lass uns einrichten",
@@ -995,7 +1008,8 @@
       "creating": "Wird erstellt…",
       "download": "Herunterladen",
       "empty": "Noch keine Sicherungen vorhanden.",
-      "downloadFailed": "Download fehlgeschlagen: {{status}}"
+      "downloadFailed": "Download fehlgeschlagen: {{status}}",
+      "sizeAndDate": "{{size}} KB · {{date}}"
     },
     "export": {
       "title": "Export",
@@ -1029,6 +1043,19 @@
       "trained": "Der genannte Zeitpunkt ist das Training des Modells. Die Prognose selbst wird bei jedem Aufruf neu aus den aktuellen Kursen gerechnet.",
       "unknown": "Diese Quelle liefert keinen Zeitpunkt. Es wird bewusst keiner angezeigt, statt einen zu schaetzen.",
       "none": "Fuer diesen Abschnitt hat kein Anbieter Daten geliefert."
+    }
+  },
+  "assets": {
+    "class": {
+      "stock": "Aktie",
+      "etf": "ETF",
+      "crypto": "Krypto"
+    },
+    "providerStatus": {
+      "live": "live",
+      "partial": "teilweise",
+      "unavailable": "nicht erreichbar",
+      "not_configured": "nicht eingerichtet"
     }
   }
 }
