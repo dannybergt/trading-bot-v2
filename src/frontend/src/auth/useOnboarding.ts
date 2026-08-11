@@ -42,6 +42,8 @@ type PortfolioSettings = {
   min_target_yield: number;
   capital_gains_tax_bps: number;
   income_tax_bps: number;
+  // `null` heisst: die Werte oben sind Vorgaben der Datenbank, keine Auswahl.
+  trading_defaults_set_at?: string | null;
 };
 
 export function useOnboarding() {
@@ -94,10 +96,13 @@ export function useOnboarding() {
       label: "Trading defaults",
       description:
         "Broker fees and your minimum net yield drive every recommendation.",
-      completed:
-        !!portfolio &&
-        portfolio.min_target_yield > 0 &&
-        (portfolio.trade_fee_absolute > 0 || portfolio.trade_fee_percent > 0),
+      // Bewertet wird die **Bestaetigung**, nicht der Wert. Die Vorgaben der
+      // Datenbank sind ungleich Null (`trade_fee_absolute=1`,
+      // `min_target_yield=1`); die alte Bedingung war damit fuer jedes frisch
+      // registrierte Konto erfuellt, und der Pflichtschritt galt beim ersten
+      // Login als erledigt. Ein frisches Konto handelte gegen eine
+      // 1-%-Schwelle, die niemand gewaehlt hatte.
+      completed: !!portfolio?.trading_defaults_set_at,
       required: true,
       cta: "Set fees and minimum yield",
     },

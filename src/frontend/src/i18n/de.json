@@ -862,7 +862,8 @@
       "incomeTax": "Einkommensteuer-Fallback (%)",
       "incomeTaxPlaceholder": "0 wenn nicht zutreffend",
       "displayCurrency": "Anzeige-Waehrung",
-      "taxHint": "Sind beide gesetzt, hat die Kapitalertragssteuer Vorrang; der Einkommensteuer-Fallback greift nur, wenn der Broker kurzfristige Gewinne als normales Einkommen behandelt."
+      "taxHint": "Sind beide gesetzt, hat die Kapitalertragssteuer Vorrang; der Einkommensteuer-Fallback greift nur, wenn der Broker kurzfristige Gewinne als normales Einkommen behandelt.",
+      "defaultsUnconfirmed": "Diese Werte sind Vorgaben, keine Auswahl — und es wird bereits gegen sie gerechnet. Bitte einmal pruefen und speichern, auch wenn sie so bleiben sollen."
     },
     "mfa": {
       "title": "Zwei-Faktor-Authentifizierung",
