@@ -1,5 +1,52 @@
 # Current Focus
 
+## 2026-08-11 (1): Der letzte Schritt, der sich selbst uebersprang — und der dabei auch zu grosszuegig gruen meldete
+
+**Gewaehlt** nach dem Session-Ritual: zuerst PR #21 gemergt (`b903afb`, CI und codeql gruen, `MERGEABLE`/`CLEAN`), dann
+die im STATE und im letzten ADR ausdruecklich zurueckgestellte Weichstelle `ui_macro_context` — die letzte Stelle
+im Harnisch mit `try`/`catch` und `best_effort_skipped`.
+
+**Der Unterschied zum `ui_admin`-Fall, der die Loesung bestimmt hat:** dort war die Begruendung des `catch`
+veraltet. Hier ist sie **noch wahr** — `MacroContextSection` liefert `null`, wenn kein Instrument einen Wert
+hat und kein Fear-&-Greed-Wert da ist; die fehlende Sektion ist dann korrekt. Ein pauschal blockierender
+Schritt haette die Umgebung fuer die Anbieterlage bestraft. Falsch war die **Folgerung**: der Schritt konnte
+"kein Anbieter" nicht von "die Seite laesst die Sektion trotz gelieferter Daten fallen" unterscheiden.
+
+**Gebaut (Branch `fix/ui-macro-context-gemessen`):** der Schritt liest zuerst `macro_context.available` aus der
+Herkunftskarte, die der Nachbarschritt ohnehin schon holt. Antwortet ein Anbieter, ist er **blockierend** und
+verlangt zusaetzlich, dass mindestens eine Kachel einen Wert zeigt. Antwortet keiner, prueft er die
+**Gegenrichtung** (die Sektion darf nicht mit lauter Gedankenstrichen dastehen) und meldet sich als `partial`.
+Dass das ohne zusaetzliche Anbieterlast geht, liegt am Cache: `MacroService` haelt seine Antwort fuenf Minuten,
+**auch die leere** — Seite und Karte sehen denselben Stand.
+
+**Was der erste Lauf gezeigt hat, und was mehr wert ist als die Umstellung:** die Sektion stand, getragen
+**allein vom Fear-&-Greed-Wert**, waehrend VIX, 10Y und DXY alle drei leer waren. Der alte Schritt haette dafuer
+`ui_macro_context ok` protokolliert. Er hat also nicht nur still uebersprungen, er hat auch **zu grosszuegig
+gruen** gemeldet.
+
+**Vier Kontrollen gefahren:** Positivkontrolle (Anbieterantwort hergestellt, Seite unveraendert) ->
+`ok [3/3 instrument(s) with a value]`, der blockierende Zweig ist erreichbar. Sektion faellt trotz Daten weg ->
+Exit 1. Sektion zeigt nur Gedankenstriche -> Exit 1 mit `VIX=—, 10Y Yield=—, DXY=—`. Sektion erzwungen ohne
+jede Datenquelle -> Exit 1 mit Nennung der Ursache.
+
+**Eigener Fehler, benannt statt still wiederholt:** die dritte Kontrolle war im ersten Anlauf **ungueltig**. Der
+Patch liess eine Variable ungenutzt (`noUnusedLocals: true`), der Frontend-Build brach ab — und weil mein
+Skript den Build nach `/dev/null` schrieb, lief der Fall gegen das Image des **vorherigen** Falls und lieferte
+dessen rote Zeile. Rot sah aus wie ein Erfolg der Kontrolle, belegt war nichts. Wiederholt mit kompilierendem
+Patch und lautem Build. Dieselbe Klasse wie der Befund im Schritt selbst.
+
+**Verifikation:** `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` **alle Gates gruen** (kein
+Persistenz-/Schema-Change, geloggter Opt-out). Unit 396, api-regression passed, ui-regression passed mit
+`ui_macro_context partial`.
+
+**Allokierte Ports/Ressourcen: KEINE.** Alle Regressionsstacks abgeraeumt (18090/18094 frei), Arbeitsbaum nach
+den Kontrollen zurueckgesetzt und sauber neu gebaut. Fremd laufend und **nicht angefasst**: `lms-platform`
+(8080, 55432, 56379, 59000/1, 51025, 58025) und `portainer` (8001, 9543).
+
+**Unveraendert offen:** die stillen Handelsschwellen-Defaults (§13, gehoert dem Menschen); Stufe 3
+(Test-Account, VAPID, `FMP_API_KEY` auf BC-KI01); der `build.sh`-Stempel; 43+ Harnisch-Schritte ohne Zielzeile;
+die Zeitabhaengigkeit der ui-regression von externen Anbietern (yfinance `429`).
+
 ## 2026-08-07 (1): Ein Pruefschritt, der sich selbst uebersprungen hat — und die Zusage darunter, die den Fehlerfall nicht sah
 
 **Gewaehlt** nach dem Session-Ritual, vom Nutzer freigegeben: die im STATE benannte Weichstelle
