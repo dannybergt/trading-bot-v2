@@ -376,6 +376,12 @@ def build_watchlist_alert_payload(
                 user=user,
                 include_news=False,
                 include_fundamentals=False,
+                # Der Eintrag ist bereits eingestuft — dieselbe Einstufung, die
+                # der Nutzer in der Karte sieht. Ohne sie fragt `get_stock_data`
+                # yfinance pro Symbol noch einmal nach Stammdaten, nur um die
+                # Anlageklasse zu bestimmen: genau der Aufruf, der unter `429`
+                # den Anfragepfad blockiert hat.
+                asset_profile=tracked,
             )
         except Exception:
             logger.exception(
@@ -2440,6 +2446,8 @@ def get_symbol_data_quality(
             user=current_user,
             include_news=False,
             include_fundamentals=False,
+            # Das Profil steht drei Zeilen weiter oben schon fest.
+            asset_profile=asset_profile,
         )
     except Exception:
         # Losing the bars degrades the report to "no price history"; log why
@@ -2753,6 +2761,8 @@ def get_symbol_backtest(
             user=None,
             include_news=False,
             include_fundamentals=False,
+            # Das Profil steht drei Zeilen weiter oben schon fest.
+            asset_profile=asset_profile,
         )
     except Exception:
         logger.exception("backtest_history_fetch_failed symbol=%s", symbol)
