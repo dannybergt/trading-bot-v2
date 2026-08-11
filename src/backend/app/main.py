@@ -29,7 +29,7 @@ from app.alpaca_service import AlpacaService
 from app.alpaca_stream import alpaca_stream
 from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_user, get_current_user
 from app.auth_routes import router as auth_router
-from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
+from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol, KNOWN_ASSET_CLASSES
 from app.background import run_cycle, shutdown as shutdown_background_executor
 from app.backup_service import BackupService, backup_scheduler_task
 from app import audit_service, auto_execution, backtest_service, data_quality_service, docs_service
@@ -227,8 +227,95 @@ def apply_watchlist_item_tags(record: WatchlistItemRecord, tags: list[str] | Non
         record.tags.append(WatchlistItemTag(tag=tag))
 
 
-def serialize_watchlist_item(record: WatchlistItemRecord) -> "WatchlistItem":
-    asset_profile = service.get_asset_profile(record.symbol, fallback_name=record.name)
+def stored_watchlist_item_asset_class(record: WatchlistItemRecord) -> str | None:
+    """Die gespeicherte Anlageklasse — **ohne** jeden Anbieteraufruf.
+
+    Steht nichts da, gibt diese Funktion `None` zurueck und der Aufrufer bleibt
+    bei der bisherigen Ableitung. Sie loest bewusst **nicht** selbst auf: das
+    waere wieder ein Anbieteraufruf im Anfragepfad, also genau das, was hier
+    beseitigt werden soll. Aufgeloest wird beim Anlegen des Eintrags und in der
+    Hintergrundschleife — dort wartet niemand vor einem Bildschirm.
+    """
+    stored = (record.asset_class or "").strip().lower()
+    return stored if stored in KNOWN_ASSET_CLASSES else None
+
+
+def persist_watchlist_item_asset_class(
+    db: Session, record: WatchlistItemRecord, asset_class: str | None
+) -> str | None:
+    """Schreibt eine aufgeloeste Klasse an den Eintrag, wenn dort noch keine steht.
+
+    Die Aufloesung ist eine Beschleunigung, keine Zusage: scheitert das
+    Schreiben, laeuft der Aufrufer mit dem Wert weiter und der naechste
+    Durchgang versucht es erneut.
+    """
+    if asset_class not in KNOWN_ASSET_CLASSES:
+        # Nichts Verwertbares — lieber offen lassen als eine Rateklasse
+        # festschreiben, die spaeter niemand mehr hinterfragt.
+        return stored_watchlist_item_asset_class(record)
+    if stored_watchlist_item_asset_class(record) == asset_class:
+        return asset_class
+
+    record.asset_class = asset_class
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("watchlist_item_asset_class_persist_failed item_id=%s", record.id)
+    return asset_class
+
+
+def backfill_watchlist_item_asset_classes(
+    db: Session, symbol: str, asset_class: str | None
+) -> int:
+    """Schreibt eine bereits ermittelte Klasse an alle Eintraege dieses Symbols,
+    die noch keine haben. Ruehrt bestehende Werte nicht an.
+
+    Gedacht fuer die Hintergrundschleife: die Analyse dort hat die Klasse gerade
+    ohnehin bestimmt, das Schreiben kostet keinen zusaetzlichen Anbieteraufruf.
+    """
+    if asset_class not in KNOWN_ASSET_CLASSES:
+        return 0
+
+    canonical = canonicalize_symbol(symbol)
+    offen = [
+        record
+        for record in db.query(WatchlistItemRecord).filter(
+            WatchlistItemRecord.asset_class.is_(None)
+        )
+        if canonicalize_symbol(record.symbol) == canonical
+    ]
+    if not offen:
+        return 0
+
+    for record in offen:
+        record.asset_class = asset_class
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("watchlist_item_asset_class_backfill_failed symbol=%s", canonical)
+        return 0
+    logger.info(
+        "watchlist_item_asset_class_backfilled symbol=%s asset_class=%s count=%d",
+        canonical,
+        asset_class,
+        len(offen),
+    )
+    return len(offen)
+
+
+def serialize_watchlist_item(
+    record: WatchlistItemRecord, *, asset_class: str | None = None
+) -> "WatchlistItem":
+    # Ohne ausdrueckliche Angabe zaehlt die gespeicherte Klasse des Eintrags.
+    # Steht dort nichts, bleibt es bei der bisherigen Ableitung — ein
+    # Bestandseintrag verhaelt sich also unveraendert, bis er aufgeloest wurde.
+    asset_profile = service.get_asset_profile(
+        record.symbol,
+        fallback_name=record.name,
+        known_asset_class=asset_class or record.asset_class,
+    )
     return WatchlistItem(
         symbol=record.symbol,
         name=asset_profile["name"],
@@ -242,8 +329,10 @@ def serialize_watchlist_item(record: WatchlistItemRecord) -> "WatchlistItem":
     )
 
 
-def serialize_tracked_watchlist_item(record: WatchlistItemRecord) -> dict:
-    payload = serialize_watchlist_item(record).model_dump()
+def serialize_tracked_watchlist_item(
+    record: WatchlistItemRecord, *, asset_class: str | None = None
+) -> dict:
+    payload = serialize_watchlist_item(record, asset_class=asset_class).model_dump()
     payload["provider"] = service.get_provider_snapshot(record.symbol, asset_profile=payload)
     return payload
 
@@ -347,7 +436,12 @@ def build_watchlist_alert_payload(
     budget_seconds: float | None = None,
 ) -> dict:
     alert_setting = setting or get_or_create_watchlist_alert_setting(db, user, record)
-    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
+    tracked_assets = [
+        serialize_tracked_watchlist_item(
+            item, asset_class=stored_watchlist_item_asset_class(item)
+        )
+        for item in sorted(record.items, key=lambda current: current.id or 0)
+    ]
 
     deadline = None if budget_seconds is None else monotonic() + budget_seconds
     stale_symbols: list[str] = []
@@ -376,6 +470,12 @@ def build_watchlist_alert_payload(
                 user=user,
                 include_news=False,
                 include_fundamentals=False,
+                # Der Eintrag ist bereits eingestuft — dieselbe Einstufung, die
+                # der Nutzer in der Karte sieht. Ohne sie fragt `get_stock_data`
+                # yfinance pro Symbol noch einmal nach Stammdaten, nur um die
+                # Anlageklasse zu bestimmen: genau der Aufruf, der unter `429`
+                # den Anfragepfad blockiert hat.
+                asset_profile=tracked,
             )
         except Exception:
             logger.exception(
@@ -1051,6 +1151,15 @@ def _auto_scanner_cycle():
             for sym in unique_symbols:
                 try:
                     res = service.get_stock_data(sym, include_fundamentals=False)
+                    # Die Analyse hat die Anlageklasse ohnehin gerade
+                    # nachgeschaerft. Sie an die Eintraege zu schreiben, die
+                    # noch keine haben, kostet hier nichts — und erspart dem
+                    # Anfragepfad den Aufruf dauerhaft. Bestandseintraege
+                    # (angelegt vor der Spalte) fuellen sich damit von selbst,
+                    # ohne Backfill in einer Migration.
+                    backfill_watchlist_item_asset_classes(
+                        db, sym, (res.get("asset") or {}).get("assetClass")
+                    )
                     pred = res.get('prediction')
                     df = res.get('data')
 
@@ -1757,6 +1866,12 @@ def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(g
         db.add(new_item)
     db.commit()
     db.refresh(record)
+    # Die Anlageklasse wird hier bewusst **nicht** aufgeloest. Ein Versuch am
+    # 2026-08-11 tat es und legte damit einen Anbieteraufruf in den Anfragepfad
+    # zurueck — die api-Regression fiel daraufhin an einer Zeitueberschreitung,
+    # die nichts mit dem Anlegen zu tun hatte. Aufgeloest wird ausschliesslich
+    # in der Hintergrundschleife; bis dahin verhaelt sich der Eintrag wie vor
+    # der Spalte.
     return serialize_watchlist(record)
 
 @app.put("/api/watchlists/{id}/items/{symbol:path}")
@@ -2440,6 +2555,8 @@ def get_symbol_data_quality(
             user=current_user,
             include_news=False,
             include_fundamentals=False,
+            # Das Profil steht drei Zeilen weiter oben schon fest.
+            asset_profile=asset_profile,
         )
     except Exception:
         # Losing the bars degrades the report to "no price history"; log why
@@ -2753,6 +2870,8 @@ def get_symbol_backtest(
             user=None,
             include_news=False,
             include_fundamentals=False,
+            # Das Profil steht drei Zeilen weiter oben schon fest.
+            asset_profile=asset_profile,
         )
     except Exception:
         logger.exception("backtest_history_fetch_failed symbol=%s", symbol)

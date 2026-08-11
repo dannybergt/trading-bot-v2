@@ -227,6 +227,7 @@ class MarketDataService:
         symbol: str,
         ticker_info: dict | None = None,
         fallback_name: str | None = None,
+        known_asset_class: str | None = None,
     ) -> dict:
         asset = self.get_asset_reference(symbol)
         return build_asset_profile(
@@ -234,6 +235,7 @@ class MarketDataService:
             asset=asset,
             ticker_info=ticker_info,
             fallback_name=fallback_name,
+            known_asset_class=known_asset_class,
         )
 
     def get_provider_snapshot(
@@ -488,14 +490,25 @@ class MarketDataService:
         *,
         include_news: bool = True,
         include_fundamentals: bool = True,
+        asset_profile: dict | None = None,
     ):
         """
         Fetch historical data and calculate indicators.
+
+        `asset_profile` ist das bereits ermittelte Profil des Aufrufers. Wer es
+        mitgibt, bekommt genau diese Einstufung zurueck — die Funktion ermittelt
+        sie weder neu noch korrigiert sie sie ueber einen Stammdatenabruf. Das
+        ist keine Bequemlichkeit, sondern der Unterschied zwischen einem und
+        keinem yfinance-`.info`-Aufruf pro Symbol im Anfragepfad; und es haelt
+        die Einstufung, die der Nutzer sieht, mit der zusammen, mit der
+        gerechnet wird.
         """
         df = pd.DataFrame()
         used_synthetic = False
         market_symbol = canonicalize_symbol(symbol)
-        asset_profile = self.get_asset_profile(symbol)
+        caller_supplied_profile = asset_profile is not None
+        if not caller_supplied_profile:
+            asset_profile = self.get_asset_profile(symbol)
         provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
         days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
         limit = days_map.get(period, 130)
@@ -510,7 +523,13 @@ class MarketDataService:
             
             df = self.alpaca.get_bars_df(market_symbol, timeframe=timeframe, limit=limit)
         
-        if df.empty and asset_profile.get("assetClass") == "stock":
+        # Nachschaerfung der Anlageklasse ueber die Stammdaten. Sie kostet den
+        # teuersten Aufruf, den dieser Dienst kennt (yfinance `.info`, der unter
+        # Drosselung `429` liefert und bis zum Wall-Clock-Limit haengt) — und sie
+        # lief bisher auch dann, wenn der Aufrufer Stammdaten ausdruecklich
+        # ausgeschlossen hatte. Gab der Aufrufer ein Profil mit, ist die Frage
+        # bereits beantwortet; dann wird sie nicht noch einmal gestellt.
+        if df.empty and not caller_supplied_profile and asset_profile.get("assetClass") == "stock":
             refined_ticker_info = self.get_ticker_info(symbol, asset_profile=asset_profile)
             if refined_ticker_info:
                 refined_profile = self.get_asset_profile(symbol, ticker_info=refined_ticker_info)
@@ -555,7 +574,9 @@ class MarketDataService:
         tickerInfo = {}
         if include_fundamentals:
             tickerInfo = self.get_ticker_info(symbol, asset_profile=asset_profile)
-            if tickerInfo:
+            # Auch hier bleibt das mitgegebene Profil unangetastet: der Aufrufer
+            # hat eingestuft, die Stammdaten liefern hier nur noch Kennzahlen.
+            if tickerInfo and not caller_supplied_profile:
                 asset_profile = self.get_asset_profile(symbol, ticker_info=tickerInfo)
                 provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
         pe_ratio = tickerInfo.get('trailingPE', 0.0)

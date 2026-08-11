@@ -61,7 +61,10 @@ def _build(*, budget, sleep_seconds=PROVIDER_SECONDS):
         sleep(sleep_seconds)
         return {}
 
-    def fake_serialize(item):
+    def fake_serialize(item, **_kwargs):
+        # `**_kwargs` schluckt die gespeicherte Anlageklasse, die der Aufrufer
+        # seit dem 2026-08-11 mitgibt. Die Zusicherungen dieses Falls betreffen
+        # das Budget, nicht die Einstufung.
         symbol = SYMBOLS[items.index(item)]
         return {"symbol": symbol, "name": symbol, "tags": [], "provider": {}}
 

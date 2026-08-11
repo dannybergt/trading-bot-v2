@@ -140,6 +140,15 @@ class WatchlistItem(Base):
     watchlist_id = Column(String, ForeignKey("watchlists.id"), index=True, nullable=False)
     symbol = Column(String, nullable=False)
     name = Column(String, nullable=False, default="")
+    # Einmal aufgeloeste Anlageklasse ("stock" / "etf" / "crypto"). Vorher wurde
+    # sie pro Anfrage neu abgeleitet — entweder aus einem teuren Stammdatenabruf
+    # oder aus dem vom Nutzer vergebenen Anzeigenamen. Beides ist als Grundlage
+    # fuer die Wahl der Kursdatenquelle untauglich: das eine blockiert den
+    # Anfragepfad, das andere macht einen Anzeigetext zur Steuerlogik.
+    # `NULL` heisst "noch nicht aufgeloest" und wird beim ersten Lesen
+    # nachgeholt; ein Bestandseintrag verhaelt sich dadurch wie bisher, bis er
+    # das erste Mal angefasst wird.
+    asset_class = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     watchlist = relationship("Watchlist", back_populates="items")
