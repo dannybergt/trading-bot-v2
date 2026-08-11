@@ -36,6 +36,19 @@ class User(Base):
     trade_fee_absolute = Column(Integer, default=1) # in dollars/euros
     trade_fee_percent = Column(Integer, default=0) # percentage 0-100
     min_target_yield = Column(Integer, default=1) # minimum NET profit percentage after fees + taxes
+    # Zeitpunkt, zu dem der Nutzer die Handelsschwellen zuletzt **selbst**
+    # gespeichert hat. `NULL` heisst: was oben steht, sind Vorgaben der
+    # Datenbank, keine Auswahl.
+    #
+    # Der Grund fuer diese Spalte: die Vorgaben sind ungleich Null
+    # (`trade_fee_absolute=1`, `min_target_yield=1`), und das Onboarding las
+    # daraus "konfiguriert". Ein frisches Konto handelte damit gegen eine
+    # 1-%-Schwelle, die niemand gewaehlt hatte — und der Pflichtschritt galt
+    # beim ersten Login als erledigt. Die Werte selbst bleiben unveraendert:
+    # sie sind konservativ (sie blockieren eher eine Empfehlung, als eine
+    # zusaetzliche zuzulassen), und welche Zahlen richtig sind, entscheidet
+    # der Mensch. Unterscheidbar wird nur die Aussage darueber.
+    trading_defaults_set_at = Column(DateTime(timezone=True), nullable=True)
     # Capital gains / Abgeltungssteuer rate in basis points (e.g. 26375 = 26.375%).
     # Stored as integer basis points so SQLite + PostgreSQL stay aligned
     # without introducing a Numeric column. Default 0 = no tax model applied.

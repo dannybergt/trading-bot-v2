@@ -37,6 +37,22 @@ from app.background import run_cycle
 logger = logging.getLogger(__name__)
 
 
+def _parse_iso(value):
+    """ISO-8601-Zeitstempel aus einem Schnappschuss, oder `None`.
+
+    Ein Schnappschuss aus einer aelteren Version kennt neuere Felder nicht, und
+    ein beschaedigter Wert soll den Import nicht zerlegen. `None` ist in beiden
+    Faellen die ehrliche Antwort: der Zeitpunkt stand nicht darin.
+    """
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        logger.warning("backup_import_unparsable_timestamp")
+        return None
+
+
 class BackupService:
     @staticmethod
     def _snapshot_timestamp() -> str:
@@ -79,6 +95,11 @@ class BackupService:
                         "trade_fee_absolute": user.trade_fee_absolute,
                         "trade_fee_percent": user.trade_fee_percent,
                         "min_target_yield": user.min_target_yield,
+                        "trading_defaults_set_at": (
+                            user.trading_defaults_set_at.isoformat()
+                            if user.trading_defaults_set_at
+                            else None
+                        ),
                         "capital_gains_tax_bps": user.capital_gains_tax_bps or 0,
                         "income_tax_bps": user.income_tax_bps or 0,
                         "display_currency": user.display_currency or "USD",
@@ -368,6 +389,10 @@ class BackupService:
                     trade_fee_absolute=record.get("trade_fee_absolute", 1),
                     trade_fee_percent=record.get("trade_fee_percent", 0),
                     min_target_yield=record.get("min_target_yield", 1),
+                    # Aeltere Schnappschuesse kennen das Feld nicht. `None` ist
+                    # dort die ehrliche Antwort: ob der Nutzer die Schwellen
+                    # selbst gesetzt hat, stand in diesem Schnappschuss nicht.
+                    trading_defaults_set_at=_parse_iso(record.get("trading_defaults_set_at")),
                     capital_gains_tax_bps=record.get("capital_gains_tax_bps", 0),
                     income_tax_bps=record.get("income_tax_bps", 0),
                     display_currency=record.get("display_currency") or "USD",

@@ -862,7 +862,8 @@
       "incomeTax": "Income tax fallback (%)",
       "incomeTaxPlaceholder": "0 if not applicable",
       "displayCurrency": "Display currency",
-      "taxHint": "Capital-gains rate dominates if both are set; income-tax fallback is only used when the broker treats short-term gains as ordinary income."
+      "taxHint": "Capital-gains rate dominates if both are set; income-tax fallback is only used when the broker treats short-term gains as ordinary income.",
+      "defaultsUnconfirmed": "These values are defaults, not a choice — and recommendations already run against them. Please review and save them once, even if you keep them as they are."
     },
     "mfa": {
       "title": "Multi-factor authentication",

@@ -18,6 +18,7 @@ type PortfolioSettings = {
   trade_fee_absolute: number;
   trade_fee_percent: number;
   min_target_yield: number;
+  trading_defaults_set_at?: string | null;
   capital_gains_tax_bps: number;
   income_tax_bps: number;
   display_currency: string;
@@ -291,6 +292,17 @@ function PortfolioSection() {
       <p className="text-sm text-slate-400">
         {t("settings.portfolio.subtitle")}
       </p>
+      {query.data && !query.data.trading_defaults_set_at ? (
+        // Solange niemand gespeichert hat, sind die Zahlen im Formular
+        // Vorgaben der Datenbank — und gegen sie wird bereits gerechnet. Das
+        // gehoert dorthin, wo der Nutzer sie sieht, nicht nur ins Onboarding.
+        <p
+          className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+          data-testid="portfolio-defaults-unconfirmed"
+        >
+          {t("settings.portfolio.defaultsUnconfirmed")}
+        </p>
+      ) : null}
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-3">
         <label className="block text-sm">
           <span className="mb-1 block text-slate-300">{t("settings.portfolio.feeAbsolute")}</span>
