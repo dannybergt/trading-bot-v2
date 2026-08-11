@@ -980,20 +980,85 @@ async function run() {
         `rendered section(s), ${availableCount} source(s) answered, ${datedCount} dated; ${note}]`,
     );
 
-    // 8b. Macro-Context-Section renders on the analysis page regardless of
-    // symbol (computed from VIX/^TNX/DXY, not the analyzed symbol). Best-
-    // effort because the underlying yfinance probes for the index symbols
-    // can fail without external connectivity in some CI environments.
-    try {
+    // 8b. Makro-Kontext (VIX / ^TNX / DXY, unabhaengig vom analysierten
+    // Symbol). Der Schritt hat seine Fehler bisher in einem `catch` als
+    // `best_effort_skipped` verbucht, begruendet damit, dass die
+    // yfinance-Sonden ohne Netzzugang ausfallen koennen.
+    //
+    // Die Begruendung stimmt hier — anders als beim `ui_admin`:
+    // `MacroContextSection` liefert `null`, wenn kein Instrument einen Wert
+    // hat und auch kein Fear-&-Greed-Wert da ist. Die fehlende Sektion ist
+    // dann korrekt. Falsch war die Folgerung daraus. Der Schritt konnte die
+    // beiden Faelle nicht auseinanderhalten: eine Seite, die die Sektion
+    // trotz gelieferter Daten fallen laesst, schrieb dieselbe Protokollzeile
+    // wie eine Umgebung ohne Anbieter — ein echter Defekt waere als harmloses
+    // Ueberspringen durchgegangen.
+    //
+    // Statt zu raten wird jetzt gemessen. Das Backend sagt in derselben
+    // Herkunftskarte, welche schon geholt wurde, ob Makro geantwortet hat.
+    // `MacroService` haelt seine Antwort fuenf Minuten im Cache — auch die
+    // leere — Seitenaufruf und Karte sehen also denselben Stand. Damit ist in
+    // jeder Umgebung genau eine der beiden Richtungen hart pruefbar, und die
+    // jeweils andere wird als Luecke benannt statt als Erfolg verbucht.
+    const macroEntry = sourceState.report.sources.find((entry) => entry.key === "macro_context");
+    if (!macroEntry) {
+      throw new Error("/api/data-quality returned no macro_context entry to check the section against");
+    }
+    if (macroEntry.available) {
+      // Blockierend: das Backend hat Werte geliefert, also muss die Sektion da
+      // sein. Kein `catch` — ein Fehlschlag hier ist der Defekt, den der alte
+      // Schritt strukturell nicht sehen konnte.
       await waitForCondition(
         client,
-        "macro context section",
+        `macro context section (backend reported macro data, asOf ${macroEntry.asOf ?? "unknown"})`,
         "!!document.querySelector('[data-testid=\"macro-context-section\"]')",
         20000,
       );
-      console.log("ui_macro_context ok");
-    } catch (error) {
-      console.log(`ui_macro_context best_effort_skipped reason="${(error.message || String(error)).slice(0, 120)}"`);
+      // Und sie muss auch etwas sagen. Eine Sektion, in der jede Kachel einen
+      // Gedankenstrich zeigt, waere fuer den blossen Vorhandenseins-Test
+      // gruen — und fuer den Nutzer leer.
+      const macroValues = await client.evaluate(`
+        (() => {
+          const section = document.querySelector('[data-testid="macro-context-section"]');
+          return Array.from(section.querySelectorAll("dl > div"))
+            .map((card) => ({
+              label: (card.querySelector("dt")?.textContent || "").trim(),
+              value: (card.querySelector("dd")?.textContent || "").trim(),
+            }))
+            .filter((card) => ["VIX", "10Y Yield", "DXY"].includes(card.label));
+        })()
+      `);
+      const named = macroValues.filter((card) => /[0-9]/.test(card.value));
+      if (named.length === 0) {
+        throw new Error(
+          "macro context section rendered without a single value although the backend reported macro data: " +
+            macroValues.map((card) => `${card.label}=${card.value || "(empty)"}`).join(", "),
+        );
+      }
+      console.log(
+        `ui_macro_context ok [backend reported macro data (asOf ${macroEntry.asOf ?? "unknown"}), ` +
+          `section renders ${named.length}/${macroValues.length} instrument(s) with a value]`,
+      );
+    } else {
+      // Kein Anbieter hat geantwortet. Dann ist die Abwesenheit der Sektion die
+      // richtige Anzeige — pruefbar ist hier die Gegenrichtung: sie darf nicht
+      // trotzdem stehen und Gedankenstriche als Makrolage ausgeben. Legitim ist
+      // allein der Fall, dass der Fear-&-Greed-Wert sie traegt.
+      const macroDom = await client.evaluate(`
+        (() => ({
+          present: !!document.querySelector('[data-testid="macro-context-section"]'),
+          fearGreedCard: !!document.querySelector('[data-testid="fear-greed-card"]'),
+        }))()
+      `);
+      if (macroDom.present && !macroDom.fearGreedCard) {
+        throw new Error(
+          "macro context section rendered although no macro instrument answered and no fear & greed value is on the page — every field would read as an em dash",
+        );
+      }
+      console.log(
+        "ui_macro_context partial [no macro instrument answered in this environment; the section is correctly " +
+          `${macroDom.present ? "carried by the fear & greed value" : "absent"} — that it renders the values when a provider does answer is not proven here]`,
+      );
     }
 
     // 9. Alerts page (rule CRUD form)
