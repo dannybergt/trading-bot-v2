@@ -227,41 +227,101 @@ def apply_watchlist_item_tags(record: WatchlistItemRecord, tags: list[str] | Non
         record.tags.append(WatchlistItemTag(tag=tag))
 
 
-def resolve_watchlist_item_asset_class(db: Session, record: WatchlistItemRecord) -> str | None:
-    """Die gespeicherte Anlageklasse des Eintrags — einmal aufgeloest, dann fest.
+def stored_watchlist_item_asset_class(record: WatchlistItemRecord) -> str | None:
+    """Die gespeicherte Anlageklasse — **ohne** jeden Anbieteraufruf.
 
-    Steht sie schon da, kostet der Aufruf nichts. Steht sie noch nicht da (jeder
-    Eintrag, der vor dieser Spalte angelegt wurde), wird sie **einmal** ueber die
-    Stammdaten aufgeloest und geschrieben. Danach nie wieder — und damit nicht
-    mehr pro Anfrage, wie es bis zum 2026-08-11 der Fall war.
-
-    Kein `db.commit()` erzwingt hier einen Zustand, den der Aufrufer nicht will:
-    geschrieben wird nur, wenn tatsaechlich aufgeloest wurde.
+    Steht nichts da, gibt diese Funktion `None` zurueck und der Aufrufer bleibt
+    bei der bisherigen Ableitung. Sie loest bewusst **nicht** selbst auf: das
+    waere wieder ein Anbieteraufruf im Anfragepfad, also genau das, was hier
+    beseitigt werden soll. Aufgeloest wird beim Anlegen des Eintrags und in der
+    Hintergrundschleife — dort wartet niemand vor einem Bildschirm.
     """
     stored = (record.asset_class or "").strip().lower()
-    if stored in KNOWN_ASSET_CLASSES:
+    return stored if stored in KNOWN_ASSET_CLASSES else None
+
+
+def persist_watchlist_item_asset_class(
+    db: Session, record: WatchlistItemRecord, asset_class: str | None
+) -> str | None:
+    """Schreibt eine aufgeloeste Klasse an den Eintrag, wenn dort noch keine steht.
+
+    Die Aufloesung ist eine Beschleunigung, keine Zusage: scheitert das
+    Schreiben, laeuft der Aufrufer mit dem Wert weiter und der naechste
+    Durchgang versucht es erneut.
+    """
+    if asset_class not in KNOWN_ASSET_CLASSES:
+        # Nichts Verwertbares — lieber offen lassen als eine Rateklasse
+        # festschreiben, die spaeter niemand mehr hinterfragt.
+        return stored_watchlist_item_asset_class(record)
+    if stored_watchlist_item_asset_class(record) == asset_class:
+        return asset_class
+
+    record.asset_class = asset_class
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("watchlist_item_asset_class_persist_failed item_id=%s", record.id)
+    return asset_class
+
+
+def backfill_watchlist_item_asset_classes(
+    db: Session, symbol: str, asset_class: str | None
+) -> int:
+    """Schreibt eine bereits ermittelte Klasse an alle Eintraege dieses Symbols,
+    die noch keine haben. Ruehrt bestehende Werte nicht an.
+
+    Gedacht fuer die Hintergrundschleife: die Analyse dort hat die Klasse gerade
+    ohnehin bestimmt, das Schreiben kostet keinen zusaetzlichen Anbieteraufruf.
+    """
+    if asset_class not in KNOWN_ASSET_CLASSES:
+        return 0
+
+    canonical = canonicalize_symbol(symbol)
+    offen = [
+        record
+        for record in db.query(WatchlistItemRecord).filter(
+            WatchlistItemRecord.asset_class.is_(None)
+        )
+        if canonicalize_symbol(record.symbol) == canonical
+    ]
+    if not offen:
+        return 0
+
+    for record in offen:
+        record.asset_class = asset_class
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("watchlist_item_asset_class_backfill_failed symbol=%s", canonical)
+        return 0
+    logger.info(
+        "watchlist_item_asset_class_backfilled symbol=%s asset_class=%s count=%d",
+        canonical,
+        asset_class,
+        len(offen),
+    )
+    return len(offen)
+
+
+def resolve_watchlist_item_asset_class(db: Session, record: WatchlistItemRecord) -> str | None:
+    """Loest die Klasse ueber die Stammdaten auf und schreibt sie fest.
+
+    Kostet einen Anbieteraufruf und gehoert deshalb **nicht** in den
+    Anfragepfad eines Feeds. Aufgerufen wird sie beim Anlegen eines Eintrags
+    (ein Symbol, der Nutzer erwartet dort ohnehin eine Abfrage) und aus der
+    Hintergrundschleife.
+    """
+    stored = stored_watchlist_item_asset_class(record)
+    if stored:
         return stored
 
     ticker_info = service.get_ticker_info(record.symbol)
     profile = service.get_asset_profile(
         record.symbol, ticker_info=ticker_info, fallback_name=record.name
     )
-    resolved = profile.get("assetClass")
-    if resolved not in KNOWN_ASSET_CLASSES:
-        # Nichts Verwertbares — lieber offen lassen als eine Rateklasse
-        # festschreiben, die spaeter niemand mehr hinterfragt.
-        return None
-
-    record.asset_class = resolved
-    try:
-        db.commit()
-    except SQLAlchemyError:
-        # Die Aufloesung ist eine Beschleunigung, keine Zusage. Scheitert das
-        # Schreiben, arbeitet der Aufrufer mit dem Wert weiter und der naechste
-        # Lauf loest erneut auf.
-        db.rollback()
-        logger.exception("watchlist_item_asset_class_persist_failed item_id=%s", record.id)
-    return resolved
+    return persist_watchlist_item_asset_class(db, record, profile.get("assetClass"))
 
 
 def serialize_watchlist_item(
@@ -397,7 +457,7 @@ def build_watchlist_alert_payload(
     alert_setting = setting or get_or_create_watchlist_alert_setting(db, user, record)
     tracked_assets = [
         serialize_tracked_watchlist_item(
-            item, asset_class=resolve_watchlist_item_asset_class(db, item)
+            item, asset_class=stored_watchlist_item_asset_class(item)
         )
         for item in sorted(record.items, key=lambda current: current.id or 0)
     ]
@@ -1110,6 +1170,15 @@ def _auto_scanner_cycle():
             for sym in unique_symbols:
                 try:
                     res = service.get_stock_data(sym, include_fundamentals=False)
+                    # Die Analyse hat die Anlageklasse ohnehin gerade
+                    # nachgeschaerft. Sie an die Eintraege zu schreiben, die
+                    # noch keine haben, kostet hier nichts — und erspart dem
+                    # Anfragepfad den Aufruf dauerhaft. Bestandseintraege
+                    # (angelegt vor der Spalte) fuellen sich damit von selbst,
+                    # ohne Backfill in einer Migration.
+                    backfill_watchlist_item_asset_classes(
+                        db, sym, (res.get("asset") or {}).get("assetClass")
+                    )
                     pred = res.get('prediction')
                     df = res.get('data')
 
@@ -1816,6 +1885,17 @@ def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(g
         db.add(new_item)
     db.commit()
     db.refresh(record)
+    if not existing:
+        # Ein einzelnes Symbol, gerade vom Nutzer hinzugefuegt: hier ist eine
+        # Abfrage erwartbar und kostet einen Aufruf. Danach steht die Klasse
+        # fest und kein Feed muss sie mehr erraten. Scheitert die Aufloesung,
+        # bleibt sie offen — der Eintrag verhaelt sich dann wie bisher.
+        item_record = next(
+            (current for current in record.items if canonicalize_symbol(current.symbol) == canonical_symbol),
+            None,
+        )
+        if item_record is not None:
+            resolve_watchlist_item_asset_class(db, item_record)
     return serialize_watchlist(record)
 
 @app.put("/api/watchlists/{id}/items/{symbol:path}")

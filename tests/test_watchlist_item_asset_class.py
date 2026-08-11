@@ -76,6 +76,20 @@ class ResolutionTests(unittest.TestCase):
         db.commit.assert_not_called()
         self.assertEqual(resolved, "etf")
 
+    def test_the_request_path_helper_never_calls_a_provider(self):
+        # Die Trennlinie dieses Entwurfs: im Anfragepfad wird nur gelesen.
+        # Ein erster Anlauf loeste dort auf — und haette denselben Aufruf
+        # zurueckgeholt, der beseitigt werden sollte.
+        from app import main as app_main
+
+        with patch.object(app_main.service, "get_ticker_info") as ticker_info:
+            offen = app_main.stored_watchlist_item_asset_class(self._record(asset_class=None))
+            gesetzt = app_main.stored_watchlist_item_asset_class(self._record(asset_class="crypto"))
+
+        ticker_info.assert_not_called()
+        self.assertIsNone(offen)
+        self.assertEqual(gesetzt, "crypto")
+
     def test_missing_class_is_resolved_once_and_written(self):
         from app import main as app_main
 
@@ -154,6 +168,66 @@ class AlertPathUsesTheStoredClassTests(unittest.TestCase):
             "der Alarm-Pfad analysiert nicht mit der gespeicherten Klasse — der "
             "Eintrag wird weiter nach seinem Anzeigenamen eingestuft",
         )
+
+
+class BackfillTests(unittest.TestCase):
+    """Der Nachtrag aus der Hintergrundschleife — gegen eine echte Datenbank.
+
+    Mit einem Mock waere die Filterbedingung (`asset_class IS NULL`) nicht
+    geprueft, und genau sie entscheidet darueber, ob der Nachtrag bestehende
+    Werte ueberschreibt.
+    """
+
+    def setUp(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        from app.database import Base
+        from app.models import Watchlist, WatchlistItem
+
+        self.engine = create_engine(
+            "sqlite:///:memory:", connect_args={"check_same_thread": False}
+        )
+        Base.metadata.create_all(bind=self.engine)
+        self.db = sessionmaker(bind=self.engine, autocommit=False, autoflush=False)()
+        self.db.add(Watchlist(id="wl", user_id=1, name="Liste", is_default=True))
+        self.db.add(WatchlistItem(id=1, watchlist_id="wl", symbol="VOO", name="Altersvorsorge"))
+        self.db.add(WatchlistItem(id=2, watchlist_id="wl", symbol="VOO", name="Zweite Liste"))
+        self.db.add(
+            WatchlistItem(id=3, watchlist_id="wl", symbol="VOO", name="X", asset_class="crypto")
+        )
+        self.db.add(WatchlistItem(id=4, watchlist_id="wl", symbol="AAPL", name="Apple"))
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+
+    def _klassen(self) -> dict[int, str | None]:
+        from app.models import WatchlistItem
+
+        return {row.id: row.asset_class for row in self.db.query(WatchlistItem).all()}
+
+    def test_backfill_fills_only_the_open_entries_of_that_symbol(self):
+        from app import main as app_main
+
+        geschrieben = app_main.backfill_watchlist_item_asset_classes(self.db, "VOO", "etf")
+
+        self.assertEqual(geschrieben, 2)
+        self.assertEqual(
+            self._klassen(),
+            {1: "etf", 2: "etf", 3: "crypto", 4: None},
+            "der Nachtrag hat einen bestehenden Wert ueberschrieben oder ein "
+            "fremdes Symbol angefasst",
+        )
+
+    def test_backfill_ignores_an_unusable_class(self):
+        from app import main as app_main
+
+        self.assertEqual(app_main.backfill_watchlist_item_asset_classes(self.db, "VOO", None), 0)
+        self.assertEqual(
+            app_main.backfill_watchlist_item_asset_classes(self.db, "VOO", "wertpapier"), 0
+        )
+        self.assertEqual(self._klassen()[1], None)
 
 
 class SnapshotRoundTripTests(unittest.TestCase):
