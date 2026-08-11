@@ -95,6 +95,11 @@
       "research": "Research",
       "movers": "Movers"
     },
+    "dataHealth": {
+      "budgetExhausted": "Incomplete: {{count}} symbol(s) were not refreshed within the request time budget ({{symbols}}). What you see for them comes from stored asset data, not from a provider answer.",
+      "providerUnavailable": "Provider temporarily unavailable — this is an empty state, not an all-clear. No alert was evaluated for this watchlist.",
+      "degradedGeneric": "Incomplete data — not every value below was confirmed by a provider."
+    },
     "onboarding": {
       "title": "Setup progress",
       "configured": "{{completed}} / {{total}} configured",

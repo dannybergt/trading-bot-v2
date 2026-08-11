@@ -87,6 +87,20 @@ ALERT_RULE_TYPES = {
 WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INTERVAL_SECONDS", "300"))
 WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS = int(os.getenv("WATCHLIST_ALERT_DISPATCH_INITIAL_DELAY_SECONDS", "90"))
 WATCHLIST_ALERT_DEDUP_HOURS = int(os.getenv("WATCHLIST_ALERT_DEDUP_HOURS", "12"))
+# Gesamtbudget fuer die Anbieterarbeit *einer* Alarm-Anfrage.
+#
+# `net_timeout` begrenzt den einzelnen Anbieteraufruf (8 s) und oeffnet nach zwei
+# Zeitueberschreitungen den Breaker; `rate_limit.acquire` wartet je Aufruf bis zu
+# 10 s auf ein Token. Beides ist *pro Aufruf*. Der Alarm-Payload laeuft aber pro
+# Symbol durch zwei anbieterlastige Aufrufe, und `get_stock_data` macht intern
+# noch einmal mehrere — die Startliste hat vier Symbole. Unter Drosselung summiert
+# sich das: am 2026-08-07 gemessen 22,5 s fuer `/api/watchlists/<id>/alerts`
+# (yfinance `429`), und der Nutzer sieht in dieser Zeit ein haengendes Dashboard.
+#
+# Das Budget gilt nur im Anfragepfad. Die Hintergrundschleifen (Regelauswertung,
+# Push-Dispatcher) rufen denselben Payload ohne Budget auf: dort wartet niemand
+# vor einem Bildschirm, und ein abgeschnittener Lauf wuerde Alarme verschlucken.
+WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS = float(os.getenv("WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS", "12"))
 # Alarmregeln wurden bis 2026-08-05 ausschliesslich beim Oeffnen der Alarmseite
 # ausgewertet. Das Intervall liegt bewusst ueber dem des Watchlist-Dispatchers:
 # eine Regelauswertung zieht pro Watchlist einen vollstaendigen Alert-Payload,
@@ -330,13 +344,30 @@ def build_watchlist_alert_payload(
     setting: WatchlistAlertSetting | None = None,
     limit: int = 10,
     news_limit: int = 2,
+    budget_seconds: float | None = None,
 ) -> dict:
     alert_setting = setting or get_or_create_watchlist_alert_setting(db, user, record)
     tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
 
+    deadline = None if budget_seconds is None else monotonic() + budget_seconds
+    stale_symbols: list[str] = []
+
     alert_items: list[dict] = []
     for tracked in tracked_assets:
         symbol = tracked["symbol"]
+        # Budget erschoepft: fuer dieses und jedes weitere Symbol wird kein
+        # Anbieter mehr befragt. Der Eintrag entsteht trotzdem — aber aus den
+        # gespeicherten Stammdaten allein, und er sagt das ueber `dataFresh`.
+        # Ohne diese Kennzeichnung waere er von einem Symbol, dessen Anbieter
+        # wirklich nichts gemeldet hat, nicht zu unterscheiden: `providerContext`
+        # stammt aus dem Watchlist-Eintrag, nicht aus diesem Aufruf.
+        if deadline is not None and monotonic() >= deadline:
+            stale_symbols.append(symbol)
+            alert_items.append(
+                build_watchlist_alert(tracked, {}, {}, news_limit=news_limit) | {"dataFresh": False}
+            )
+            continue
+
         try:
             analysis_result = service.get_stock_data(
                 symbol,
@@ -371,6 +402,16 @@ def build_watchlist_alert_payload(
                 news_payload,
                 news_limit=news_limit,
             )
+            | {"dataFresh": True}
+        )
+
+    if stale_symbols:
+        logger.warning(
+            "watchlist_alert_budget_exhausted watchlist_id=%s user_id=%s budget=%.1fs skipped=%d",
+            record.id,
+            user.id,
+            budget_seconds or 0.0,
+            len(stale_symbols),
         )
 
     alert_items.sort(
@@ -388,6 +429,13 @@ def build_watchlist_alert_payload(
     summary["trackedSymbols"] = len(tracked_assets)
     summary["popupEligible"] = notification_plan["popupCount"]
     summary["pushEligible"] = notification_plan["pushCount"]
+    if stale_symbols:
+        # Dieselben Schluessel wie der Ausnahmepfad des Endpunkts, damit die
+        # Oberflaeche nur einen Fall kennen muss. Die Symbole werden genannt:
+        # "einige Werte fehlen" ohne zu sagen welche, ist keine Auskunft.
+        summary["degraded"] = True
+        summary["degradedReason"] = "provider_budget_exhausted"
+        summary["staleSymbols"] = stale_symbols
 
     return {
         "watchlist": {"id": record.id, "name": record.name},
@@ -1840,6 +1888,7 @@ def get_watchlist_alerts(
             record,
             limit=limit,
             news_limit=news_limit,
+            budget_seconds=WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS,
         )
     except Exception:
         # Yahoo 429 / provider hiccup / schema drift must not 500 the whole dashboard.

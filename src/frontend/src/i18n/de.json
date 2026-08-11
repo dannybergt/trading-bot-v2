@@ -95,6 +95,11 @@
       "research": "Research",
       "movers": "Bewegungen"
     },
+    "dataHealth": {
+      "budgetExhausted": "Unvollstaendig: {{count}} Symbol(e) wurden im Zeitbudget der Anfrage nicht aktualisiert ({{symbols}}). Was dazu angezeigt wird, stammt aus den gespeicherten Stammdaten, nicht aus einer Anbieterantwort.",
+      "providerUnavailable": "Anbieter voruebergehend nicht erreichbar — das ist ein Leerzustand, keine Entwarnung. Fuer diese Watchlist wurde kein Alarm ausgewertet.",
+      "degradedGeneric": "Unvollstaendige Daten — nicht jeder Wert unten ist von einem Anbieter bestaetigt."
+    },
     "onboarding": {
       "title": "Einrichtungs-Fortschritt",
       "configured": "{{completed}} / {{total}} konfiguriert",

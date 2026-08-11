@@ -1,5 +1,44 @@
 # Current Focus
 
+## 2026-08-11 (2): Die Anfrage, die kein Ende kannte — und der Leerzustand, der als Entwarnung gelesen wurde
+
+**Gewaehlt** nach dem Abschluss von PR #22: der letzte Punkt, an dem ein Lauf aus **fremdem** Grund rot wird —
+die Zeitabhaengigkeit der ui-regression von externen Anbietern. Am 2026-08-07 fiel ein Zwischenlauf an
+`ui_scanner`, Ursache laut Compose-Log ein `429` von yfinance mit **22,5 s** auf
+`GET /api/watchlists/<id>/alerts`.
+
+**Nicht das Zeitfenster vergroessert.** Die vorhandenen Grenzen wirken alle **pro Aufruf** (`net_timeout` 8 s,
+`rate_limit.acquire` bis 10 s Wartezeit). Der Alarm-Payload laeuft aber **pro Symbol** durch zwei
+anbieterlastige Aufrufe, und `get_stock_data` macht intern noch einmal mehrere — bei vier Symbolen der
+Startliste summiert sich genau das. Fuer die Anfrage als Ganzes gab es **keine** Grenze. Das ist kein
+Testproblem: der Nutzer sah in dieser Zeit ein haengendes Dashboard.
+
+**Gebaut (Branch `fix/alarm-anfrage-budget`):** Gesamtbudget im **Anfragepfad**
+(`WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS`, Default 12 s). Ist es erschoepft, kommen die restlichen Symbole
+ohne Anbieterabfrage — und sagen das: `dataFresh: false` am Eintrag, `degraded`/`degradedReason`/`staleSymbols`
+in der Zusammenfassung. Die **Hintergrundschleifen bleiben ohne Budget** — dort wartet niemand vor einem
+Bildschirm, und ein abgeschnittener Lauf wuerde Alarme verschlucken.
+
+**Der Befund, ohne den das Budget schaedlich waere:** ein uebersprungenes Symbol waere von einem Symbol mit
+stillem Anbieter **nicht zu unterscheiden** — `providerContext` stammt aus dem gespeicherten Watchlist-Eintrag,
+nicht aus dem Aufruf. Und `summary.degraded`, das der Ausnahmepfad seit laengerem setzt, wurde im Frontend
+**nirgends gelesen**; der Dashboard-Typ kannte das Feld nicht einmal. Ein Anbieterausfall sah damit aus wie
+"keine Alarme" — ein Leerzustand, der als Entwarnung gelesen wird. Beides ist mitbehoben, der Hinweis nennt
+Grund und betroffene Symbole, DE/EN.
+
+**Kontrollen gefahren**, jede Zusage einzeln zurueckgenommen: Endpunkt reicht das Budget nicht durch ->
+`None != 12.0`; uebersprungene Symbole nicht ausgewiesen -> faellt an der Kennzeichnung; Eintrag gibt sich
+trotzdem als frisch aus -> `BBB wurde uebersprungen, gibt sich aber als frisch aus`. Gegenprobe ohne Budget:
+alle vier Symbole befragt, kein `degraded`.
+
+**Eigener Fehler, teuer:** das Kontrollskript setzte per `git checkout` zurueck — auf **die Datei, an der ich
+arbeitete**. Die noch nicht committete Implementierung war weg (sichtbar an `errors=4` statt einer einzelnen
+Zusicherung). Wiederhergestellt; seitdem gilt: **erst committen, dann kontrollieren.**
+
+**Offen gelassen, ausdruecklich:** die Ursache dahinter — `get_stock_data` macht pro Symbol mehrere
+Anbieteraufrufe seriell. Das Budget begrenzt die **Wirkung**, nicht die Anzahl. Der Default von 12 s ist eine
+Annahme, die der Mensch widerrufen kann.
+
 ## 2026-08-11 (1): Der letzte Schritt, der sich selbst uebersprang — und der dabei auch zu grosszuegig gruen meldete
 
 **Gewaehlt** nach dem Session-Ritual: zuerst PR #21 gemergt (`b903afb`, CI und codeql gruen, `MERGEABLE`/`CLEAN`), dann
