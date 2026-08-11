@@ -43,6 +43,9 @@ type AlertsSummary = {
 type WatchlistAlertSummary = {
   rules?: number;
   trackedSymbols?: number;
+  degraded?: boolean;
+  degradedReason?: string;
+  staleSymbols?: string[];
   providerLive?: number;
   providerPartial?: number;
   providerUnavailable?: number;
@@ -298,6 +301,34 @@ function Stat({
   return <div className="card">{body}</div>;
 }
 
+function DataHealthNote({ summary }: { summary: WatchlistAlertSummary | undefined }) {
+  const { t } = useTranslation();
+  if (!summary?.degraded) return null;
+  const stale = summary.staleSymbols ?? [];
+  // Die Meldung nennt Grund und betroffene Symbole. Ein blosses "Daten
+  // unvollstaendig" waere fuer den Nutzer so wenig verwertbar wie ein
+  // Leerzustand ohne Hinweis — und genau der stand hier vorher.
+  const message =
+    summary.degradedReason === "provider_budget_exhausted" && stale.length > 0
+      ? t("dashboard.dataHealth.budgetExhausted", {
+          count: stale.length,
+          symbols: stale.join(", "),
+        })
+      : summary.degradedReason === "provider_temporarily_unavailable"
+      ? t("dashboard.dataHealth.providerUnavailable")
+      : t("dashboard.dataHealth.degradedGeneric");
+
+  return (
+    <p
+      className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+      data-testid="dashboard-data-health"
+      data-degraded-reason={summary.degradedReason ?? "unknown"}
+    >
+      {message}
+    </p>
+  );
+}
+
 function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
   if (!data) return null;
   const tracked = data.trackedAssets ?? [];
@@ -321,6 +352,7 @@ function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
         Watchlist “{data.watchlist.name}” · {tracked.length} symbol
         {tracked.length === 1 ? "" : "s"}
       </p>
+      <DataHealthNote summary={data.summary} />
       {tracked.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">No symbols.</p>
       ) : (
