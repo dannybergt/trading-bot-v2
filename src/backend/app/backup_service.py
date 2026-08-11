@@ -102,6 +102,7 @@ class BackupService:
                         "watchlist_id": item.watchlist_id,
                         "symbol": item.symbol,
                         "name": item.name,
+                        "asset_class": item.asset_class,
                         "created_at": item.created_at.isoformat() if item.created_at else None,
                     }
                     for item in watchlist_items
@@ -396,6 +397,10 @@ class BackupService:
                     watchlist_id=record["watchlist_id"],
                     symbol=record["symbol"],
                     name=record.get("name", ""),
+                    # Aeltere Schnappschuesse kennen die Spalte nicht. `None`
+                    # heisst "noch nicht aufgeloest" — der Eintrag verhaelt sich
+                    # dann wie vor der Spalte, statt eine Klasse zu erfinden.
+                    asset_class=record.get("asset_class"),
                 )
             )
 

@@ -227,6 +227,7 @@ class MarketDataService:
         symbol: str,
         ticker_info: dict | None = None,
         fallback_name: str | None = None,
+        known_asset_class: str | None = None,
     ) -> dict:
         asset = self.get_asset_reference(symbol)
         return build_asset_profile(
@@ -234,6 +235,7 @@ class MarketDataService:
             asset=asset,
             ticker_info=ticker_info,
             fallback_name=fallback_name,
+            known_asset_class=known_asset_class,
         )
 
     def get_provider_snapshot(
@@ -505,7 +507,8 @@ class MarketDataService:
         used_synthetic = False
         market_symbol = canonicalize_symbol(symbol)
         caller_supplied_profile = asset_profile is not None
-        asset_profile = asset_profile or self.get_asset_profile(symbol)
+        if not caller_supplied_profile:
+            asset_profile = self.get_asset_profile(symbol)
         provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
         days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
         limit = days_map.get(period, 130)

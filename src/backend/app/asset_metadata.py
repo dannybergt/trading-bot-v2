@@ -6,6 +6,10 @@ from typing import Any
 
 CRYPTO_QUOTE_CURRENCIES = {"USD", "USDT", "USDC", "EUR", "GBP", "BTC", "ETH"}
 ETF_HINT_PATTERNS = ("etf", "exchange traded fund", "index fund", "mutual fund", "fund")
+# Die Werte, die `infer_asset_class` ueberhaupt zurueckgeben kann. Eine
+# gespeicherte Einstufung wird dagegen gehalten, bevor sie die Heuristik
+# ersetzen darf.
+KNOWN_ASSET_CLASSES = {"stock", "etf", "crypto"}
 
 
 def normalize_symbol(symbol: str | None) -> str:
@@ -127,16 +131,24 @@ def build_asset_profile(
     asset: dict[str, Any] | None = None,
     ticker_info: dict[str, Any] | None = None,
     fallback_name: str | None = None,
+    known_asset_class: str | None = None,
 ) -> dict[str, Any]:
+    """`known_asset_class` ist eine bereits aufgeloeste und gespeicherte
+    Einstufung. Sie schlaegt die Heuristik — genau dafuer wurde sie gespeichert.
+    Ein unbekannter Wert wird ignoriert, statt sich durch die Oberflaeche zu
+    ziehen: die Klasse kommt aus der Datenbank und ist damit potenziell aelter
+    als der Code, der sie interpretiert."""
     asset = asset or {}
     ticker_info = ticker_info or {}
 
-    asset_class = infer_asset_class(
-        symbol,
-        asset=asset,
-        ticker_info=ticker_info,
-        fallback_name=fallback_name,
-    )
+    asset_class = (known_asset_class or "").strip().lower()
+    if asset_class not in KNOWN_ASSET_CLASSES:
+        asset_class = infer_asset_class(
+            symbol,
+            asset=asset,
+            ticker_info=ticker_info,
+            fallback_name=fallback_name,
+        )
     market = "crypto" if asset_class == "crypto" else "equity"
     canonical_symbol = canonicalize_symbol(symbol)
     exchange = _first_non_empty(

@@ -29,7 +29,7 @@ from app.alpaca_service import AlpacaService
 from app.alpaca_stream import alpaca_stream
 from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_user, get_current_user
 from app.auth_routes import router as auth_router
-from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol
+from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol, KNOWN_ASSET_CLASSES
 from app.background import run_cycle, shutdown as shutdown_background_executor
 from app.backup_service import BackupService, backup_scheduler_task
 from app import audit_service, auto_execution, backtest_service, data_quality_service, docs_service
@@ -227,8 +227,54 @@ def apply_watchlist_item_tags(record: WatchlistItemRecord, tags: list[str] | Non
         record.tags.append(WatchlistItemTag(tag=tag))
 
 
-def serialize_watchlist_item(record: WatchlistItemRecord) -> "WatchlistItem":
-    asset_profile = service.get_asset_profile(record.symbol, fallback_name=record.name)
+def resolve_watchlist_item_asset_class(db: Session, record: WatchlistItemRecord) -> str | None:
+    """Die gespeicherte Anlageklasse des Eintrags — einmal aufgeloest, dann fest.
+
+    Steht sie schon da, kostet der Aufruf nichts. Steht sie noch nicht da (jeder
+    Eintrag, der vor dieser Spalte angelegt wurde), wird sie **einmal** ueber die
+    Stammdaten aufgeloest und geschrieben. Danach nie wieder — und damit nicht
+    mehr pro Anfrage, wie es bis zum 2026-08-11 der Fall war.
+
+    Kein `db.commit()` erzwingt hier einen Zustand, den der Aufrufer nicht will:
+    geschrieben wird nur, wenn tatsaechlich aufgeloest wurde.
+    """
+    stored = (record.asset_class or "").strip().lower()
+    if stored in KNOWN_ASSET_CLASSES:
+        return stored
+
+    ticker_info = service.get_ticker_info(record.symbol)
+    profile = service.get_asset_profile(
+        record.symbol, ticker_info=ticker_info, fallback_name=record.name
+    )
+    resolved = profile.get("assetClass")
+    if resolved not in KNOWN_ASSET_CLASSES:
+        # Nichts Verwertbares — lieber offen lassen als eine Rateklasse
+        # festschreiben, die spaeter niemand mehr hinterfragt.
+        return None
+
+    record.asset_class = resolved
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        # Die Aufloesung ist eine Beschleunigung, keine Zusage. Scheitert das
+        # Schreiben, arbeitet der Aufrufer mit dem Wert weiter und der naechste
+        # Lauf loest erneut auf.
+        db.rollback()
+        logger.exception("watchlist_item_asset_class_persist_failed item_id=%s", record.id)
+    return resolved
+
+
+def serialize_watchlist_item(
+    record: WatchlistItemRecord, *, asset_class: str | None = None
+) -> "WatchlistItem":
+    # Ohne ausdrueckliche Angabe zaehlt die gespeicherte Klasse des Eintrags.
+    # Steht dort nichts, bleibt es bei der bisherigen Ableitung — ein
+    # Bestandseintrag verhaelt sich also unveraendert, bis er aufgeloest wurde.
+    asset_profile = service.get_asset_profile(
+        record.symbol,
+        fallback_name=record.name,
+        known_asset_class=asset_class or record.asset_class,
+    )
     return WatchlistItem(
         symbol=record.symbol,
         name=asset_profile["name"],
@@ -242,8 +288,10 @@ def serialize_watchlist_item(record: WatchlistItemRecord) -> "WatchlistItem":
     )
 
 
-def serialize_tracked_watchlist_item(record: WatchlistItemRecord) -> dict:
-    payload = serialize_watchlist_item(record).model_dump()
+def serialize_tracked_watchlist_item(
+    record: WatchlistItemRecord, *, asset_class: str | None = None
+) -> dict:
+    payload = serialize_watchlist_item(record, asset_class=asset_class).model_dump()
     payload["provider"] = service.get_provider_snapshot(record.symbol, asset_profile=payload)
     return payload
 
@@ -347,7 +395,12 @@ def build_watchlist_alert_payload(
     budget_seconds: float | None = None,
 ) -> dict:
     alert_setting = setting or get_or_create_watchlist_alert_setting(db, user, record)
-    tracked_assets = [serialize_tracked_watchlist_item(item) for item in sorted(record.items, key=lambda current: current.id or 0)]
+    tracked_assets = [
+        serialize_tracked_watchlist_item(
+            item, asset_class=resolve_watchlist_item_asset_class(db, item)
+        )
+        for item in sorted(record.items, key=lambda current: current.id or 0)
+    ]
 
     deadline = None if budget_seconds is None else monotonic() + budget_seconds
     stale_symbols: list[str] = []

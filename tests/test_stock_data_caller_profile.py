@@ -89,7 +89,9 @@ class CallerProfileTests(unittest.TestCase):
 
         with patch.object(service, "get_ticker_info", return_value={}) as ticker_info, patch.object(
             service, "get_provider_history_df", return_value=pd.DataFrame()
-        ), patch.object(service, "get_yfinance_history_df", return_value=pd.DataFrame()):
+        ), patch.object(service, "get_provider_snapshot", return_value=None), patch.object(
+            service, "get_yfinance_history_df", return_value=pd.DataFrame()
+        ):
             service.get_stock_data(
                 "AAPL",
                 period="1mo",
@@ -110,8 +112,8 @@ class CallerProfileTests(unittest.TestCase):
         with patch.object(
             service, "get_ticker_info", return_value={"quoteType": "EQUITY", "trailingPE": 21.5}
         ), patch.object(service, "get_provider_history_df", return_value=pd.DataFrame()), patch.object(
-            service, "get_yfinance_history_df", return_value=pd.DataFrame()
-        ):
+            service, "get_provider_snapshot", return_value=None
+        ), patch.object(service, "get_yfinance_history_df", return_value=pd.DataFrame()):
             payload = service.get_stock_data(
                 "VOO",
                 period="1mo",
@@ -135,7 +137,9 @@ class CallerProfileTests(unittest.TestCase):
             service, "get_ticker_info", return_value={"quoteType": "ETF", "shortName": "Vanguard S&P 500 ETF"}
         ) as ticker_info, patch.object(
             service, "get_provider_history_df", return_value=pd.DataFrame()
-        ), patch.object(service, "get_yfinance_history_df", return_value=pd.DataFrame()):
+        ), patch.object(service, "get_provider_snapshot", return_value=None), patch.object(
+            service, "get_yfinance_history_df", return_value=pd.DataFrame()
+        ):
             payload = service.get_stock_data(
                 "VOO",
                 period="1mo",
@@ -146,6 +150,48 @@ class CallerProfileTests(unittest.TestCase):
 
         ticker_info.assert_called()
         self.assertEqual(payload["asset"]["assetClass"], "etf")
+
+
+class ProfileContractTests(unittest.TestCase):
+    """Der Vertrag zwischen Serialisierung und Analyse.
+
+    `get_stock_data` liest aus dem Profil `name`, `assetClass`, `assetLabel`,
+    `market`, `exchange`, `type`, `isCrypto` und `symbol` (services.py, Aufbau
+    von `info` und `asset`). Kaeme das Profil aus einer Serialisierung, der
+    einer dieser Schluessel fehlt, gaebe es im Anfragepfad einen `KeyError` —
+    und der wuerde im Alarm-Pfad vom breiten `except Exception` verschluckt und
+    als leerer Alarm mit `dataFresh: True` durchgehen. Ein handgeschriebenes
+    Test-Dict wuerde das nicht bemerken; deshalb kommt das Profil hier aus der
+    echten Serialisierung.
+    """
+
+    GELESENE_SCHLUESSEL = {
+        "symbol",
+        "name",
+        "assetClass",
+        "assetLabel",
+        "market",
+        "exchange",
+        "type",
+        "isCrypto",
+    }
+
+    def test_serialized_watchlist_item_covers_every_key_the_analysis_reads(self):
+        from app import main as app_main
+
+        record = MagicMock()
+        record.symbol = "VOO"
+        record.name = "Vanguard S&P 500 ETF"
+        record.tags = []
+        record.asset_class = "etf"
+
+        payload = app_main.serialize_watchlist_item(record).model_dump()
+
+        fehlend = self.GELESENE_SCHLUESSEL - set(payload)
+        self.assertFalse(
+            fehlend,
+            f"die Serialisierung liefert nicht, was die Analyse liest: {sorted(fehlend)}",
+        )
 
 
 class AlertRequestPathTests(unittest.TestCase):
