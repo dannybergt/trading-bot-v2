@@ -95,8 +95,16 @@ class WatchlistAlertRequestBudgetTests(unittest.TestCase):
         payload, _elapsed, _asked = _build(budget=0.3)
 
         summary = payload["summary"]
+        # Erst die Existenz, dann der Wert: ein fehlender Schluessel soll sagen,
+        # dass die Kennzeichnung fehlt, und nicht als nackter KeyError auffallen.
+        self.assertIn(
+            "degraded",
+            summary,
+            "uebersprungene Symbole werden nicht gekennzeichnet — der Payload sieht aus wie ein vollstaendiger",
+        )
         self.assertTrue(summary["degraded"])
         self.assertEqual(summary["degradedReason"], "provider_budget_exhausted")
+        self.assertIn("staleSymbols", summary, "die uebersprungenen Symbole werden nicht genannt")
         # Die Symbole werden genannt. "Einige Werte fehlen" ohne zu sagen welche
         # waere keine Auskunft.
         self.assertEqual(summary["staleSymbols"], ["BBB", "CCC", "DDD"])
