@@ -11,10 +11,14 @@ Beides ist als Grundlage untauglich. Geprueft wird deshalb:
   1. eine gespeicherte Klasse schlaegt die Namensheuristik (sonst steuert ein
      Anzeigetext die Datenquelle),
   2. ein unbekannter gespeicherter Wert wird ignoriert statt durchgereicht,
-  3. die Aufloesung passiert **einmal** und danach nie wieder,
-  4. der Alarm-Pfad benutzt sie ueberhaupt — ohne (4) waere der Rest gruen und
-     wirkungslos,
-  5. der Schnappschuss traegt die Spalte durch Export und Import; ein alter
+  3. **kein** Anfragepfad loest selbst auf — das taten zwei zurueckgenommene
+     Anlaeufe, und beide holten damit genau den Aufruf zurueck, der hier weg
+     soll,
+  4. der Alarm-Pfad benutzt die gespeicherte Klasse ueberhaupt — ohne (4) waere
+     der Rest gruen und wirkungslos,
+  5. der Nachtrag aus der Hintergrundschleife fuellt nur offene Eintraege und
+     ruehrt bestehende Werte nicht an,
+  6. der Schnappschuss traegt die Spalte durch Export und Import; ein alter
      Schnappschuss ohne die Spalte laedt weiterhin.
 """
 import os
@@ -54,7 +58,15 @@ class StoredClassBeatsTheHeuristicTests(unittest.TestCase):
         self.assertEqual(profil["assetClass"], "stock")
 
 
-class ResolutionTests(unittest.TestCase):
+class RequestPathTests(unittest.TestCase):
+    """Die Trennlinie dieses Entwurfs: im Anfragepfad wird nur gelesen.
+
+    Zwei Anlaeufe haben sie verletzt und sind zurueckgenommen worden — einer
+    loeste im Alarm-Feed auf, einer beim Anlegen eines Eintrags. Beide holten
+    denselben Anbieteraufruf zurueck, der hier beseitigt werden soll, nur
+    seltener. Dieser Fall haelt die Linie.
+    """
+
     def _record(self, asset_class=None):
         record = MagicMock()
         record.id = 1
@@ -63,69 +75,35 @@ class ResolutionTests(unittest.TestCase):
         record.asset_class = asset_class
         return record
 
-    def test_stored_class_costs_no_provider_call(self):
-        from app import main as app_main
-
-        record = self._record(asset_class="etf")
-        db = MagicMock()
-
-        with patch.object(app_main.service, "get_ticker_info") as ticker_info:
-            resolved = app_main.resolve_watchlist_item_asset_class(db, record)
-
-        ticker_info.assert_not_called()
-        db.commit.assert_not_called()
-        self.assertEqual(resolved, "etf")
-
-    def test_the_request_path_helper_never_calls_a_provider(self):
-        # Die Trennlinie dieses Entwurfs: im Anfragepfad wird nur gelesen.
-        # Ein erster Anlauf loeste dort auf — und haette denselben Aufruf
-        # zurueckgeholt, der beseitigt werden sollte.
+    def test_reading_the_stored_class_never_calls_a_provider(self):
         from app import main as app_main
 
         with patch.object(app_main.service, "get_ticker_info") as ticker_info:
             offen = app_main.stored_watchlist_item_asset_class(self._record(asset_class=None))
             gesetzt = app_main.stored_watchlist_item_asset_class(self._record(asset_class="crypto"))
+            unbekannt = app_main.stored_watchlist_item_asset_class(
+                self._record(asset_class="wertpapier")
+            )
 
         ticker_info.assert_not_called()
-        self.assertIsNone(offen)
+        self.assertIsNone(offen, "eine fehlende Klasse muss offen bleiben")
         self.assertEqual(gesetzt, "crypto")
+        self.assertIsNone(unbekannt, "ein unbekannter Wert darf nicht durchgereicht werden")
 
-    def test_missing_class_is_resolved_once_and_written(self):
+    def test_no_request_path_resolves_the_class_itself(self):
+        # Statisch begruendet: kaeme die Aufloesung in einem Endpunkt zurueck,
+        # wuerde sie hier auffallen, bevor sie eine Regression rot macht.
+        import inspect
+
         from app import main as app_main
 
-        record = self._record(asset_class=None)
-        db = MagicMock()
-
-        with patch.object(
-            app_main.service,
+        quelle = inspect.getsource(app_main)
+        anfragepfad = quelle[quelle.index("def add_item(") : quelle.index("def update_item(")]
+        self.assertNotIn(
             "get_ticker_info",
-            return_value={"quoteType": "ETF", "shortName": "Vanguard S&P 500 ETF"},
-        ) as ticker_info:
-            first = app_main.resolve_watchlist_item_asset_class(db, record)
-            # Der Eintrag traegt die Klasse jetzt — der zweite Lauf darf keinen
-            # Anbieter mehr sehen.
-            second = app_main.resolve_watchlist_item_asset_class(db, record)
-
-        self.assertEqual((first, second), ("etf", "etf"))
-        self.assertEqual(ticker_info.call_count, 1, "die Aufloesung lief mehr als einmal")
-        self.assertEqual(record.asset_class, "etf")
-        db.commit.assert_called_once()
-
-    def test_unresolvable_symbol_is_left_open_instead_of_guessed(self):
-        from app import main as app_main
-
-        record = self._record(asset_class=None)
-        record.symbol = ""
-        db = MagicMock()
-
-        with patch.object(app_main.service, "get_ticker_info", return_value={}), patch.object(
-            app_main.service, "get_asset_profile", return_value={"assetClass": None}
-        ):
-            resolved = app_main.resolve_watchlist_item_asset_class(db, record)
-
-        self.assertIsNone(resolved)
-        self.assertIsNone(record.asset_class)
-        db.commit.assert_not_called()
+            anfragepfad,
+            "das Anlegen eines Eintrags fragt wieder die Stammdaten ab",
+        )
 
 
 class AlertPathUsesTheStoredClassTests(unittest.TestCase):

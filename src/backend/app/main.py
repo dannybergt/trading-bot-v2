@@ -305,25 +305,6 @@ def backfill_watchlist_item_asset_classes(
     return len(offen)
 
 
-def resolve_watchlist_item_asset_class(db: Session, record: WatchlistItemRecord) -> str | None:
-    """Loest die Klasse ueber die Stammdaten auf und schreibt sie fest.
-
-    Kostet einen Anbieteraufruf und gehoert deshalb **nicht** in den
-    Anfragepfad eines Feeds. Aufgerufen wird sie beim Anlegen eines Eintrags
-    (ein Symbol, der Nutzer erwartet dort ohnehin eine Abfrage) und aus der
-    Hintergrundschleife.
-    """
-    stored = stored_watchlist_item_asset_class(record)
-    if stored:
-        return stored
-
-    ticker_info = service.get_ticker_info(record.symbol)
-    profile = service.get_asset_profile(
-        record.symbol, ticker_info=ticker_info, fallback_name=record.name
-    )
-    return persist_watchlist_item_asset_class(db, record, profile.get("assetClass"))
-
-
 def serialize_watchlist_item(
     record: WatchlistItemRecord, *, asset_class: str | None = None
 ) -> "WatchlistItem":
@@ -1885,17 +1866,12 @@ def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(g
         db.add(new_item)
     db.commit()
     db.refresh(record)
-    if not existing:
-        # Ein einzelnes Symbol, gerade vom Nutzer hinzugefuegt: hier ist eine
-        # Abfrage erwartbar und kostet einen Aufruf. Danach steht die Klasse
-        # fest und kein Feed muss sie mehr erraten. Scheitert die Aufloesung,
-        # bleibt sie offen — der Eintrag verhaelt sich dann wie bisher.
-        item_record = next(
-            (current for current in record.items if canonicalize_symbol(current.symbol) == canonical_symbol),
-            None,
-        )
-        if item_record is not None:
-            resolve_watchlist_item_asset_class(db, item_record)
+    # Die Anlageklasse wird hier bewusst **nicht** aufgeloest. Ein Versuch am
+    # 2026-08-11 tat es und legte damit einen Anbieteraufruf in den Anfragepfad
+    # zurueck — die api-Regression fiel daraufhin an einer Zeitueberschreitung,
+    # die nichts mit dem Anlegen zu tun hatte. Aufgeloest wird ausschliesslich
+    # in der Hintergrundschleife; bis dahin verhaelt sich der Eintrag wie vor
+    # der Spalte.
     return serialize_watchlist(record)
 
 @app.put("/api/watchlists/{id}/items/{symbol:path}")
