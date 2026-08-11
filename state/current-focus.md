@@ -13,7 +13,7 @@ anbieterlastige Aufrufe, und `get_stock_data` macht intern noch einmal mehrere �
 Startliste summiert sich genau das. Fuer die Anfrage als Ganzes gab es **keine** Grenze. Das ist kein
 Testproblem: der Nutzer sah in dieser Zeit ein haengendes Dashboard.
 
-**Gebaut (Branch `fix/alarm-anfrage-budget`):** Gesamtbudget im **Anfragepfad**
+**Gebaut (PR #23, gemergt als `b5e7614`; `ci`/`codeql` gruen):** Gesamtbudget im **Anfragepfad**
 (`WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS`, Default 12 s). Ist es erschoepft, kommen die restlichen Symbole
 ohne Anbieterabfrage — und sagen das: `dataFresh: false` am Eintrag, `degraded`/`degradedReason`/`staleSymbols`
 in der Zusammenfassung. Die **Hintergrundschleifen bleiben ohne Budget** — dort wartet niemand vor einem
