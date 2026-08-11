@@ -1,5 +1,29 @@
 # Current Focus
 
+## 2026-08-11 (3): Der Stempel, der den falschen Commit nannte — seit dem 05.08. offen, dreimal im eigenen Lauf gesehen
+
+**Gewaehlt** nach dem Merge von PR #23: der `build.sh`-Stempel. Er stand seit dem 2026-08-05 als offener Punkt
+im STATE, und er ist mir in den Laeufen vom 06., 07. und heute **im eigenen Abschlussbanner** begegnet —
+gemeldet wurde jeweils der Commit von `main`, waehrend ein ungetesteter Arbeitsbaum geprueft wurde.
+
+**Der Defekt in einem Satz:** gebaut wird der Arbeitsbaum, gestempelt wurde HEAD. Der Kommentar im Code
+behauptete sogar "so CI and local builds carry the exact commit". `ui_version_badge` konnte das strukturell
+nicht sehen, weil Badge und `/api/version` aus derselben falschen Quelle stammen.
+
+**Gebaut (Branch `fix/versionsstempel-nennt-den-baum`):** `APP_VERSION` und `GIT_SHA` tragen `-dirty`, sobald
+der Baum abweicht. Geaenderte **und** unverfolgte Dateien zaehlen (beide landen im Build-Kontext); von git
+ignorierte nicht, das Laufzeitverzeichnis macht den Stempel also nicht faelschlich schmutzig. Bewusst **nicht**
+`git describe --dirty` — das sieht die unverfolgten Dateien nicht.
+
+**Warum ein eigenes `ops/automation/version.sh`:** `build.sh` baut Images und ist ohne Docker nicht pruefbar.
+Ausgelagert laeuft die Logik im Test gegen ein **vorgetaeuschtes git** — das Testimage hat gar keins, und ein
+Docker-Build je Fall waere zu teuer.
+
+**Am Artefakt belegt, derselbe Baum:** vorher `v2026.05.08-1-152-g0645e7c` (Commit von `main`), nach dem Fix
+`...-g0645e7c-dirty`, nach dem Commit `v2026.05.08-1-153-gc026dda` — der tatsaechlich gebaute Stand.
+
+**Verifikation:** Unit **401 -> 407**, Kette laeuft.
+
 ## 2026-08-11 (2): Die Anfrage, die kein Ende kannte — und der Leerzustand, der als Entwarnung gelesen wurde
 
 **Gewaehlt** nach dem Abschluss von PR #22: der letzte Punkt, an dem ein Lauf aus **fremdem** Grund rot wird —

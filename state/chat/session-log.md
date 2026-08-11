@@ -1,5 +1,13 @@
 # Sitzungslog
 
+- Datum: 2026-08-11 (dritter Eintrag)
+  Kontext: Fortsetzung derselben Sitzung ("mach weiter") nach dem Merge von PR #23. Gewaehlt: der `build.sh`-Stempel, seit dem 2026-08-05 offen und in den Laeufen vom 06., 07. und heute jeweils im eigenen Abschlussbanner sichtbar geworden.
+  Erledigt (Branch `fix/versionsstempel-nennt-den-baum`, `c026dda`): gebaut wird der Arbeitsbaum, gestempelt wurde HEAD. `APP_VERSION` und `GIT_SHA` tragen jetzt `-dirty`, sobald der Baum abweicht — geaenderte und unverfolgte Dateien zaehlen, von git ignorierte nicht. Logik in neuem `ops/automation/version.sh`, `build.sh` sourct sie; `ops/automation/{version,build}.sh` neu in `test.sh` eingehaengt.
+  Warum ausgelagert: `build.sh` baut Images und ist ohne Docker nicht pruefbar. Der Guard faehrt die Logik stattdessen gegen ein vorgetaeuschtes `git` — das Testimage hat gar keins.
+  Verifikation: Unit **401 -> 407** (6 neue in `tests/test_build_version_stamp.py`). Am Artefakt belegt, derselbe Baum: vorher `v2026.05.08-1-152-g0645e7c` (Commit von `main`), nach dem Fix `...-dirty`, nach dem Commit `v2026.05.08-1-153-gc026dda`.
+  Ausserdem in dieser Runde: PR #23 gemergt (`b5e7614`), `ci`+`publish` fuer `0645e7c` gruen — Docker-Hub-Sync erfolgt. Der `publish`-Lauf fuer `b5e7614` steht auf `cancelled`, das ist der Concurrency-Abbruch durch den folgenden STATE-Push, kein Fehlschlag.
+  Ports: keine allokiert; `lms-platform`, `portainer` und die inzwischen fremd laufenden `nexura-*` nicht angefasst.
+
 - Datum: 2026-08-11 (zweiter Eintrag)
   Kontext: Fortsetzung derselben Sitzung ("mach weiter") nach dem Merge von PR #22. Gewaehlt: der letzte Punkt, an dem ein Lauf aus fremdem Grund rot wird — die Zeitabhaengigkeit der ui-regression von externen Anbietern.
   Erledigt (Branch `fix/alarm-anfrage-budget`, `894730a`): **Gesamtbudget fuer die Alarm-Anfrage** statt eines groesseren Zeitfensters im Harnisch. Die vorhandenen Grenzen wirken pro Aufruf (`net_timeout` 8 s, `rate_limit` bis 10 s Wartezeit); der Payload laeuft pro Symbol durch zwei anbieterlastige Aufrufe, `get_stock_data` intern durch mehrere — fuer die Anfrage als Ganzes gab es keine Grenze, gemessen 22,5 s. Neu: `WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS` (Default 12 s) nur im Anfragepfad; erschoepft -> restliche Symbole ohne Anbieterabfrage, ausgewiesen per `dataFresh` am Eintrag und `degraded`/`degradedReason`/`staleSymbols` in der Zusammenfassung. Hintergrundschleifen bleiben ohne Budget.
