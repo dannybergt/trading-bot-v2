@@ -12,7 +12,7 @@ hat und kein Fear-&-Greed-Wert da ist; die fehlende Sektion ist dann korrekt. Ei
 Schritt haette die Umgebung fuer die Anbieterlage bestraft. Falsch war die **Folgerung**: der Schritt konnte
 "kein Anbieter" nicht von "die Seite laesst die Sektion trotz gelieferter Daten fallen" unterscheiden.
 
-**Gebaut (Branch `fix/ui-macro-context-gemessen`):** der Schritt liest zuerst `macro_context.available` aus der
+**Gebaut (PR #22, gemergt als `b5bd0f3`; `ci`/`codeql` gruen):** der Schritt liest zuerst `macro_context.available` aus der
 Herkunftskarte, die der Nachbarschritt ohnehin schon holt. Antwortet ein Anbieter, ist er **blockierend** und
 verlangt zusaetzlich, dass mindestens eine Kachel einen Wert zeigt. Antwortet keiner, prueft er die
 **Gegenrichtung** (die Sektion darf nicht mit lauter Gedankenstrichen dastehen) und meldet sich als `partial`.
