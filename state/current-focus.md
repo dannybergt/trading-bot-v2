@@ -22,7 +22,72 @@ Docker-Build je Fall waere zu teuer.
 **Am Artefakt belegt, derselbe Baum:** vorher `v2026.05.08-1-152-g0645e7c` (Commit von `main`), nach dem Fix
 `...-g0645e7c-dirty`, nach dem Commit `v2026.05.08-1-153-gc026dda` — der tatsaechlich gebaute Stand.
 
-**Verifikation:** Unit **401 -> 407**, Kette laeuft.
+**Verifikation:** `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` **alle Gates gruen** (Unit **401 -> 407**,
+api-regression passed, ui-regression passed inkl. `ui_version_badge ok`). **Der Fix beweist sich in seiner
+eigenen Ausgabe:** der Abschlussbanner meldet `@ c026dda` — den Branch-Commit — statt wie in den drei Laeufen
+zuvor den von `main`.
+
+**Gemergt als `ca6fc0e`** (PR #24; `ci`, `codeql`, `validate` gruen, `publish` fuer `ca6fc0e` **success**,
+Docker-Hub-Sync erfolgt).
+
+**Rueckwirkende Folge, die dazugehoert:** die Abschlussbanner der Laeufe vom 2026-08-06 und -07 haben Laeufe mit
+dem Commit von `main` beschriftet, obwohl ein anderer Baum geprueft wurde. Diese Protokollzeilen sind
+nachtraeglich unzuverlaessig — ab `ca6fc0e` nicht mehr.
+
+## SESSION-ABSCHLUSS 2026-08-11T12:35Z: Drei Aussagen ueber den Code, die nicht stimmten
+
+**Stand:** `main` auf `ca6fc0e`, working tree clean (bis auf diesen Abschluss-Commit), `ci` und `publish` gruen.
+Drei PRs in dieser Sitzung, jede einzeln durch die volle Gate-Kette, jede neue Zusage mit gefahrener
+Negativkontrolle. Unit **396 -> 407**.
+
+| PR | Merge | Inhalt |
+| --- | --- | --- |
+| #21 | `b903afb` | `ui_admin` blockierend (aus der Vorsitzung uebernommen und gemergt) |
+| #22 | `b5bd0f3` | `ui_macro_context` misst statt zu raten |
+| #23 | `b5e7614` | Gesamtbudget fuer die Alarm-Anfrage + ehrliche Kennzeichnung |
+| #24 | `ca6fc0e` | Versionsstempel nennt den gebauten Baum, nicht HEAD |
+
+**Der rote Faden:** in keinem der drei Faelle war der Code kaputt. Unwahr war jeweils eine **Aussage ueber den
+Code** — ein Pruefschritt, der seinen Fehlerfall strukturell nicht sehen konnte; ein Payload, der Fehlendes
+verschwieg; ein Stempel, der den falschen Commit nannte. Und jedes Mal war die Kette vollstaendig gruen.
+
+**Drei Befunde, die ohne die Arbeit unsichtbar geblieben waeren:**
+1. `ui_macro_context` meldete **`ok`**, waehrend VIX, 10Y und DXY alle drei leer waren — die Sektion stand
+   allein vom Fear-&-Greed-Wert getragen da. Der Schritt hat also nicht nur still uebersprungen, er hat auch zu
+   grosszuegig gruen gemeldet.
+2. **`summary.degraded` wurde im Frontend nirgends gelesen.** Der Ausnahmepfad setzt es seit Monaten; der
+   Dashboard-Typ kannte das Feld nicht einmal. Ein Anbieterausfall sah aus wie "keine Alarme" — ein
+   Leerzustand, der als Entwarnung gelesen wird.
+3. Der Alarm-Anfrage fehlte **jede** Gesamtgrenze: alle vorhandenen Limits wirken pro Aufruf, der Payload laeuft
+   aber pro Symbol durch mehrere. Gemessen 22,5 s bei yfinance-`429`.
+
+**Zwei eigene Fehler, beide derselben Klasse — ein Ergebnis, dessen Zustandekommen ich nicht geprueft hatte:**
+(a) Ein Kontrollskript schrieb den Build nach `/dev/null`; ein `noUnusedLocals`-Fehler brach ihn ab, der Fall
+lief gegen das **Image des vorherigen Falls** und lieferte dessen rote Zeile. Rot sah aus wie ein Erfolg der
+Kontrolle. (b) Ein Kontrollskript setzte per `git checkout` zurueck — auf **die Datei, an der ich arbeitete**;
+die noch nicht committete Implementierung war weg. Seitdem gilt: **erst committen, dann kontrollieren**, und
+Builds laut.
+
+**Allokierte Ports/Ressourcen: KEINE.** Alle Regressionsstacks abgeraeumt (18090/18094/181xx frei), keine
+eigenen Container aktiv, Arbeitsbaum nach jeder Kontrolle zurueckgesetzt und sauber neu gebaut. Fremd laufend
+und **nicht angefasst**: `lms-platform` (8080, 55432, 56379, 59000/1, 51025, 58025), `nexura-*` und `portainer`
+(8001, 9543).
+
+**Wartet auf den Nutzer (§13), unveraendert:**
+- **Stufe 3**: Test-Account (`LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD` in `.env.local`, Mode 600), VAPID-Schluessel
+  auf der Instanz, `FMP_API_KEY` auf BC-KI01. Ohne sie bleiben TBV2-Z01, der Realdatenzweig von Z02/Z07, Z13,
+  die Symbolsuche und der Push-Empfang dauerhaft unbewiesen.
+- **Entscheidung zu den stillen Handelsschwellen-Defaults**: `models.py` setzt `trade_fee_absolute=1` und
+  `min_target_yield=1` als DB-Defaults, das Onboarding wertet das als "konfiguriert". Ein frisches Konto handelt
+  gegen eine 1-%-Schwelle, die niemand gewaehlt hat.
+
+**Annahme, die widerrufen werden kann:** `WATCHLIST_ALERT_REQUEST_BUDGET_SECONDS=12`. Bewusst unter dem
+30-s-Fenster der api-regression und ueber dem, was ein gesunder Anbieterlauf braucht. Zu klein gewaehlt
+degradiert es bei langsamen, aber funktionierenden Anbietern — dann erhoehen, nicht abschalten.
+
+**Naechster sinnvoller Schritt:** die serielle Anbieterkette in `get_stock_data` — pro Symbol mehrere Aufrufe
+nacheinander. Das Budget aus PR #23 begrenzt die **Wirkung**, nicht die Anzahl. Danach die restlichen
+Harnisch-Schritte ohne Zielzeile und die hartcodierten englischen Texte der Tracked-Assets-Karte.
 
 ## 2026-08-11 (2): Die Anfrage, die kein Ende kannte — und der Leerzustand, der als Entwarnung gelesen wurde
 
