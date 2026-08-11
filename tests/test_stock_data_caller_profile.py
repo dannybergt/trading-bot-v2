@@ -46,6 +46,17 @@ ETF_PROFILE = {
     "isCrypto": False,
 }
 
+STOCK_PROFILE = {
+    "symbol": "AAPL",
+    "name": "Apple Inc.",
+    "assetClass": "stock",
+    "assetLabel": "Stock",
+    "market": "equity",
+    "exchange": "NASDAQ",
+    "type": "STOCK",
+    "isCrypto": False,
+}
+
 
 class _FakePredictor:
     is_trained = True
@@ -71,18 +82,21 @@ def _service_without_providers(symbol: str) -> MarketDataService:
 
 class CallerProfileTests(unittest.TestCase):
     def test_supplied_profile_skips_the_fundamentals_lookup(self):
-        service = _service_without_providers("VOO")
+        # Das Profil muss hier auf `stock` lauten: nur dann greift die
+        # Nachschaerfung ueberhaupt. Mit einem ETF-Profil waere der Fall auch
+        # ohne den Schutz gruen — er wuerde nichts belegen.
+        service = _service_without_providers("AAPL")
 
         with patch.object(service, "get_ticker_info", return_value={}) as ticker_info, patch.object(
             service, "get_provider_history_df", return_value=pd.DataFrame()
         ), patch.object(service, "get_yfinance_history_df", return_value=pd.DataFrame()):
             service.get_stock_data(
-                "VOO",
+                "AAPL",
                 period="1mo",
                 interval="1h",
                 include_news=False,
                 include_fundamentals=False,
-                asset_profile=dict(ETF_PROFILE),
+                asset_profile=dict(STOCK_PROFILE),
             )
 
         ticker_info.assert_not_called()
