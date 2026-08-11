@@ -196,6 +196,8 @@
   - Phase 4f (echter Broker-Adapter) fehlt → kein echtgeld-produktiver Pfad.
   - ~~Bug: Watchlist selbst nicht loeschbar (Items schon)~~ — **ERLEDIGT 2026-07-26** (`7e0fe33`): drei verschraenkte Ursachen (Seeding im Lese-Pfad `get_user_watchlist_records`, HTTP-400-Sperre auf `is_default`, `is_default` nie serialisiert + Delete-Mutation ohne `onError`). Seeding laeuft jetzt nur noch bei Account-Anlage (`app/watchlist_seed.py`), api-regression deckt Loeschen inkl. Start-Listen ab.
   - `.env.example` pinnt veralteten `IMAGE_TAG=2026.05.07-1` (Deploy-Footgun) — auf `latest` fixen.
+- die ui-regression haengt zeitlich an externen Anbietern: bei yfinance-`429` brauchte `/api/watchlists/<id>/alerts` 22,5 s und `ui_scanner` lief in sein Zeitfenster (beobachtet 2026-08-07). Erklaert auch das Schwanken von `ui_metric_sources` zwischen Laeufen. Nicht behoben.
+- `ui_macro_context` faengt seine Fehler weiterhin in einem `try`/`catch` ab und meldet sie als `best_effort_skipped` (letzte verbliebene Weichstelle dieser Art; `ui_admin` ist seit 2026-08-07 blockierend)
 - kuenftige Release-Tags muessen denselben Upgrade-/Restore-Rehearsal-Pfad erneut bestehen
 - der automatische GitHub-Actions-Publish-Pfad ist fuer `main` live bestaetigt; bei kuenftigen Workflow-Aenderungen weiter auf Secret-/Namespace-Drift achten
 - alte Docker-Hub-Staende vor `sha-f826304a7850` enthalten den BTC-Parserfix noch nicht; fuer Live-Smokes mit BTC/USD mindestens `sha-f826304a7850` oder neuer verwenden

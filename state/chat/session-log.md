@@ -1,5 +1,13 @@
 # Sitzungslog
 
+- Datum: 2026-08-07
+  Kontext: Session-Ritual, danach vom Nutzer freigegeben: erst `fe78609` nach `origin/main` pushen, dann die im STATE benannte Weichstelle `ui_admin` blockierend machen.
+  Erledigt (Branch `fix/ui-admin-blockierend`, `d0d44af`): `try`/`catch` mit `best_effort_skipped` entfernt; Zusagen des Schritts ausgetauscht (Sektionen einzeln ueber `data-testid`, Tabellen-Zusage auf die Users-Sektion verengt, neu: keine Sektion steht in ihrer ErrorBoundary-Fallback-Karte); `data-testid` fuer Users-/Backups-/Export-Sektion nachgezogen; `ErrorBoundary`-Fallback traegt seinen `scope` als `data-scope` im DOM; CLAUDE.md-Eintrag zur best-effort-Behandlung korrigiert (war seit dem Wegfall von React.lazy veraltet).
+  Der Befund darunter: die Begruendung des Schritts ("ein Absturz killt den ganzen Tree") stimmte seit den Sektions-ErrorBoundaries nicht mehr. Negativkontrolle mit echtem `throw` in der Nutzer-Sektion: alle drei alten Zusagen blieben im Fehlerfall erfuellt, der Schritt haette `ok` gemeldet, ohne dass das `catch` greifen musste.
+  Verifikation: `SKIP_REHEARSAL=1 bash ops/automation/verify-branch.sh` alle Gates gruen (Unit 396, api-regression passed, ui-regression passed inkl. `ui_admin ok`). Negativkontrolle in beiden Fassungen gefahren, Exit 1; zweite Fassung meldet Ursache und Sektion statt eines Timeouts.
+  Offen / nicht mitgefixt: `ui_macro_context` bleibt best-effort; die ui-regression haengt zeitlich an externen Anbietern (Zwischenlauf fiel an `ui_scanner`, Ursache yfinance `429` mit 22,5 s Antwortzeit) — als offener Punkt aufgenommen, nicht behoben. `build.sh`-Stempel wieder im eigenen Lauf gesehen (`@ fe78609`).
+  Ports: keine allokiert, 18090/18094 nach den Laeufen wieder frei; `lms-platform` und `portainer` nicht angefasst.
+
 - Datum: 2026-07-25
   Kontext: User-Wunsch nach durchgaengiger Hilfe (Hover-Kurzerklaerung an den Punkten der aktuellen Ansicht + weiterfuehrend die ganze Webapp-Hilfe). Explorer-Kartierung: volle Hilfe existiert schon (docs_service.py + /api/docs + DocsPage + HelpDrawer "?"-Header-Button + docs/inapp 13 Themen DE/EN); nur eine wiederverwendbare Tooltip-Komponente fehlte.
   Erledigt (Branch `feature/help-tooltips`, Frontend-only):

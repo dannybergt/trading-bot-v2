@@ -727,7 +727,7 @@ function UsersSection() {
   }
 
   return (
-    <section>
+    <section data-testid="admin-users-section">
       <h2 className="mb-3 text-lg font-semibold">{t("admin.users.title")}</h2>
       <form onSubmit={handleCreate} className="card mb-4 grid gap-3 sm:grid-cols-4">
         {/* Beide Felder trugen ihre Semantik nur im placeholder: kein Label,
@@ -891,7 +891,7 @@ function BackupsSection() {
   }
 
   return (
-    <section>
+    <section data-testid="admin-backups-section">
       <h2 className="mb-3 text-lg font-semibold">{t("admin.backups.title")}</h2>
       <div className="card mb-4 flex items-center gap-3">
         <button
@@ -967,7 +967,7 @@ function ExportSection() {
   }
 
   return (
-    <section>
+    <section data-testid="admin-export-section">
       <h2 className="mb-3 text-lg font-semibold">{t("admin.export.title")}</h2>
       <div className="card flex flex-wrap items-center gap-3">
         <p className="text-sm text-slate-400">{t("admin.export.description")}</p>
