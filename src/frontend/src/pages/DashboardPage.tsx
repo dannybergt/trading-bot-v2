@@ -78,6 +78,37 @@ type WatchlistNewsPayload = {
   items: WatchlistNewsItem[];
 };
 
+type Uebersetzer = ReturnType<typeof useTranslation>["t"];
+
+/** Anlageklasse als Wort in der Sprache des Nutzers.
+ *
+ * Backend und Buendel koennen auseinanderlaufen: die Klasse kommt aus der
+ * Datenbank und ist potenziell aelter als dieses Frontend. Kennt das Buendel
+ * sie nicht, bleibt das Backend-Label stehen — besser ein englisches Wort als
+ * ein Schluesselpfad im Text.
+ */
+function assetClassLabel(
+  t: Uebersetzer,
+  assetClass?: string,
+  fallback?: string,
+): string {
+  const key = (assetClass ?? "").trim().toLowerCase();
+  if (!key) return fallback ?? "";
+  const uebersetzt = t(`assets.class.${key}`, { defaultValue: "" });
+  return uebersetzt || fallback || key;
+}
+
+/** Anbieterstatus als Wort statt als roher Zustandsschluessel.
+ *
+ * "provider: live" ist derselbe Fehler, den `ui_trade_gates` an anderer Stelle
+ * zurueckweist: ein interner Schluessel, der in der Oberflaeche landet.
+ */
+function providerStatusLabel(t: Uebersetzer, status?: string): string {
+  const key = (status ?? "").trim().toLowerCase();
+  if (!key) return "";
+  return t(`assets.providerStatus.${key}`, { defaultValue: "" }) || key;
+}
+
 export function DashboardPage() {
   const { t } = useTranslation();
   const watchlistsQuery = useQuery({
@@ -199,8 +230,9 @@ export function DashboardPage() {
 
       {watchlistAlertsQuery.error ? (
         <p className="text-xs text-red-300">
-          Failed to load watchlist alerts:{" "}
-          {(watchlistAlertsQuery.error as ApiError).message}
+          {t("dashboard.alertsLoadFailed", {
+            message: (watchlistAlertsQuery.error as ApiError).message,
+          })}
         </p>
       ) : null}
     </div>
@@ -330,12 +362,17 @@ function DataHealthNote({ summary }: { summary: WatchlistAlertSummary | undefine
 }
 
 function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
+  const { t } = useTranslation();
   if (!data) return null;
   const tracked = data.trackedAssets ?? [];
   const classCounts = new Map<string, number>();
   const tagCounts = new Map<string, number>();
   for (const item of tracked) {
-    const key = item.assetLabel ?? item.assetClass ?? "Other";
+    // Die Anlageklasse kommt als Rohwert ("etf") aus dem Backend, das Label
+    // ("ETF") ebenfalls auf Englisch. Uebersetzt wird ueber die Klasse; kennt
+    // das Buendel sie nicht, bleibt das Backend-Label stehen, statt einen
+    // Schluesselpfad anzuzeigen.
+    const key = assetClassLabel(t, item.assetClass, item.assetLabel);
     classCounts.set(key, (classCounts.get(key) ?? 0) + 1);
     for (const tag of item.tags ?? []) {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
@@ -347,19 +384,25 @@ function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">Tracked assets</h2>
+      <h2 className="text-lg font-semibold">{t("dashboard.tracked.title")}</h2>
       <p className="text-xs text-slate-500">
-        Watchlist “{data.watchlist.name}” · {tracked.length} symbol
-        {tracked.length === 1 ? "" : "s"}
+        {t(
+          tracked.length === 1
+            ? "dashboard.tracked.subtitleOne"
+            : "dashboard.tracked.subtitle",
+          { name: data.watchlist.name, count: tracked.length },
+        )}
       </p>
       <DataHealthNote summary={data.summary} />
       {tracked.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">No symbols.</p>
+        <p className="mt-3 text-sm text-slate-500">
+          {t("dashboard.tracked.empty")}
+        </p>
       ) : (
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">
-              Asset mix
+              {t("dashboard.tracked.assetMix")}
             </p>
             <ul className="mt-1 space-y-1 text-sm">
               {Array.from(classCounts.entries()).map(([label, count]) => (
@@ -373,7 +416,7 @@ function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
           {sortedTags.length > 0 ? (
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">
-                Top tags
+                {t("dashboard.tracked.topTags")}
               </p>
               <ul className="mt-1 flex flex-wrap gap-1.5 text-xs">
                 {sortedTags.map(([tag, count]) => (
@@ -403,9 +446,11 @@ function TrackedAssets({ data }: { data: WatchlistAlertsPayload | undefined }) {
                 {item.symbol}
               </Link>
               <span className="text-xs text-slate-400">
-                {item.assetLabel ?? item.assetClass ?? ""}
+                {assetClassLabel(t, item.assetClass, item.assetLabel)}
                 {item.provider?.status
-                  ? ` · provider: ${item.provider.status}`
+                  ? ` · ${t("dashboard.tracked.provider", {
+                      status: providerStatusLabel(t, item.provider.status),
+                    })}`
                   : ""}
               </span>
             </li>
@@ -565,11 +610,12 @@ function MacroCalendarCard() {
 }
 
 function NewsTicker({ data }: { data: WatchlistNewsPayload | undefined }) {
+  const { t } = useTranslation();
   const items = data?.items ?? [];
   if (items.length === 0) return null;
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold">News ticker</h2>
+      <h2 className="text-lg font-semibold">{t("dashboard.newsTicker.title")}</h2>
       <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-2">
         {items.map((item, idx) => (
           <li key={`${item.symbol}-${idx}`} className="text-sm">

@@ -1081,6 +1081,10 @@ async function run() {
       ["/watchlists", "Listen werden pro Nutzer gespeichert"],
       ["/settings", "Zwei-Faktor-Authentifizierung"],
       ["/scanner", "Aktueller Stand der gewaehlten Watchlist"],
+      // Seit 2026-08-11: die Tracked-Assets-Karte stand fest auf Englisch, und
+      // die Quellpruefung konnte sie nicht sehen, weil ihr Text in bedingt
+      // gerenderten Zweigen liegt. Hier steht sie am laufenden Artefakt.
+      ["/", "Beobachtete Werte"],
     ]) {
       await navigate(client, `${FRONTEND_URL}${path}`);
       await waitForCondition(
