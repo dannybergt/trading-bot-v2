@@ -1,64 +1,63 @@
 # Current Focus
 
-## SESSION 2026-09-11 (1): Der Backtest, der nie gerechnet hat — und was sichtbar wurde, als er es tat
+## SESSION-ABSCHLUSS 2026-09-11T10:45Z: Der Backtest, der nie gerechnet hat — und was sichtbar wurde, als er es tat
 
-**Stand:** `main` auf `def91d8` unveraendert. Zwei Branches, beide gepusht, PRs offen:
+**Stand:** `main` auf `d7e76af` (PR #29 gemergt: Gates laufen auf dem neuen Host). `fix/backtest-zwei-jahre`
+lokal auf `810c6c7` + dieser STATE/ADR-Commit; **Remote (PR #30, Entwurf, Basis `main`) steht noch auf dem
+Stand vor dem Rebase** — Push mit `--force-with-lease` steht aus (Session-Ende ohne Push). Unit **435 -> 442**.
 
-| Branch | Commits | Inhalt | Status |
-| --- | --- | --- | --- |
-| `chore/bind-mounts-unter-selinux` | `9131d17` (+ ADR) | Gates laufen auf einem Host mit SELinux + nativem Docker | PR, mergefaehig nach CI |
-| `fix/backtest-zwei-jahre` | `c662c65`, `230ff48` (+ STATE/ADR) | "2y" in allen drei Zeitraum-Tabellen; kein Backtest auf Platzhalterkursen; untrainierbare Fenster uebersprungen | **Entwurf — wartet auf Designentscheidung (unten)** |
+| Commit | Inhalt | verifier |
+| --- | --- | --- |
+| `9131d17`+`f1ab89b` (#29, gemergt) | `z`-Label an allen Bind-Mounts; `make_writable_for_containers` statt `chmod 0777` auf fremde Verzeichnisse | nachgewiesen (Negativkontrolle am frischen Verzeichnis; Rehearsal 2x gruen); CI `validate`/`CodeQL`/`analyze` gruen |
+| `ff24458` | "2y" in allen drei Zeitraum-Tabellen (504 Bars / "2y" / 730 Tage) | rot gegen main (`130 not >= 500`); allein **widerlegt**: 216–249 s, 504 durch nginx, identische Kennzahlen fuer AAPL/MSFT/`ZZZZNOPE123`, 6 Tracebacks je Anfrage |
+| `77ffb36` | Kein Backtest auf Platzhalterkursen (`synthetic:true`, Leerantwort, kein Training); untrainierbare Fenster uebersprungen | nachgewiesen: 2–5 s, 200 durch nginx, 0 Tracebacks; Negativkontrollen `run_backtest` 1x / `train` 79x |
+| `fc14445` | `BACKTEST_STEP = 30` (Eigentuemer-Entscheid gegenueber Hintergrund-Rechnung) | **widerlegt**: 51–57 s (einmal 95 s); Ursache `predict_next_movement` 323 x 0,125 s = 40 s, unabhaengig von step |
+| `680c167` | Batch-Scoring je Block (`PricePredictor.probability_up`), ein Training je Block | nachgewiesen: 17,7–19,1 s, Kennzahlen identisch (Accuracy 0.6502, Reliability-Zaehler gleich), Leakage-Kontrolle dynamisch — **aber** zwei parallele Anfragen je 78–85 s |
+| `810c6c7` | `run_backtest_serialized`: ein Backtest zur Zeit, ein Ergebnis je Symbol+Datenstand im Prozessspeicher | **Lauf D4 beim Session-Ende noch nicht zurueck** (zwei Threads, zwei Symbole, dann Cache-Treffer, dann neuer Bar; dazu `test.sh` komplett, api-regression). Ergebnis in die naechste Session uebernehmen |
 
-Unit **435 -> 439**. `test.sh`, `run-api-regression.sh`, `run-upgrade-rehearsal.sh` (:local) gruen auf diesem Host.
+**Der rote Faden:** vier Verifier-Laeufe, drei Widerlegungen, jede an einer Zahl, die ich fuer plausibel gehalten
+hatte — 130 statt 500 Bars; "2–2,7 s je Training" (in Wahrheit 1,2 s Training + 0,125 s je Bar Bildschirm-
+Vorhersage); "Reserve fuer zwei Anfragen" (in Wahrheit Thread-Ueberbuchung). Ein Test, den ich dazu schrieb,
+war gruen bei 53 s Antwortzeit, weil er meine Rechnung bewachte statt die Zusage. Er tut das nicht mehr.
 
-**Neuer Host `dev-claude`** (openSUSE, SELinux enforcing, Docker nativ, **kein `node`**): Kein Gate lief
-beim ersten Versuch — `PermissionError: /app/tests` vor dem ersten Test, Postgres-Bind-Mount, `mkdir
-/app/data/ml_models`, `chmod 0777` auf ein von Postgres uebernommenes Verzeichnis. Alle Bind-Mounts tragen
-jetzt `z`; `make_writable_for_containers` (env.sh) setzt Rechte nur auf eigenen Pfaden und meldet fremde.
-Die UI-Regression ist hier ohne `node` **nicht lauffaehig**; die CI faehrt sie im Runner (Node + Chrome) —
-der PR ist damit der Weg zum L2-Nachweis.
+**Neuer Host `dev-claude`** (openSUSE, SELinux enforcing, Docker nativ): Kein Gate lief beim ersten Versuch —
+`PermissionError: /app/tests`, Postgres-Bind-Mount, `mkdir /app/data/ml_models`, `chmod 0777` auf ein von
+Postgres uebernommenes Verzeichnis. Behoben in #29. **`node` fehlt weiterhin** — der Nutzer hat die
+system-weite Installation freigegeben (`sudo zypper install -y nodejs24`), sie ist aber noch nicht erfolgt; die
+UI-Regression laeuft bis dahin nur in der CI (dort gruen fuer #29, fuer #30 nach dem Push zu pruefen).
 
-**Der Backtest-Befund, schaerfer als notiert:** "2y" fehlte nicht in einer Tabelle, sondern in **drei**
-(`days_map` -> 130 Bars, `yf_period` -> "6mo", Mock -> 180 Tage). `run_backtest` verlangt 185 Zeilen. Der
-Endpunkt war seit seiner Einfuehrung strukturell leer, die Karte auf `/analysis` rendert bei `samples == 0`
-nichts — nichts war rot. Der Fix (`c662c65`) ist rot gegen `main` (`130 not greater than or equal to 500`).
-
-**Was der `verifier` am laufenden Stack dann sah (der eigentliche Ertrag der Sitzung):**
-1. **216–249 s** pro Anfrage auf dem 731-Zeilen-Platzhalter (~55 Ensemble-Trainings, 100 % CPU); durch nginx
-   (kein `proxy_read_timeout`) **504 nach 60 s**, Backend rechnet ins Leere weiter, `retry: 1` verdoppelt.
-2. Im synthetischen Modus **byte-identische Kennzahlen** fuer AAPL, MSFT und `ZZZZNOPE123` (`np.random.seed(42)`),
-   ohne Zustandswort — Regel K verletzt. Vor dem Fix blieb die Karte leer; danach stuende "52,86 % Accuracy"
-   fuer ein nicht existierendes Symbol.
-3. Sechs `ERROR model_training_failed` mit Traceback pro Anfrage (fruehe Fenster mit einer Klasse).
-
-(2) und (3) sind behoben (`230ff48`, Negativkontrollen: `run_backtest` 1x / `train` 79x gegen `main`). Zweiter
-Lauf: 2–3,5 s, `synthetic:true`, 200 durch nginx, 0 Tracebacks. (1) **ist nicht behoben** und gehoert dem
-Menschen:
-
-**Wartet auf den Nutzer (§13) — Designfrage Backtest-Antwortzeit:** Gemessen (verifier, D): 504 echte Bars,
-`train_window=180, step=10` -> 33 Trainings, **64,6–87,9 s** (~2–2,7 s je Training) — ueber dem nginx-Limit
-von 60 s. Ein Anbieter-Host (Alpaca liefert 504 Bars) bekaeme mit `c662c65` einen 504 pro Seitenaufruf, zweimal.
-Optionen: (a) **Hintergrund-Rechnung mit Ergebnis-Cache je Symbol/Tag** (Endpunkt antwortet sofort mit
-`pending`, Karte fragt nach; sauber, ~halber Tag, neuer Zustand im UI, i18n); (b) `step` 10 -> 30/40 (11–8
-Trainings, ~20–30 s; aendert die Statistik der Kennzahlen, bleibt CPU-teuer je Seitenaufruf); (c)
-`proxy_read_timeout` hoch (verschiebt nur, jeder Seitenaufruf rechnet Minuten). Empfehlung: (a). **Bis zur
-Entscheidung darf `c662c65` nicht nach `main`** — vorher war der Endpunkt leer und billig, danach leer und teuer.
-- **Stufe 3 unveraendert** (Test-Account, VAPID, `FMP_API_KEY`); die vier Zielzeilen-Vorschlaege V1–V4 warten.
+**Wartet auf den Nutzer (§13):**
+- **`node` installieren** (freigegeben, nicht ausgefuehrt): `sudo zypper install -y nodejs24`.
+- **PR #30 mergen oder nicht** — nach Push, CI und dem ausstehenden D4-Ergebnis. Bewusste Grenze der gewaehlten
+  Loesung: drei gleichzeitige Backtests fuer drei Symbole -> die dritte wartet ~40 s und liegt an der
+  Timeout-Grenze. Die Bildschirm-Vorhersage von `/analysis/<symbol>` trainiert gleichzeitig mit dem Backtest
+  derselben Seite auf denselben Kernen (benannt, nicht gemessen). Falls das unter Last nicht reicht: Option (a)
+  Hintergrund-Rechnung mit `pending`-Zustand bleibt die saubere Loesung.
+- **Stufe 3 unveraendert** (Test-Account, VAPID, `FMP_API_KEY`); Zielzeilen-Vorschlaege V1–V4 warten.
 - **Neu, vom verifier:** der Backtest hat **keine Zielzeile** und keinen Harnisch-Schritt. Vorschlag: "Backtest
-  rechnet nie auf Platzhalterkursen" (`synthetic:true` => `samples 0`, Antwort < 10 s; Realdaten =>
-  `synthetic:false`, Antwort < nginx-Timeout), Beweisschritt in der api-regression. Der Zielsatz gehoert dem Menschen.
-- **`node` auf dem Host** (§3: system-weite Installation nur mit Freigabe) — sonst bleibt L2 hier CI-only.
+  rechnet nie auf Platzhalterkursen" (`synthetic:true` => `samples 0`, < 10 s; Realdaten => `synthetic:false`,
+  Antwort durch nginx < 60 s bei zwei parallelen Anfragen). Der Zielsatz gehoert dem Menschen.
 
-**Bewusst nicht angefasst:** `"1y": 500`, `"6mo": 260` in der Bar-Tabelle (etwa das Doppelte der Handelstage;
-eigener Anzeige-Befund, nicht ausgemessen). `tests/test_ml_persistence.py::test_save_load_roundtrip_recovers_predictor`
-skippt sich selbst ("XGBoost training did not converge") und beweist den Roundtrip nie — Bestand. 14x
-`provider_call_failed label=ticker_info:*` auf ERROR aus der Hintergrundschleife (yfinance 429) — Bestandsrauschen.
+**Bewusst nicht angefasst (Bestand, vom verifier benannt):**
+- `prepare_features` etikettiert die letzte Zeile jedes Trainings-Slice als `Target=0` (`NaN > x` -> False) statt
+  sie zu verwerfen — kein Zukunftswissen, aber ein falsches Label im Testteil; verfaelscht `memberAccuracies`
+  und etikettiert den juengsten Bar der Bildschirm-Vorhersage immer als DOWN. **SHOULD**, eigener Schnitt.
+- `n_jobs=-1` je Ensemble-Mitglied (Thread-Ueberbuchung bei paralleler Arbeit) — aendert die Bildschirm-Vorhersage
+  mit, eigener Schnitt.
+- `"1y": 500`, `"6mo": 260` in der Bar-Tabelle (etwa das Doppelte der Handelstage; Anzeige-Befund, nicht ausgemessen).
+- `test_ml_persistence::test_save_load_roundtrip_recovers_predictor` skippt sich selbst und beweist den Roundtrip nie.
+- 14x `provider_call_failed label=ticker_info:*` auf ERROR aus der Hintergrundschleife (yfinance 429).
 
-**Allokierte Ports/Ressourcen: KEINE.** Alle `tbv2-verify-*`-Container und -Netze entfernt. Fremd auf diesem Host
-(nicht angefasst): `nex-im-*` einer parallelen Session (kam und ging waehrend der Laeufe).
+**Annahmen, widerrufbar:** `step=30` ist die Kadenz des Eigentuemers; der Cache ist prozesslokal (ein uvicorn-
+Worker); ein Backtest zur Zeit ist akzeptabel.
 
-**Naechster sinnvoller Schritt:** Entscheidung (a)/(b)/(c) einholen; bei (a) Slice: Ergebnis-Cache + Hintergrund-Thread
-+ `pending`-Zustand in der Karte. Danach unveraendert: **Analyse-Seite uebersetzen** (129 feste Literale).
+**Allokierte Ports/Ressourcen: KEINE eigenen** — der laufende `verifier` (D4) haelt kurzzeitig `tbv2-verify-*`
+und 18194 und raeumt selbst auf. Fremd auf diesem Host (nicht angefasst): `nex-im-*` einer parallelen Session,
+kommt und geht. `artifacts/verification/2026-09-11T*` (gitignored) haelt die Rohbelege aller Laeufe.
+
+**Naechster sinnvoller Schritt:** D4-Ergebnis lesen; falls nachgewiesen: `git push --force-with-lease`, PR #30
+aus dem Entwurf nehmen, CI (inkl. UI-Regression) abwarten, mergen. Danach unveraendert: **Analyse-Seite
+uebersetzen** (129 feste Literale, `OFFENE_SEITEN` in `tests/test_page_i18n.py`).
 
 
 ## SESSION-ABSCHLUSS 2026-08-11T18:05Z (2): Vier Aussagen, die im Anfragepfad Geld gekostet haben
