@@ -174,7 +174,7 @@ class BacktestServiceTests(unittest.TestCase):
                                         "assetLabel": "Stock", "market": "equity",
                                         "exchange": "NASDAQ", "type": "STOCK", "isCrypto": False}), \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
-             patch.object(backtest_service, "run_backtest",
+             patch.object(backtest_service, "run_backtest_serialized",
                           return_value=backtest_service._empty_payload()) as run:
             payload = app_main.get_symbol_backtest(
                 symbol="AAPL", current_user=MagicMock(), db=MagicMock()
@@ -183,6 +183,58 @@ class BacktestServiceTests(unittest.TestCase):
         self.assertFalse(payload["synthetic"])
         self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
         self.assertEqual(run.call_args.kwargs["train_window"], app_main.BACKTEST_TRAIN_WINDOW)
+        self.assertEqual(run.call_args.kwargs["symbol"], "AAPL")
+
+    def test_serialized_backtests_never_overlap_and_repeat_for_free(self):
+        # Zwei gleichzeitige Backtests brauchten je 78-85 s statt ~20 s
+        # (verifier, 2026-09-11): jedes Ensemble-Mitglied trainiert auf allen
+        # Kernen, parallel nehmen sie sich nur die CPUs weg. Also: einer zur
+        # Zeit — und dieselben Bars fuer dasselbe Symbol nie zweimal.
+        import threading
+        import time
+        from unittest.mock import patch
+        from app import backtest_service
+
+        overlap = {"active": 0, "max": 0, "calls": 0}
+        guard = threading.Lock()
+
+        def slow_backtest(df, *, train_window, step):
+            with guard:
+                overlap["active"] += 1
+                overlap["calls"] += 1
+                overlap["max"] = max(overlap["max"], overlap["active"])
+            time.sleep(0.05)
+            with guard:
+                overlap["active"] -= 1
+            return {**backtest_service._empty_payload(), "samples": len(df)}
+
+        df = _synthetic_frame(30)
+        backtest_service._RESULTS.clear()
+        with patch.object(backtest_service, "run_backtest", side_effect=slow_backtest):
+            threads = [
+                threading.Thread(
+                    target=backtest_service.run_backtest_serialized,
+                    args=(df,), kwargs={"symbol": sym, "train_window": 5, "step": 5},
+                )
+                for sym in ("AAPL", "MSFT", "AAPL", "MSFT")
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            # Wiederholung auf denselben Bars: kein Aufruf.
+            repeat = backtest_service.run_backtest_serialized(
+                df, symbol="AAPL", train_window=5, step=5
+            )
+            # Ein neuer Bar: neue Rechnung.
+            longer = _synthetic_frame(31)
+            backtest_service.run_backtest_serialized(
+                longer, symbol="AAPL", train_window=5, step=5
+            )
+
+        self.assertEqual(overlap["max"], 1, "zwei Backtests liefen gleichzeitig")
+        self.assertEqual(overlap["calls"], 3)  # AAPL, MSFT, AAPL mit neuem Bar
+        self.assertEqual(repeat["samples"], 30)
 
     def test_endpoint_refuses_synthetic_history(self):
         # Regel K: keine Kennzahl auf erfundenen Kursen. Der Platzhalter ist

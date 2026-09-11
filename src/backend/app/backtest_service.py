@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from typing import Any
 
 import pandas as pd
@@ -146,6 +147,46 @@ def run_backtest(
         "trainWindow": train_window,
         "step": step,
     }
+
+
+# One walk-forward at a time, one result per symbol and data stamp.
+#
+# Measured 2026-09-11 (verifier): a single request takes ~18-26 s, but two
+# running at once take 78-85 s each — every ensemble member trains on all
+# cores (`n_jobs=-1`), so parallel backtests only fight over the same CPUs
+# and both miss nginx's 60 s upstream timeout, after which the frontend's
+# `retry: 1` adds a third and fourth. Serialising them makes the second
+# request wait ~20 s and then take ~20 s; the cache makes any repeat of the
+# same symbol on the same data free. Process-local: the backend runs a
+# single uvicorn worker (ops/docker/backend.Dockerfile).
+_RUN_LOCK = threading.Lock()
+_RESULTS: dict[str, tuple[str, dict[str, Any]]] = {}
+
+
+def run_backtest_serialized(
+    df: pd.DataFrame,
+    *,
+    symbol: str,
+    train_window: int = 180,
+    step: int = 10,
+) -> dict[str, Any]:
+    """`run_backtest`, but never concurrently and never twice for the same
+    symbol on the same bars. The stamp is the last bar's timestamp plus the
+    row count — a new bar or a different history length recomputes."""
+    if df is None or df.empty:
+        return _empty_payload()
+    stamp = f"{df.index[-1]}|{len(df)}|{train_window}|{step}"
+    hit = _RESULTS.get(symbol)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    with _RUN_LOCK:
+        # A request that waited here may find the answer already computed.
+        hit = _RESULTS.get(symbol)
+        if hit is not None and hit[0] == stamp:
+            return hit[1]
+        result = run_backtest(df, train_window=train_window, step=step)
+        _RESULTS[symbol] = (stamp, result)
+        return result
 
 
 def run_backtest_for_history(

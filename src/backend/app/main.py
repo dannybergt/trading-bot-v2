@@ -2907,8 +2907,8 @@ def get_symbol_backtest(
             "result": backtest_service._empty_payload(),
         }
 
-    result = backtest_service.run_backtest(
-        df, train_window=BACKTEST_TRAIN_WINDOW, step=BACKTEST_STEP
+    result = backtest_service.run_backtest_serialized(
+        df, symbol=canonical, train_window=BACKTEST_TRAIN_WINDOW, step=BACKTEST_STEP
     )
     return {
         "symbol": canonical,
