@@ -13,7 +13,7 @@ Stand vor dem Rebase** — Push mit `--force-with-lease` steht aus (Session-Ende
 | `77ffb36` | Kein Backtest auf Platzhalterkursen (`synthetic:true`, Leerantwort, kein Training); untrainierbare Fenster uebersprungen | nachgewiesen: 2–5 s, 200 durch nginx, 0 Tracebacks; Negativkontrollen `run_backtest` 1x / `train` 79x |
 | `fc14445` | `BACKTEST_STEP = 30` (Eigentuemer-Entscheid gegenueber Hintergrund-Rechnung) | **widerlegt**: 51–57 s (einmal 95 s); Ursache `predict_next_movement` 323 x 0,125 s = 40 s, unabhaengig von step |
 | `680c167` | Batch-Scoring je Block (`PricePredictor.probability_up`), ein Training je Block | nachgewiesen: 17,7–19,1 s, Kennzahlen identisch (Accuracy 0.6502, Reliability-Zaehler gleich), Leakage-Kontrolle dynamisch — **aber** zwei parallele Anfragen je 78–85 s |
-| `810c6c7` | `run_backtest_serialized`: ein Backtest zur Zeit, ein Ergebnis je Symbol+Datenstand im Prozessspeicher | **Lauf D4 beim Session-Ende noch nicht zurueck** (zwei Threads, zwei Symbole, dann Cache-Treffer, dann neuer Bar; dazu `test.sh` komplett, api-regression). Ergebnis in die naechste Session uebernehmen |
+| `810c6c7` | `run_backtest_serialized`: ein Backtest zur Zeit, ein Ergebnis je Symbol+Datenstand im Prozessspeicher | Lock, Cache (0,001 s / 0,01 s ueber HTTP), Neu-Rechnung bei neuem Bar, Event-Loop frei: nachgewiesen; `test.sh` **443 OK**. **"beide < 60 s" widerlegt:** im anyio-Threadpool (Starlette-Pfad fuer `def`-Endpunkte) rechnet der Thread nach dem Warten 3x langsamer (32–44 s statt 9–13 s); ueber HTTP 5 von 7 Paaren > 60 s (47/65/111/89/97/55/67 s). Mit aktiven Hintergrundschleifen **Einzel**anfrage 165 s — der Scanner trainiert dasselbe Ensemble auf denselben Kernen (jetzt gemessen). Hypothese: OpenMP-Pools je lebendem Pool-Thread |
 
 **Der rote Faden:** vier Verifier-Laeufe, drei Widerlegungen, jede an einer Zahl, die ich fuer plausibel gehalten
 hatte — 130 statt 500 Bars; "2–2,7 s je Training" (in Wahrheit 1,2 s Training + 0,125 s je Bar Bildschirm-
@@ -55,8 +55,13 @@ Worker); ein Backtest zur Zeit ist akzeptabel.
 und 18194 und raeumt selbst auf. Fremd auf diesem Host (nicht angefasst): `nex-im-*` einer parallelen Session,
 kommt und geht. `artifacts/verification/2026-09-11T*` (gitignored) haelt die Rohbelege aller Laeufe.
 
-**Naechster sinnvoller Schritt:** D4-Ergebnis lesen; falls nachgewiesen: `git push --force-with-lease`, PR #30
-aus dem Entwurf nehmen, CI (inkl. UI-Regression) abwarten, mergen. Danach unveraendert: **Analyse-Seite
+**Eskaliert (§13, vierte Widerlegung):** Der synchrone On-Demand-Backtest ist auf dieser Architektur (drei
+Ensemble-Mitglieder mit `n_jobs=-1`, ein Prozess, Hintergrund-Scanner im selben Kernbudget) nicht verlaesslich
+unter 60 s zu bekommen. Entscheidung des Eigentuemers: **(a)** Hintergrund-Rechnung + `pending` (Empfehlung) oder
+**(d)** Threads je Ensemble-Mitglied deckeln (trifft Bildschirm-Vorhersage und Scanner mit, dort zu messen).
+
+**Naechster sinnvoller Schritt:** Entscheidung (a)/(d) einholen. Der Branch ist in sich korrekt (jeder Commit rot
+gegen den Vorstand); `git push --force-with-lease` und PR-Text-Update stehen aus. Danach unveraendert: **Analyse-Seite
 uebersetzen** (129 feste Literale, `OFFENE_SEITEN` in `tests/test_page_i18n.py`).
 
 
