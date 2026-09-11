@@ -276,7 +276,7 @@ class MarketDataService:
             return pd.DataFrame()
         yf_period = {
             "1d": "5d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
-            "6mo": "6mo", "1y": "1y", "max": "max",
+            "6mo": "6mo", "1y": "1y", "2y": "2y", "max": "max",
         }.get(period, "6mo")
         hist = call_with_timeout(
             lambda: yf.Ticker(to_yfinance_symbol(symbol)).history(
@@ -510,7 +510,13 @@ class MarketDataService:
         if not caller_supplied_profile:
             asset_profile = self.get_asset_profile(symbol)
         provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
-        days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
+        # Jede Zeitraum-Tabelle in diesem Dienst (hier, `get_yfinance_history_df`,
+        # `_generate_mock_data`) faellt fuer einen unbekannten Wert still auf
+        # ihren Default. So bekam der Backtest mit "2y" 130 Bars, "6mo" und 180
+        # Tage — und fand nie die 185 Zeilen fuer ein Trainingsfenster. Ein neuer
+        # Zeitraum gehoert in alle drei; `test_two_year_period_reaches_every_history_source`
+        # haelt das fuer "2y".
+        days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "2y": 504, "max": 1000}
         limit = days_map.get(period, 130)
         if self.alpaca:
             # map period/interval to alpaca args
@@ -731,7 +737,7 @@ class MarketDataService:
         from datetime import datetime, timedelta
         
         # Determine number of points based on period/interval
-        days_map = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "max": 1000}
+        days_map = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "max": 1000}
         days = days_map.get(period, 180)
         
         end_date = datetime.now()
