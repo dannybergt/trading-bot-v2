@@ -48,12 +48,28 @@ prepare_runtime_dirs() {
     "${host_backup_dir}" \
     "${host_postgres_dir}"
 
-  # The backend container runs as a non-root user, so bind-mounted runtime paths
-  # must already be writable on the host before `docker compose up`.
-  chmod 0777 \
+  make_writable_for_containers \
     "${host_data_dir}" \
     "${host_backup_dir}" \
     "${host_postgres_dir}"
+}
+
+# The backend container runs as a non-root user, so bind-mounted runtime paths
+# must already be writable on the host before `docker compose up`. Once a
+# container has started, it may own the path itself: Postgres chowns its data
+# dir to its own uid and locks it to 0700. A chmod by the host user then fails
+# with "Operation not permitted" — and is not needed, the owner can write.
+# So: chmod what we own, leave what a container has already taken over. A
+# path that is neither ours nor writable is reported, not silently skipped.
+make_writable_for_containers() {
+  local dir
+  for dir in "$@"; do
+    if [[ -O "${dir}" ]]; then
+      chmod 0777 "${dir}"
+    elif [[ ! -w "${dir}" ]]; then
+      echo "Runtime path ${dir} is owned by another user (a container's, presumably) — leaving its permissions alone" >&2
+    fi
+  done
 }
 
 resolve_host_path() {

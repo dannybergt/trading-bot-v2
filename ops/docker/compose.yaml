@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-trading}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trading-change-me}
     volumes:
-      - ${HOST_POSTGRES_DATA_DIR:-../../state/runtime/postgres}:/var/lib/postgresql/data
+      - ${HOST_POSTGRES_DATA_DIR:-../../state/runtime/postgres}:/var/lib/postgresql/data:z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trading} -d ${POSTGRES_DB:-trading_bot_v2}"]
       interval: 10s
@@ -56,8 +56,8 @@ services:
     ports:
       - "${BACKEND_PORT:-18090}:8000"
     volumes:
-      - ${HOST_DATA_DIR:-../../state/runtime/backend-data}:/app/data
-      - ${HOST_BACKUP_DIR:-../../state/runtime/backups}:/app/backups
+      - ${HOST_DATA_DIR:-../../state/runtime/backend-data}:/app/data:z
+      - ${HOST_BACKUP_DIR:-../../state/runtime/backups}:/app/backups:z
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 30s

@@ -195,7 +195,7 @@ mkdir -p \
   "${HOST_POSTGRES_DATA_DIR}" \
   "${DEPLOY_STATE_DIR}"
 
-chmod 0777 \
+make_writable_for_containers \
   "${HOST_DATA_DIR}" \
   "${HOST_BACKUP_DIR}" \
   "${HOST_POSTGRES_DATA_DIR}"

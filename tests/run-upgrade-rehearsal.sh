@@ -425,7 +425,7 @@ mkdir -p \
 # up directly (restore_postgres_dump_into_stack), bypassing that path, so the
 # restore data dirs would otherwise stay root-owned and the backend would crash
 # at import on `mkdir /app/data/ml_models`.
-chmod 0777 \
+make_writable_for_containers \
   "${PRIMARY_ROOT}/backend-data" \
   "${PRIMARY_ROOT}/backups" \
   "${PRIMARY_ROOT}/postgres" \
