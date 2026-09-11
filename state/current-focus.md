@@ -1,5 +1,66 @@
 # Current Focus
 
+## SESSION 2026-09-11 (1): Der Backtest, der nie gerechnet hat — und was sichtbar wurde, als er es tat
+
+**Stand:** `main` auf `def91d8` unveraendert. Zwei Branches, beide gepusht, PRs offen:
+
+| Branch | Commits | Inhalt | Status |
+| --- | --- | --- | --- |
+| `chore/bind-mounts-unter-selinux` | `9131d17` (+ ADR) | Gates laufen auf einem Host mit SELinux + nativem Docker | PR, mergefaehig nach CI |
+| `fix/backtest-zwei-jahre` | `c662c65`, `230ff48` (+ STATE/ADR) | "2y" in allen drei Zeitraum-Tabellen; kein Backtest auf Platzhalterkursen; untrainierbare Fenster uebersprungen | **Entwurf — wartet auf Designentscheidung (unten)** |
+
+Unit **435 -> 439**. `test.sh`, `run-api-regression.sh`, `run-upgrade-rehearsal.sh` (:local) gruen auf diesem Host.
+
+**Neuer Host `dev-claude`** (openSUSE, SELinux enforcing, Docker nativ, **kein `node`**): Kein Gate lief
+beim ersten Versuch — `PermissionError: /app/tests` vor dem ersten Test, Postgres-Bind-Mount, `mkdir
+/app/data/ml_models`, `chmod 0777` auf ein von Postgres uebernommenes Verzeichnis. Alle Bind-Mounts tragen
+jetzt `z`; `make_writable_for_containers` (env.sh) setzt Rechte nur auf eigenen Pfaden und meldet fremde.
+Die UI-Regression ist hier ohne `node` **nicht lauffaehig**; die CI faehrt sie im Runner (Node + Chrome) —
+der PR ist damit der Weg zum L2-Nachweis.
+
+**Der Backtest-Befund, schaerfer als notiert:** "2y" fehlte nicht in einer Tabelle, sondern in **drei**
+(`days_map` -> 130 Bars, `yf_period` -> "6mo", Mock -> 180 Tage). `run_backtest` verlangt 185 Zeilen. Der
+Endpunkt war seit seiner Einfuehrung strukturell leer, die Karte auf `/analysis` rendert bei `samples == 0`
+nichts — nichts war rot. Der Fix (`c662c65`) ist rot gegen `main` (`130 not greater than or equal to 500`).
+
+**Was der `verifier` am laufenden Stack dann sah (der eigentliche Ertrag der Sitzung):**
+1. **216–249 s** pro Anfrage auf dem 731-Zeilen-Platzhalter (~55 Ensemble-Trainings, 100 % CPU); durch nginx
+   (kein `proxy_read_timeout`) **504 nach 60 s**, Backend rechnet ins Leere weiter, `retry: 1` verdoppelt.
+2. Im synthetischen Modus **byte-identische Kennzahlen** fuer AAPL, MSFT und `ZZZZNOPE123` (`np.random.seed(42)`),
+   ohne Zustandswort — Regel K verletzt. Vor dem Fix blieb die Karte leer; danach stuende "52,86 % Accuracy"
+   fuer ein nicht existierendes Symbol.
+3. Sechs `ERROR model_training_failed` mit Traceback pro Anfrage (fruehe Fenster mit einer Klasse).
+
+(2) und (3) sind behoben (`230ff48`, Negativkontrollen: `run_backtest` 1x / `train` 79x gegen `main`). Zweiter
+Lauf: 2–3,5 s, `synthetic:true`, 200 durch nginx, 0 Tracebacks. (1) **ist nicht behoben** und gehoert dem
+Menschen:
+
+**Wartet auf den Nutzer (§13) — Designfrage Backtest-Antwortzeit:** Gemessen (verifier, D): 504 echte Bars,
+`train_window=180, step=10` -> 33 Trainings, **64,6–87,9 s** (~2–2,7 s je Training) — ueber dem nginx-Limit
+von 60 s. Ein Anbieter-Host (Alpaca liefert 504 Bars) bekaeme mit `c662c65` einen 504 pro Seitenaufruf, zweimal.
+Optionen: (a) **Hintergrund-Rechnung mit Ergebnis-Cache je Symbol/Tag** (Endpunkt antwortet sofort mit
+`pending`, Karte fragt nach; sauber, ~halber Tag, neuer Zustand im UI, i18n); (b) `step` 10 -> 30/40 (11–8
+Trainings, ~20–30 s; aendert die Statistik der Kennzahlen, bleibt CPU-teuer je Seitenaufruf); (c)
+`proxy_read_timeout` hoch (verschiebt nur, jeder Seitenaufruf rechnet Minuten). Empfehlung: (a). **Bis zur
+Entscheidung darf `c662c65` nicht nach `main`** — vorher war der Endpunkt leer und billig, danach leer und teuer.
+- **Stufe 3 unveraendert** (Test-Account, VAPID, `FMP_API_KEY`); die vier Zielzeilen-Vorschlaege V1–V4 warten.
+- **Neu, vom verifier:** der Backtest hat **keine Zielzeile** und keinen Harnisch-Schritt. Vorschlag: "Backtest
+  rechnet nie auf Platzhalterkursen" (`synthetic:true` => `samples 0`, Antwort < 10 s; Realdaten =>
+  `synthetic:false`, Antwort < nginx-Timeout), Beweisschritt in der api-regression. Der Zielsatz gehoert dem Menschen.
+- **`node` auf dem Host** (§3: system-weite Installation nur mit Freigabe) — sonst bleibt L2 hier CI-only.
+
+**Bewusst nicht angefasst:** `"1y": 500`, `"6mo": 260` in der Bar-Tabelle (etwa das Doppelte der Handelstage;
+eigener Anzeige-Befund, nicht ausgemessen). `tests/test_ml_persistence.py::test_save_load_roundtrip_recovers_predictor`
+skippt sich selbst ("XGBoost training did not converge") und beweist den Roundtrip nie — Bestand. 14x
+`provider_call_failed label=ticker_info:*` auf ERROR aus der Hintergrundschleife (yfinance 429) — Bestandsrauschen.
+
+**Allokierte Ports/Ressourcen: KEINE.** Alle `tbv2-verify-*`-Container und -Netze entfernt. Fremd auf diesem Host
+(nicht angefasst): `nex-im-*` einer parallelen Session (kam und ging waehrend der Laeufe).
+
+**Naechster sinnvoller Schritt:** Entscheidung (a)/(b)/(c) einholen; bei (a) Slice: Ergebnis-Cache + Hintergrund-Thread
++ `pending`-Zustand in der Karte. Danach unveraendert: **Analyse-Seite uebersetzen** (129 feste Literale).
+
+
 ## SESSION-ABSCHLUSS 2026-08-11T18:05Z (2): Vier Aussagen, die im Anfragepfad Geld gekostet haben
 
 **Stand:** `main` auf `e90104f`, working tree clean, `ci`/`codeql`/`validate` fuer alle vier PRs
