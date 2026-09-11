@@ -115,11 +115,54 @@ class BacktestServiceTests(unittest.TestCase):
         df = _synthetic_frame(60)  # gemischte Richtungen
         self.assertTrue(backtest_service._window_is_trainable(predictor, df))
 
-    def test_endpoint_retrains_at_a_cadence_that_fits_the_proxy_timeout(self):
-        # 504 Bars, ein Training 2-2,7 s (gemessen 2026-09-11): mit step=10
-        # 33 Trainings und 65-88 s — nginx bricht bei 60 s ab. Der Endpunkt
-        # muss die Kadenz setzen, die unter dem Timeout bleibt, und zwar
-        # ueber die Konstante, sonst ist die Rechnung im Kommentar wertlos.
+    def test_walk_forward_scores_each_block_in_one_batch(self):
+        # Der Walk-Forward rief fuer jeden Bar die volle Bildschirm-Vorhersage
+        # (Erklaerung, Zonen, Ertragsmodell) auf einer wachsenden Kopie des
+        # Frames: 323 Aufrufe x 0,125 s = 40 s von 53 s je Anfrage, unabhaengig
+        # von `step` (verifier, 2026-09-11). Jetzt: ein Training je Block, ein
+        # Batch-Aufruf je Block, und die Bildschirm-Vorhersage gar nicht.
+        from unittest.mock import patch
+        from app import backtest_service
+
+        df = _synthetic_frame(250)
+        with patch.object(backtest_service.PricePredictor, "probability_up",
+                          autospec=True, side_effect=lambda self, rows: [0.6] * len(rows)) as batch, \
+             patch.object(backtest_service.PricePredictor, "predict_next_movement") as single:
+            result = backtest_service.run_backtest(df, train_window=120, step=20)
+
+        single.assert_not_called()
+        # 250 Zeilen, Fenster 120, Schritt 20: Bloecke ab 120, 140, ..., 240 -> 7
+        self.assertEqual(batch.call_count, 7)
+        self.assertEqual(result["samples"], 249 - 120)
+        # Jeder Block sieht genau seine `step` Zeilen (der letzte den Rest).
+        sizes = [len(call.args[1]) for call in batch.call_args_list]
+        self.assertEqual(sizes, [20, 20, 20, 20, 20, 20, 9])
+
+    def test_batch_probabilities_match_the_single_prediction(self):
+        # Die Batch-Wahrscheinlichkeit muss dieselbe sein wie die der
+        # Einzelvorhersage — sonst misst der Backtest ein anderes Modell als
+        # das, was auf dem Bildschirm steht.
+        from app.ml_models import PricePredictor
+
+        df = _synthetic_frame(250)
+        predictor = PricePredictor()
+        predictor.train(df.iloc[:200])
+        if not predictor.is_trained:
+            self.skipTest("XGBoost training did not converge on the synthetic frame")
+
+        rows = df.iloc[200:210]
+        batch = predictor.probability_up(rows)
+        self.assertIsNotNone(batch)
+        self.assertEqual(len(batch), 10)
+        for offset in (0, 4, 9):
+            single = predictor.predict_next_movement(df.iloc[: 200 + offset + 1], user=None)
+            self.assertAlmostEqual(float(batch[offset]), single["probabilityUp"], places=6)
+
+    def test_endpoint_passes_the_configured_cadence(self):
+        # Die Kadenz ist eine Konstante mit einer Messung im Kommentar; der
+        # Endpunkt muss sie auch setzen, sonst ist die Messung wertlos. Ob die
+        # Antwortzeit unter dem Proxy-Timeout bleibt, wird nicht hier
+        # modelliert, sondern am laufenden System gemessen (verifier).
         from unittest.mock import MagicMock, patch
         from app import backtest_service
         from app import main as app_main
@@ -139,12 +182,7 @@ class BacktestServiceTests(unittest.TestCase):
 
         self.assertFalse(payload["synthetic"])
         self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
-        bars_after_warmup = 504 - app_main.BACKTEST_TRAIN_WINDOW
-        trainings = -(-bars_after_warmup // app_main.BACKTEST_STEP)
-        self.assertLessEqual(
-            trainings * 2.7, 45.0,
-            f"{trainings} Trainings x 2,7 s liegen zu nah am 60-s-Proxy-Timeout",
-        )
+        self.assertEqual(run.call_args.kwargs["train_window"], app_main.BACKTEST_TRAIN_WINDOW)
 
     def test_endpoint_refuses_synthetic_history(self):
         # Regel K: keine Kennzahl auf erfundenen Kursen. Der Platzhalter ist

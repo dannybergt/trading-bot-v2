@@ -213,6 +213,34 @@ class PricePredictor:
         stacked = np.stack(member_probas, axis=0)
         return stacked.mean(axis=0)
 
+    def probability_up(self, rows: pd.DataFrame) -> np.ndarray | None:
+        """P(UP) for every row of `rows`, from the same ensemble average that
+        `predict_next_movement` uses — without the explanation, zones and
+        yield model that a single on-screen prediction carries. The backtest
+        scores hundreds of bars per request; measured 2026-09-11, the full
+        prediction cost 0.125 s per bar and outweighed the training itself.
+
+        Returns None when nothing is trained or no member produced a usable
+        probability matrix. Rows are scored as given — the caller filters
+        out rows whose features are not yet warm.
+        """
+        if not ML_AVAILABLE or not self.is_trained or self.model is None:
+            return None
+        feature_cols = [c for c in MODEL_FEATURE_COLS if c in rows.columns]
+        if not feature_cols or rows.empty:
+            return None
+        X = rows[feature_cols]
+        proba = self._ensemble_proba(X)
+        if proba is None:
+            try:
+                proba = np.asarray(self.model.predict_proba(X))
+            except Exception:
+                logger.exception("model_prediction_failed")
+                return None
+        if proba.ndim != 2 or proba.shape[1] < 2:
+            return None
+        return proba[:, 1]
+
     def predict_next_movement(self, current_data_df: pd.DataFrame, *, user=None):
         """
         Predict the movement for the next period based on the latest data,

@@ -21,7 +21,7 @@ from typing import Any
 import pandas as pd
 
 from app.analysis import calculate_indicators
-from app.ml_models import PricePredictor
+from app.ml_models import MODEL_FEATURE_COLS, PricePredictor
 
 logger = logging.getLogger(__name__)
 
@@ -57,53 +57,64 @@ def run_backtest(
         return empty
 
     predictions: list[dict[str, Any]] = []
-    last_trained_at: int | None = None
-    predictor: PricePredictor | None = None
+    feature_cols = [c for c in MODEL_FEATURE_COLS if c in work.columns]
+    last = len(work) - 1  # the final row has no "next close" to score against
 
-    for i in range(train_window, len(work) - 1):
-        if predictor is None or last_trained_at is None or i - last_trained_at >= step:
-            slice_df = work.iloc[: i].copy()
-            predictor = PricePredictor()
-            if not _window_is_trainable(predictor, slice_df):
-                # Early windows lose most rows to indicator warm-up and can
-                # end up with one row or one class. Training there cannot
-                # succeed and used to log a traceback at ERROR per window.
-                predictor = None
-                continue
-            try:
-                predictor.train(slice_df)
-            except Exception:
-                logger.exception("backtest_train_failed at_index=%s", i)
-                predictor = None
-                continue
-            if not predictor.is_trained:
-                continue
-            last_trained_at = i
-
+    # Train once per block of `step` bars, then score the whole block in one
+    # batch. Each bar is still predicted from a model that has seen only the
+    # bars before the block, and only from its own features — the same
+    # information as a bar-by-bar loop. What changes is the cost: the
+    # bar-by-bar loop ran the full on-screen prediction (explanation, zones,
+    # yield model) on a growing copy of the frame for every bar; measured
+    # 2026-09-11 that was 40 s of a 53 s request, independent of `step`.
+    for block_start in range(train_window, last, step):
+        slice_df = work.iloc[:block_start].copy()
+        predictor = PricePredictor()
+        if not _window_is_trainable(predictor, slice_df):
+            # Early windows lose most rows to indicator warm-up and can
+            # end up with one row or one class. Training there cannot
+            # succeed and used to log a traceback at ERROR per window.
+            continue
         try:
-            row_df = work.iloc[: i + 1].copy()
-            prediction = predictor.predict_next_movement(row_df, user=None)
+            predictor.train(slice_df)
         except Exception:
-            logger.exception("backtest_predict_failed at_index=%s", i)
+            logger.exception("backtest_train_failed at_index=%s", block_start)
             continue
-        if not prediction:
+        if not predictor.is_trained:
             continue
-        actual_close = float(work.iloc[i + 1]["Close"])
-        prev_close = float(work.iloc[i]["Close"])
-        actual_up = actual_close > prev_close
-        predicted_up = prediction.get("direction") == "UP"
-        confidence = float(prediction.get("confidence") or 0.0)
-        prob_up = float(prediction.get("probabilityUp") or (confidence if predicted_up else 1.0 - confidence))
-        ret_pct = (actual_close - prev_close) / prev_close * 100.0 if prev_close else 0.0
-        predictions.append(
-            {
-                "predictedUp": predicted_up,
-                "actualUp": actual_up,
-                "confidence": confidence,
-                "probabilityUp": prob_up,
-                "returnPct": ret_pct,
-            }
-        )
+
+        block_end = min(block_start + step, last)
+        block = work.iloc[block_start:block_end]
+        if feature_cols:
+            block = block.dropna(subset=feature_cols)
+        if block.empty:
+            continue
+        try:
+            probs_up = predictor.probability_up(block)
+        except Exception:
+            logger.exception("backtest_predict_failed at_index=%s", block_start)
+            continue
+        if probs_up is None:
+            continue
+
+        positions = work.index.get_indexer(block.index)
+        for pos, prob_up in zip(positions, probs_up):
+            prob_up = float(prob_up)
+            actual_close = float(work.iloc[pos + 1]["Close"])
+            prev_close = float(work.iloc[pos]["Close"])
+            actual_up = actual_close > prev_close
+            predicted_up = prob_up > 0.5
+            confidence = prob_up if predicted_up else 1.0 - prob_up
+            ret_pct = (actual_close - prev_close) / prev_close * 100.0 if prev_close else 0.0
+            predictions.append(
+                {
+                    "predictedUp": predicted_up,
+                    "actualUp": actual_up,
+                    "confidence": confidence,
+                    "probabilityUp": prob_up,
+                    "returnPct": ret_pct,
+                }
+            )
 
     if not predictions:
         return empty
