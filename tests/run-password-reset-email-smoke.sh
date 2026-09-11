@@ -151,7 +151,7 @@ docker run -d \
   -e POSTGRES_DB="${POSTGRES_DB}" \
   -e POSTGRES_USER="${POSTGRES_USER}" \
   -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-  -v "${POSTGRES_DATA_DIR}:/var/lib/postgresql/data" \
+  -v "${POSTGRES_DATA_DIR}:/var/lib/postgresql/data:z" \
   "${POSTGRES_IMAGE}" >/dev/null
 
 wait_for_postgres
@@ -161,7 +161,7 @@ docker run -d \
   --name "${SMTP_CONTAINER}" \
   --network "${NETWORK_NAME}" \
   --network-alias smtp \
-  -v "${PROJECT_ROOT}/tests/smtp_capture_server.py:/tmp/smtp_capture_server.py:ro" \
+  -v "${PROJECT_ROOT}/tests/smtp_capture_server.py:/tmp/smtp_capture_server.py:ro,z" \
   "${BACKEND_IMAGE}" \
   python /tmp/smtp_capture_server.py >/dev/null
 
@@ -184,8 +184,8 @@ docker run -d \
   -e SMTP_PORT=1025 \
   -e SMTP_FROM_EMAIL="${SMTP_FROM_EMAIL}" \
   -e SMTP_USE_TLS=false \
-  -v "${DATA_DIR}:/app/data" \
-  -v "${BACKUP_DIR}:/app/backups" \
+  -v "${DATA_DIR}:/app/data:z" \
+  -v "${BACKUP_DIR}:/app/backups:z" \
   "${BACKEND_IMAGE}" >/dev/null
 
 wait_for_backend
