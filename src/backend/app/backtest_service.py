@@ -25,6 +25,9 @@ from app.ml_models import PricePredictor
 
 logger = logging.getLogger(__name__)
 
+# Fewer prepared rows than this cannot carry an 80/20 split with two classes.
+MIN_TRAINABLE_ROWS = 10
+
 
 def run_backtest(
     df: pd.DataFrame,
@@ -61,6 +64,12 @@ def run_backtest(
         if predictor is None or last_trained_at is None or i - last_trained_at >= step:
             slice_df = work.iloc[: i].copy()
             predictor = PricePredictor()
+            if not _window_is_trainable(predictor, slice_df):
+                # Early windows lose most rows to indicator warm-up and can
+                # end up with one row or one class. Training there cannot
+                # succeed and used to log a traceback at ERROR per window.
+                predictor = None
+                continue
             try:
                 predictor.train(slice_df)
             except Exception:
@@ -197,6 +206,20 @@ def _reliability_buckets(predictions: list[dict[str, Any]]) -> list[dict[str, An
             }
         )
     return out
+
+
+def _window_is_trainable(predictor: PricePredictor, slice_df: pd.DataFrame) -> bool:
+    """Whether `predictor.train` has anything to learn from: enough rows after
+    feature preparation, and both classes inside the unshuffled 80 % that
+    `train` fits on."""
+    try:
+        data, _ = predictor.prepare_features(slice_df)
+    except Exception:
+        return False
+    if len(data) < MIN_TRAINABLE_ROWS:
+        return False
+    train_part = data["Target"].iloc[: max(1, int(len(data) * 0.8))]
+    return train_part.nunique() == 2
 
 
 def _empty_payload() -> dict[str, Any]:

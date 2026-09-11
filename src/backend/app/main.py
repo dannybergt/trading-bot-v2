@@ -2881,10 +2881,25 @@ def get_symbol_backtest(
     if df is None:
         return {"symbol": canonical, "result": backtest_service._empty_payload()}
 
+    # Regel K (ADR 2026-08-05): no metric rides on fabricated prices. The
+    # placeholder is a seeded random walk — every symbol, including ones that
+    # do not exist, would yield the same accuracy table, and computing it
+    # costs minutes of CPU. Measured 2026-09-11: identical payloads for AAPL,
+    # MSFT and `ZZZZNOPE123`.
+    synthetic = bool(stock_data.get("synthetic"))
+    if synthetic:
+        return {
+            "symbol": canonical,
+            **asset_response_fields(asset_profile),
+            "synthetic": True,
+            "result": backtest_service._empty_payload(),
+        }
+
     result = backtest_service.run_backtest(df, train_window=180, step=10)
     return {
         "symbol": canonical,
         **asset_response_fields(asset_profile),
+        "synthetic": False,
         "result": result,
     }
 

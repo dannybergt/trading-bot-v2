@@ -83,6 +83,65 @@ class BacktestServiceTests(unittest.TestCase):
         self.assertEqual(0, result["samples"])
         self.assertIsNone(result["accuracy"])
 
+    def test_untrainable_windows_do_not_reach_the_predictor(self):
+        # Ein Fenster, das nach der Feature-Vorbereitung eine Zeile oder eine
+        # Klasse traegt, kann kein Training tragen. Bisher lief `train`
+        # trotzdem an und schrieb je Fenster einen Traceback auf ERROR
+        # (gemessen 2026-09-11: sechs pro Anfrage). Das Fenster wird jetzt
+        # vorher erkannt und ohne Training uebersprungen.
+        from unittest.mock import patch
+        from app import backtest_service
+
+        # Alles NaN ausser den letzten Zeilen: prepare_features behaelt zu
+        # wenige Zeilen fuer einen Split -> untrainierbar.
+        df = _synthetic_frame(200)
+        df.loc[: len(df) - 4, "RSI"] = float("nan")
+
+        with patch.object(backtest_service.PricePredictor, "train") as train, \
+             self.assertNoLogs("app.ml_models", level="ERROR"):
+            result = backtest_service.run_backtest(df, train_window=120, step=20)
+
+        train.assert_not_called()
+        self.assertEqual(0, result["samples"])
+
+    def test_single_class_window_is_untrainable(self):
+        from app import backtest_service
+
+        df = _synthetic_frame(60)
+        df["Close"] = [100.0 + i for i in range(60)]  # nur Aufwaertstage
+        predictor = backtest_service.PricePredictor()
+        self.assertFalse(backtest_service._window_is_trainable(predictor, df))
+
+        df = _synthetic_frame(60)  # gemischte Richtungen
+        self.assertTrue(backtest_service._window_is_trainable(predictor, df))
+
+    def test_endpoint_refuses_synthetic_history(self):
+        # Regel K: keine Kennzahl auf erfundenen Kursen. Der Platzhalter ist
+        # ein geseedeter Random Walk — AAPL, MSFT und `ZZZZNOPE123` liefern
+        # dieselbe Accuracy-Tabelle (gemessen 2026-09-11), und die Rechnung
+        # kostet Minuten. Der Endpunkt gibt dann die Leerantwort und sagt
+        # warum, statt zu trainieren.
+        from unittest.mock import MagicMock, patch
+        from app import backtest_service
+        from app import main as app_main
+
+        synthetic_payload = {"data": _synthetic_frame(600), "synthetic": True}
+        with patch.object(app_main.service, "get_stock_data", return_value=synthetic_payload), \
+             patch.object(app_main.service, "get_asset_profile",
+                          return_value={"symbol": "ZZZZNOPE123", "assetClass": "stock",
+                                        "assetLabel": "Stock", "market": "equity",
+                                        "exchange": "", "type": "STOCK", "isCrypto": False}), \
+             patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
+             patch.object(backtest_service, "run_backtest") as run:
+            payload = app_main.get_symbol_backtest(
+                symbol="ZZZZNOPE123", current_user=MagicMock(), db=MagicMock()
+            )
+
+        run.assert_not_called()
+        self.assertTrue(payload["synthetic"])
+        self.assertEqual(0, payload["result"]["samples"])
+        self.assertIsNone(payload["result"]["accuracy"])
+
     def test_run_backtest_empty_for_empty_frame(self):
         from app import backtest_service
 
