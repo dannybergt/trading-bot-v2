@@ -115,6 +115,37 @@ class BacktestServiceTests(unittest.TestCase):
         df = _synthetic_frame(60)  # gemischte Richtungen
         self.assertTrue(backtest_service._window_is_trainable(predictor, df))
 
+    def test_endpoint_retrains_at_a_cadence_that_fits_the_proxy_timeout(self):
+        # 504 Bars, ein Training 2-2,7 s (gemessen 2026-09-11): mit step=10
+        # 33 Trainings und 65-88 s — nginx bricht bei 60 s ab. Der Endpunkt
+        # muss die Kadenz setzen, die unter dem Timeout bleibt, und zwar
+        # ueber die Konstante, sonst ist die Rechnung im Kommentar wertlos.
+        from unittest.mock import MagicMock, patch
+        from app import backtest_service
+        from app import main as app_main
+
+        real_payload = {"data": _synthetic_frame(504), "synthetic": False}
+        with patch.object(app_main.service, "get_stock_data", return_value=real_payload), \
+             patch.object(app_main.service, "get_asset_profile",
+                          return_value={"symbol": "AAPL", "assetClass": "stock",
+                                        "assetLabel": "Stock", "market": "equity",
+                                        "exchange": "NASDAQ", "type": "STOCK", "isCrypto": False}), \
+             patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
+             patch.object(backtest_service, "run_backtest",
+                          return_value=backtest_service._empty_payload()) as run:
+            payload = app_main.get_symbol_backtest(
+                symbol="AAPL", current_user=MagicMock(), db=MagicMock()
+            )
+
+        self.assertFalse(payload["synthetic"])
+        self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
+        bars_after_warmup = 504 - app_main.BACKTEST_TRAIN_WINDOW
+        trainings = -(-bars_after_warmup // app_main.BACKTEST_STEP)
+        self.assertLessEqual(
+            trainings * 2.7, 45.0,
+            f"{trainings} Trainings x 2,7 s liegen zu nah am 60-s-Proxy-Timeout",
+        )
+
     def test_endpoint_refuses_synthetic_history(self):
         # Regel K: keine Kennzahl auf erfundenen Kursen. Der Platzhalter ist
         # ein geseedeter Random Walk — AAPL, MSFT und `ZZZZNOPE123` liefern

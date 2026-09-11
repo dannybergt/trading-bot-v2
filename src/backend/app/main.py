@@ -2845,6 +2845,17 @@ def run_composite_calibration(
     return report
 
 
+# Walk-forward retrain interval for the on-demand backtest. Measured
+# 2026-09-11 on 504 daily bars (two years, what `period="2y"` fetches): one
+# ensemble training costs 2-2.7 s, so `step=10` meant 33 trainings and
+# 65-88 s — past nginx's 60 s upstream timeout, i.e. a 504 on every page
+# view. `step=30` is 11 trainings (~25-30 s). Predictions are still emitted
+# for every bar; only the retrain cadence changes. Chosen by the owner over a
+# background job with cache (see state/current-focus.md 2026-09-11).
+BACKTEST_TRAIN_WINDOW = 180
+BACKTEST_STEP = 30
+
+
 @app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,
@@ -2895,7 +2906,9 @@ def get_symbol_backtest(
             "result": backtest_service._empty_payload(),
         }
 
-    result = backtest_service.run_backtest(df, train_window=180, step=10)
+    result = backtest_service.run_backtest(
+        df, train_window=BACKTEST_TRAIN_WINDOW, step=BACKTEST_STEP
+    )
     return {
         "symbol": canonical,
         **asset_response_fields(asset_profile),
