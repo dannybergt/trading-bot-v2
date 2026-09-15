@@ -114,6 +114,28 @@ Wenn Informationen fehlen:
 - Workarounds nur mit Kommentar (Warum + Verweis auf Issue/ADR + Bedingung zum Entfernen).
 - Wenn du den gleichen Fehler 3× nicht beheben konntest: eskaliere statt weiter zu raten.
 
+### 2.7 Durcharbeiten bis fertig
+
+Das Ziel jeder Session ist ein **vollständig nutzbares** Projekt ohne offene Punkte — nicht ein
+sauber dokumentierter Rest. Deshalb:
+
+- Nach dem Session-Ritual (§0) wird **nicht gefragt, womit es weitergehen soll**, sondern der
+  nächste sinnvolle Schritt aus `STATE.md` genommen und abgearbeitet — und danach der nächste.
+  Eine Nachfrage ist nur an den Eskalationsschwellen aus §13 richtig (vollständige Liste
+  dort — §2.7 kürzt sie nicht) sowie für Merge und Release-Tag (`FREIGABE`, §14).
+- Ein offener Thread wird **geschlossen oder umgewidmet**, nie nur mitgeschleppt. Was auf
+  diesem Host nicht lösbar ist (anderer Host, Betreiber-Hand, fehlende Freigabe), wird in
+  `STATE.md` als **„nicht hier lösbar"** mit dem konkreten Handgriff und dem Ort notiert —
+  getrennt von dem, was hier noch zu tun ist. „Offen" heißt: hier, jetzt, machbar.
+- Die Liste der offenen Threads muss am Sessionende **kürzer** sein als am Anfang, oder die
+  Session begründet, warum nicht. Ein neu aufgemachter Thread wird sofort bearbeitet oder mit
+  Zieldatum und Auslöser eingetragen.
+- Fehlende Werkzeuge sind ein Arbeitsschritt, kein Grund zum Anhalten: was nicht global
+  installiert werden darf (§3), läuft im Container oder im Projektverzeichnis.
+- Eine Session endet mit der Standardantwort §18 und dem nächsten Schritt — nicht mit einer
+  Auswahlfrage. Was der Betreiber selbst tun muss, steht als eine konkrete Rückfrage am Ende,
+  nicht als Menü.
+
 ---
 
 ## 3. Coexistence- und Ressourcen-Disziplin
@@ -126,6 +148,7 @@ In Multi-Session-, Multi-Container- und Multi-Agent-Umgebungen gilt ohne Ausnahm
 - **Keine globalen Mutationen** ohne Freigabe: keine system-weiten Pakete, keine globale Git-Config, keine Cron-Jobs außerhalb des Projekts, keine system-weiten Python/Node-Installs.
 - **Dateisystem:** bleibe innerhalb des Projektverzeichnisses; keine Pfade unter `~/`, `/etc`, `/usr`, `/var` ohne Freigabe.
 - **CI/Cloud-Ressourcen:** keine neuen Buckets, Queues, Datenbanken, Cluster ohne Freigabe.
+- **Fremde Repos:** Repos unter einem anderen Owner, an denen nur Collaborator-Rechte bestehen, gehören nicht zum eigenen Bestand. Nicht klonen, nicht committen, nicht pushen, keine PRs, keine Issues, nichts aufräumen — und ebenso wenig löschen oder archivieren. Bestandsaufnahmen, Massen-Klone und repo-übergreifende Aktionen (Sync, Rename, Cleanup, Bulk-PR) filtern nach Owner und schließen sie explizit aus. Ein Artefakt ohne Gegenstück im eigenen Bestand (z.B. ein Registry-Image ohne passendes Repo) ist typischerweise damit erklärt und kein Fund, dem nachzugehen wäre.
 
 ---
 
@@ -378,6 +401,12 @@ Bei unklaren Anforderungen: sichere Defaults, Annahmen dokumentieren, nicht unn�
 
 Niemals direkt auf `main`/`master` arbeiten.
 
+**Merge und Release nur auf das Codewort `FREIGABE`.** Ein PR wird gemergt und ein
+Release-Tag gesetzt, wenn CI grün, `reviewer` ohne Blocker und `verifier` ohne offene Lücke
+sind **und** der Mensch auf eine konkrete Rückfrage (PR-Nummern, Tag, was der Tag auslöst)
+wörtlich mit `FREIGABE` antwortet. Das ist die Form der „expliziten Freigabe" aus §17 —
+„ja"/„ok" reicht nicht, das Wort gilt nur für das Gefragte. Verfahren: Skill `ship-pr`, Schritt 5.
+
 **Branch-Schema:**
 
 ```
@@ -484,6 +513,7 @@ Bei einem neuen Projekt-Masterprompt:
 - Keine Architekturänderung ohne Begründung (ADR).
 - Keine ungetesteten Security-kritischen Änderungen.
 - Keine fremden Prozesse, Container, Sessions oder Ports beenden.
+- Keine Änderungen an fremden Repos (anderer Owner, nur Collaborator-Rechte) — weder Commit noch PR noch Löschung.
 - Keine globalen System-Mutationen (apt install, globale Pakete, system-weite Configs) ohne Freigabe.
 - Kein `--no-verify`, kein `--force` auf geteilte Branches, kein Hook-Bypass ohne Freigabe.
 - Kein `git add -A` / `git add .` ohne vorherige Sichtprüfung.
