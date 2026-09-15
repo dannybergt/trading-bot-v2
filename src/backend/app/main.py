@@ -2845,6 +2845,18 @@ def run_composite_calibration(
     return report
 
 
+# Walk-forward retrain interval for the on-demand backtest, chosen by the
+# owner over a background job with cache (state/current-focus.md 2026-09-11).
+# Measured on 504 daily bars (what `period="2y"` fetches): one ensemble
+# training is ~1.2 s, so `step=10` is 33 trainings and `step=30` is 11.
+# Scoring is batched per block (backtest_service), which is what brought the
+# request from 51-57 s down to ~18 s at step=30 — nginx's upstream timeout is
+# 60 s, and the frontend retries once. Predictions are still emitted for every
+# bar; only the retrain cadence changes.
+BACKTEST_TRAIN_WINDOW = 180
+BACKTEST_STEP = 30
+
+
 @app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,
@@ -2881,10 +2893,27 @@ def get_symbol_backtest(
     if df is None:
         return {"symbol": canonical, "result": backtest_service._empty_payload()}
 
-    result = backtest_service.run_backtest(df, train_window=180, step=10)
+    # Regel K (ADR 2026-08-05): no metric rides on fabricated prices. The
+    # placeholder is a seeded random walk — every symbol, including ones that
+    # do not exist, would yield the same accuracy table, and computing it
+    # costs minutes of CPU. Measured 2026-09-11: identical payloads for AAPL,
+    # MSFT and `ZZZZNOPE123`.
+    synthetic = bool(stock_data.get("synthetic"))
+    if synthetic:
+        return {
+            "symbol": canonical,
+            **asset_response_fields(asset_profile),
+            "synthetic": True,
+            "result": backtest_service._empty_payload(),
+        }
+
+    result = backtest_service.run_backtest_serialized(
+        df, symbol=canonical, train_window=BACKTEST_TRAIN_WINDOW, step=BACKTEST_STEP
+    )
     return {
         "symbol": canonical,
         **asset_response_fields(asset_profile),
+        "synthetic": False,
         "result": result,
     }
 

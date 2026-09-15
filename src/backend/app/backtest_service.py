@@ -16,14 +16,18 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from typing import Any
 
 import pandas as pd
 
 from app.analysis import calculate_indicators
-from app.ml_models import PricePredictor
+from app.ml_models import MODEL_FEATURE_COLS, PricePredictor
 
 logger = logging.getLogger(__name__)
+
+# Fewer prepared rows than this cannot carry an 80/20 split with two classes.
+MIN_TRAINABLE_ROWS = 10
 
 
 def run_backtest(
@@ -54,47 +58,64 @@ def run_backtest(
         return empty
 
     predictions: list[dict[str, Any]] = []
-    last_trained_at: int | None = None
-    predictor: PricePredictor | None = None
+    feature_cols = [c for c in MODEL_FEATURE_COLS if c in work.columns]
+    last = len(work) - 1  # the final row has no "next close" to score against
 
-    for i in range(train_window, len(work) - 1):
-        if predictor is None or last_trained_at is None or i - last_trained_at >= step:
-            slice_df = work.iloc[: i].copy()
-            predictor = PricePredictor()
-            try:
-                predictor.train(slice_df)
-            except Exception:
-                logger.exception("backtest_train_failed at_index=%s", i)
-                predictor = None
-                continue
-            if not predictor.is_trained:
-                continue
-            last_trained_at = i
-
+    # Train once per block of `step` bars, then score the whole block in one
+    # batch. Each bar is still predicted from a model that has seen only the
+    # bars before the block, and only from its own features — the same
+    # information as a bar-by-bar loop. What changes is the cost: the
+    # bar-by-bar loop ran the full on-screen prediction (explanation, zones,
+    # yield model) on a growing copy of the frame for every bar; measured
+    # 2026-09-11 that was 40 s of a 53 s request, independent of `step`.
+    for block_start in range(train_window, last, step):
+        slice_df = work.iloc[:block_start].copy()
+        predictor = PricePredictor()
+        if not _window_is_trainable(predictor, slice_df):
+            # Early windows lose most rows to indicator warm-up and can
+            # end up with one row or one class. Training there cannot
+            # succeed and used to log a traceback at ERROR per window.
+            continue
         try:
-            row_df = work.iloc[: i + 1].copy()
-            prediction = predictor.predict_next_movement(row_df, user=None)
+            predictor.train(slice_df)
         except Exception:
-            logger.exception("backtest_predict_failed at_index=%s", i)
+            logger.exception("backtest_train_failed at_index=%s", block_start)
             continue
-        if not prediction:
+        if not predictor.is_trained:
             continue
-        actual_close = float(work.iloc[i + 1]["Close"])
-        prev_close = float(work.iloc[i]["Close"])
-        actual_up = actual_close > prev_close
-        predicted_up = prediction.get("direction") == "UP"
-        confidence = float(prediction.get("confidence") or 0.0)
-        prob_up = float(prediction.get("probabilityUp") or (confidence if predicted_up else 1.0 - confidence))
-        ret_pct = (actual_close - prev_close) / prev_close * 100.0 if prev_close else 0.0
-        predictions.append(
-            {
-                "predictedUp": predicted_up,
-                "actualUp": actual_up,
-                "confidence": confidence,
-                "probabilityUp": prob_up,
-                "returnPct": ret_pct,
-            }
-        )
+
+        block_end = min(block_start + step, last)
+        block = work.iloc[block_start:block_end]
+        if feature_cols:
+            block = block.dropna(subset=feature_cols)
+        if block.empty:
+            continue
+        try:
+            probs_up = predictor.probability_up(block)
+        except Exception:
+            logger.exception("backtest_predict_failed at_index=%s", block_start)
+            continue
+        if probs_up is None:
+            continue
+
+        positions = work.index.get_indexer(block.index)
+        for pos, prob_up in zip(positions, probs_up):
+            prob_up = float(prob_up)
+            actual_close = float(work.iloc[pos + 1]["Close"])
+            prev_close = float(work.iloc[pos]["Close"])
+            actual_up = actual_close > prev_close
+            predicted_up = prob_up > 0.5
+            confidence = prob_up if predicted_up else 1.0 - prob_up
+            ret_pct = (actual_close - prev_close) / prev_close * 100.0 if prev_close else 0.0
+            predictions.append(
+                {
+                    "predictedUp": predicted_up,
+                    "actualUp": actual_up,
+                    "confidence": confidence,
+                    "probabilityUp": prob_up,
+                    "returnPct": ret_pct,
+                }
+            )
 
     if not predictions:
         return empty
@@ -126,6 +147,46 @@ def run_backtest(
         "trainWindow": train_window,
         "step": step,
     }
+
+
+# One walk-forward at a time, one result per symbol and data stamp.
+#
+# Measured 2026-09-11 (verifier): a single request takes ~18-26 s, but two
+# running at once take 78-85 s each — every ensemble member trains on all
+# cores (`n_jobs=-1`), so parallel backtests only fight over the same CPUs
+# and both miss nginx's 60 s upstream timeout, after which the frontend's
+# `retry: 1` adds a third and fourth. Serialising them makes the second
+# request wait ~20 s and then take ~20 s; the cache makes any repeat of the
+# same symbol on the same data free. Process-local: the backend runs a
+# single uvicorn worker (ops/docker/backend.Dockerfile).
+_RUN_LOCK = threading.Lock()
+_RESULTS: dict[str, tuple[str, dict[str, Any]]] = {}
+
+
+def run_backtest_serialized(
+    df: pd.DataFrame,
+    *,
+    symbol: str,
+    train_window: int = 180,
+    step: int = 10,
+) -> dict[str, Any]:
+    """`run_backtest`, but never concurrently and never twice for the same
+    symbol on the same bars. The stamp is the last bar's timestamp plus the
+    row count — a new bar or a different history length recomputes."""
+    if df is None or df.empty:
+        return _empty_payload()
+    stamp = f"{df.index[-1]}|{len(df)}|{train_window}|{step}"
+    hit = _RESULTS.get(symbol)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    with _RUN_LOCK:
+        # A request that waited here may find the answer already computed.
+        hit = _RESULTS.get(symbol)
+        if hit is not None and hit[0] == stamp:
+            return hit[1]
+        result = run_backtest(df, train_window=train_window, step=step)
+        _RESULTS[symbol] = (stamp, result)
+        return result
 
 
 def run_backtest_for_history(
@@ -197,6 +258,20 @@ def _reliability_buckets(predictions: list[dict[str, Any]]) -> list[dict[str, An
             }
         )
     return out
+
+
+def _window_is_trainable(predictor: PricePredictor, slice_df: pd.DataFrame) -> bool:
+    """Whether `predictor.train` has anything to learn from: enough rows after
+    feature preparation, and both classes inside the unshuffled 80 % that
+    `train` fits on."""
+    try:
+        data, _ = predictor.prepare_features(slice_df)
+    except Exception:
+        return False
+    if len(data) < MIN_TRAINABLE_ROWS:
+        return False
+    train_part = data["Target"].iloc[: max(1, int(len(data) * 0.8))]
+    return train_part.nunique() == 2
 
 
 def _empty_payload() -> dict[str, Any]:

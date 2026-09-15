@@ -1,5 +1,70 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-09-11T10:45Z: Der Backtest, der nie gerechnet hat — und was sichtbar wurde, als er es tat
+
+**Stand:** `main` auf `d7e76af` (PR #29 gemergt: Gates laufen auf dem neuen Host). `fix/backtest-zwei-jahre`
+lokal auf `810c6c7` + dieser STATE/ADR-Commit; **Remote (PR #30, Entwurf, Basis `main`) steht noch auf dem
+Stand vor dem Rebase** — Push mit `--force-with-lease` steht aus (Session-Ende ohne Push). Unit **435 -> 442**.
+
+| Commit | Inhalt | verifier |
+| --- | --- | --- |
+| `9131d17`+`f1ab89b` (#29, gemergt) | `z`-Label an allen Bind-Mounts; `make_writable_for_containers` statt `chmod 0777` auf fremde Verzeichnisse | nachgewiesen (Negativkontrolle am frischen Verzeichnis; Rehearsal 2x gruen); CI `validate`/`CodeQL`/`analyze` gruen |
+| `ff24458` | "2y" in allen drei Zeitraum-Tabellen (504 Bars / "2y" / 730 Tage) | rot gegen main (`130 not >= 500`); allein **widerlegt**: 216–249 s, 504 durch nginx, identische Kennzahlen fuer AAPL/MSFT/`ZZZZNOPE123`, 6 Tracebacks je Anfrage |
+| `77ffb36` | Kein Backtest auf Platzhalterkursen (`synthetic:true`, Leerantwort, kein Training); untrainierbare Fenster uebersprungen | nachgewiesen: 2–5 s, 200 durch nginx, 0 Tracebacks; Negativkontrollen `run_backtest` 1x / `train` 79x |
+| `fc14445` | `BACKTEST_STEP = 30` (Eigentuemer-Entscheid gegenueber Hintergrund-Rechnung) | **widerlegt**: 51–57 s (einmal 95 s); Ursache `predict_next_movement` 323 x 0,125 s = 40 s, unabhaengig von step |
+| `680c167` | Batch-Scoring je Block (`PricePredictor.probability_up`), ein Training je Block | nachgewiesen: 17,7–19,1 s, Kennzahlen identisch (Accuracy 0.6502, Reliability-Zaehler gleich), Leakage-Kontrolle dynamisch — **aber** zwei parallele Anfragen je 78–85 s |
+| `810c6c7` | `run_backtest_serialized`: ein Backtest zur Zeit, ein Ergebnis je Symbol+Datenstand im Prozessspeicher | Lock, Cache (0,001 s / 0,01 s ueber HTTP), Neu-Rechnung bei neuem Bar, Event-Loop frei: nachgewiesen; `test.sh` **443 OK**. **"beide < 60 s" widerlegt:** im anyio-Threadpool (Starlette-Pfad fuer `def`-Endpunkte) rechnet der Thread nach dem Warten 3x langsamer (32–44 s statt 9–13 s); ueber HTTP 5 von 7 Paaren > 60 s (47/65/111/89/97/55/67 s). Mit aktiven Hintergrundschleifen **Einzel**anfrage 165 s — der Scanner trainiert dasselbe Ensemble auf denselben Kernen (jetzt gemessen). Hypothese: OpenMP-Pools je lebendem Pool-Thread |
+
+**Der rote Faden:** vier Verifier-Laeufe, drei Widerlegungen, jede an einer Zahl, die ich fuer plausibel gehalten
+hatte — 130 statt 500 Bars; "2–2,7 s je Training" (in Wahrheit 1,2 s Training + 0,125 s je Bar Bildschirm-
+Vorhersage); "Reserve fuer zwei Anfragen" (in Wahrheit Thread-Ueberbuchung). Ein Test, den ich dazu schrieb,
+war gruen bei 53 s Antwortzeit, weil er meine Rechnung bewachte statt die Zusage. Er tut das nicht mehr.
+
+**Neuer Host `dev-claude`** (openSUSE, SELinux enforcing, Docker nativ): Kein Gate lief beim ersten Versuch —
+`PermissionError: /app/tests`, Postgres-Bind-Mount, `mkdir /app/data/ml_models`, `chmod 0777` auf ein von
+Postgres uebernommenes Verzeichnis. Behoben in #29. **`node` fehlt weiterhin** — der Nutzer hat die
+system-weite Installation freigegeben (`sudo zypper install -y nodejs24`), sie ist aber noch nicht erfolgt; die
+UI-Regression laeuft bis dahin nur in der CI (dort gruen fuer #29, fuer #30 nach dem Push zu pruefen).
+
+**Wartet auf den Nutzer (§13):**
+- **`node` installieren** (freigegeben, nicht ausgefuehrt): `sudo zypper install -y nodejs24`.
+- **PR #30 mergen oder nicht** — nach Push, CI und dem ausstehenden D4-Ergebnis. Bewusste Grenze der gewaehlten
+  Loesung: drei gleichzeitige Backtests fuer drei Symbole -> die dritte wartet ~40 s und liegt an der
+  Timeout-Grenze. Die Bildschirm-Vorhersage von `/analysis/<symbol>` trainiert gleichzeitig mit dem Backtest
+  derselben Seite auf denselben Kernen (benannt, nicht gemessen). Falls das unter Last nicht reicht: Option (a)
+  Hintergrund-Rechnung mit `pending`-Zustand bleibt die saubere Loesung.
+- **Stufe 3 unveraendert** (Test-Account, VAPID, `FMP_API_KEY`); Zielzeilen-Vorschlaege V1–V4 warten.
+- **Neu, vom verifier:** der Backtest hat **keine Zielzeile** und keinen Harnisch-Schritt. Vorschlag: "Backtest
+  rechnet nie auf Platzhalterkursen" (`synthetic:true` => `samples 0`, < 10 s; Realdaten => `synthetic:false`,
+  Antwort durch nginx < 60 s bei zwei parallelen Anfragen). Der Zielsatz gehoert dem Menschen.
+
+**Bewusst nicht angefasst (Bestand, vom verifier benannt):**
+- `prepare_features` etikettiert die letzte Zeile jedes Trainings-Slice als `Target=0` (`NaN > x` -> False) statt
+  sie zu verwerfen — kein Zukunftswissen, aber ein falsches Label im Testteil; verfaelscht `memberAccuracies`
+  und etikettiert den juengsten Bar der Bildschirm-Vorhersage immer als DOWN. **SHOULD**, eigener Schnitt.
+- `n_jobs=-1` je Ensemble-Mitglied (Thread-Ueberbuchung bei paralleler Arbeit) — aendert die Bildschirm-Vorhersage
+  mit, eigener Schnitt.
+- `"1y": 500`, `"6mo": 260` in der Bar-Tabelle (etwa das Doppelte der Handelstage; Anzeige-Befund, nicht ausgemessen).
+- `test_ml_persistence::test_save_load_roundtrip_recovers_predictor` skippt sich selbst und beweist den Roundtrip nie.
+- 14x `provider_call_failed label=ticker_info:*` auf ERROR aus der Hintergrundschleife (yfinance 429).
+
+**Annahmen, widerrufbar:** `step=30` ist die Kadenz des Eigentuemers; der Cache ist prozesslokal (ein uvicorn-
+Worker); ein Backtest zur Zeit ist akzeptabel.
+
+**Allokierte Ports/Ressourcen: KEINE eigenen** — der laufende `verifier` (D4) haelt kurzzeitig `tbv2-verify-*`
+und 18194 und raeumt selbst auf. Fremd auf diesem Host (nicht angefasst): `nex-im-*` einer parallelen Session,
+kommt und geht. `artifacts/verification/2026-09-11T*` (gitignored) haelt die Rohbelege aller Laeufe.
+
+**Eskaliert (§13, vierte Widerlegung):** Der synchrone On-Demand-Backtest ist auf dieser Architektur (drei
+Ensemble-Mitglieder mit `n_jobs=-1`, ein Prozess, Hintergrund-Scanner im selben Kernbudget) nicht verlaesslich
+unter 60 s zu bekommen. Entscheidung des Eigentuemers: **(a)** Hintergrund-Rechnung + `pending` (Empfehlung) oder
+**(d)** Threads je Ensemble-Mitglied deckeln (trifft Bildschirm-Vorhersage und Scanner mit, dort zu messen).
+
+**Naechster sinnvoller Schritt:** Entscheidung (a)/(d) einholen. Der Branch ist in sich korrekt (jeder Commit rot
+gegen den Vorstand); `git push --force-with-lease` und PR-Text-Update stehen aus. Danach unveraendert: **Analyse-Seite
+uebersetzen** (129 feste Literale, `OFFENE_SEITEN` in `tests/test_page_i18n.py`).
+
+
 ## SESSION-ABSCHLUSS 2026-08-11T18:05Z (2): Vier Aussagen, die im Anfragepfad Geld gekostet haben
 
 **Stand:** `main` auf `e90104f`, working tree clean, `ci`/`codeql`/`validate` fuer alle vier PRs
