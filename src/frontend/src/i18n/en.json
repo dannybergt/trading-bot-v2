@@ -425,8 +425,10 @@
     },
     "modelPerformance": {
       "title": "Model performance",
-      "subtitle": "Walk-forward backtest of the persisted predictor over the last {{count}} predicted bars{{trained}}.",
-      "trainedAt": " · model retrained {{when}}",
+      "subtitle": "Walk-forward backtest of the persisted predictor over the last {{count}} predicted bars.",
+      "pending": "The backtest is being computed — this card fills in by itself, usually within a minute.",
+      "refreshing": "New bars arrived — the backtest is being recomputed; the figures below are from the previous run.",
+      "failed": "The backtest failed for the current bars. It is retried when the next bar arrives; the server log names the cause.",
       "directionAccuracy": "Direction accuracy",
       "strategyVsHold": "Strategy vs buy-hold",
       "backtestSetup": "Backtest setup",

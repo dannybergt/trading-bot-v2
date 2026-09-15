@@ -17,6 +17,9 @@ from __future__ import annotations
 import logging
 import math
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -149,44 +152,206 @@ def run_backtest(
     }
 
 
-# One walk-forward at a time, one result per symbol and data stamp.
+# The walk-forward never runs in the request path.
 #
-# Measured 2026-09-11 (verifier): a single request takes ~18-26 s, but two
-# running at once take 78-85 s each — every ensemble member trains on all
-# cores (`n_jobs=-1`), so parallel backtests only fight over the same CPUs
-# and both miss nginx's 60 s upstream timeout, after which the frontend's
-# `retry: 1` adds a third and fourth. Serialising them makes the second
-# request wait ~20 s and then take ~20 s; the cache makes any repeat of the
-# same symbol on the same data free. Process-local: the backend runs a
-# single uvicorn worker (ops/docker/backend.Dockerfile).
-_RUN_LOCK = threading.Lock()
-_RESULTS: dict[str, tuple[str, dict[str, Any]]] = {}
+# Measured 2026-09-11 (verifier, four runs): one request takes 18-26 s, a
+# thread that waited in the AnyIO pool computes 3x slower afterwards, two
+# requests at once both miss nginx's 60 s upstream timeout, and with the
+# background loops active a single request took 165 s. Every variant that
+# kept the computation in the request (larger `step`, batch scoring, a
+# lock) was refuted at the running system. So the request only *asks*: a
+# job per symbol runs on its own single worker thread, the answer is
+# `pending` until it is done and `ready` from then on, and the same bars
+# for the same symbol are never computed twice.
+#
+# Process-local by design: the backend runs one uvicorn worker
+# (ops/docker/backend.Dockerfile) and results are small dicts. Lid: a second
+# worker or a complaint about the cold start after a deploy would justify
+# moving the results to the database. The worker is its own executor, not
+# `background.get_executor()` — those four threads belong to the periodic
+# loops, and a 20-165 s job in there would starve scanner cycles. It still
+# competes with the scanner for CPU cores (each ensemble member trains with
+# `n_jobs=-1`); if `backtest_job_finished duration_s` stays near 165 s with
+# the loops active, the next step is `threadpoolctl.threadpool_limits` in
+# this thread alone, which leaves the on-screen prediction untouched.
+#
+# Jobs are keyed by symbol, not (symbol, stamp): one job per symbol at a
+# time. A request that arrives with newer bars while an older stamp is still
+# computing gets `pending` and re-asks on its next poll — one extra poll
+# cycle, never two concurrent trainings for one symbol.
+
+STATUS_READY = "ready"
+STATUS_PENDING = "pending"
+STATUS_FAILED = "failed"
+
+#: Jobs that may be queued or running at once (including the running one).
+#: One request costs < 1 s but buys up to 165 s of CPU on every core; this
+#: bounds the amplification to BACKTEST_MAX_JOBS x job duration. A user who
+#: hits it sees `pending` with `queued: false` and is enqueued on a later
+#: poll. Raise it once `backtest_queue_full` shows up in the log more than a
+#: handful of times a day with several users.
+BACKTEST_MAX_JOBS = 8
+
+_LOCK = threading.Lock()
+_RESULTS: dict[str, dict[str, Any]] = {}
+_JOBS: dict[str, dict[str, Any]] = {}
+_executor: ThreadPoolExecutor | None = None
 
 
-def run_backtest_serialized(
+def _get_executor() -> ThreadPoolExecutor:
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="backtest")
+    return _executor
+
+
+def shutdown(wait: bool = False) -> None:
+    """Close the worker on application shutdown. Queued jobs are dropped; a
+    job that is already computing keeps the thread until it returns (the
+    container's stop grace period bounds that), same as `background.shutdown`."""
+    global _executor
+    if _executor is not None:
+        _executor.shutdown(wait=wait, cancel_futures=True)
+        _executor = None
+
+
+def _stamp(df: pd.DataFrame, train_window: int, step: int) -> str:
+    return f"{df.index[-1]}|{len(df)}|{train_window}|{step}"
+
+
+def _payload(status: str, entry: dict[str, Any] | None, *, queued: bool) -> dict[str, Any]:
+    return {
+        "status": status,
+        "queued": queued,
+        "result": entry["result"] if entry else _empty_payload(),
+        "computedAt": entry["computedAt"] if entry else None,
+        "lastBar": entry["lastBar"] if entry else None,
+    }
+
+
+def _job_is_open(job: dict[str, Any] | None) -> bool:
+    return job is not None and not job["future"].done()
+
+
+def peek(symbol: str) -> dict[str, Any] | None:
+    """`pending` (with the last known result) while a job for `symbol` is
+    queued or running, else None. The endpoint calls this before it fetches
+    any history: a poll must not pay for a provider call or the on-screen
+    prediction, and it must not be able to fall back to the synthetic
+    placeholder while a real-data job is computing."""
+    with _LOCK:
+        job = _JOBS.get(symbol)
+        if not _job_is_open(job):
+            return None
+        return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=True)
+
+
+def request_backtest(
     df: pd.DataFrame,
     *,
     symbol: str,
     train_window: int = 180,
     step: int = 10,
 ) -> dict[str, Any]:
-    """`run_backtest`, but never concurrently and never twice for the same
-    symbol on the same bars. The stamp is the last bar's timestamp plus the
-    row count — a new bar or a different history length recomputes."""
+    """The answer for `symbol` on these bars: `ready` when it is known,
+    `pending` after enqueueing (or while a job is open), `failed` when the
+    job raised for exactly these bars. The stamp is the last bar plus the
+    row count — a new bar recomputes, a repeat is free."""
     if df is None or df.empty:
-        return _empty_payload()
-    stamp = f"{df.index[-1]}|{len(df)}|{train_window}|{step}"
-    hit = _RESULTS.get(symbol)
-    if hit is not None and hit[0] == stamp:
-        return hit[1]
-    with _RUN_LOCK:
-        # A request that waited here may find the answer already computed.
-        hit = _RESULTS.get(symbol)
-        if hit is not None and hit[0] == stamp:
-            return hit[1]
+        return _payload(STATUS_READY, None, queued=False)
+    stamp = _stamp(df, train_window, step)
+    with _LOCK:
+        entry = _RESULTS.get(symbol)
+        if entry is not None and entry["stamp"] == stamp:
+            return _payload(entry["status"], entry, queued=False)
+        job = _JOBS.get(symbol)
+        if _job_is_open(job):
+            if job["stamp"] != stamp and job["future"].cancel():
+                # Still waiting for the worker with bars that are already
+                # stale: replace it instead of computing twice.
+                del _JOBS[symbol]
+            else:
+                return _payload(STATUS_PENDING, entry, queued=True)
+        open_jobs = sum(1 for j in _JOBS.values() if _job_is_open(j))
+        if open_jobs >= BACKTEST_MAX_JOBS:
+            logger.warning(
+                "backtest_queue_full",
+                extra={"symbol": symbol, "jobs": open_jobs, "max_jobs": BACKTEST_MAX_JOBS},
+            )
+            return _payload(STATUS_PENDING, entry, queued=False)
+        future = _get_executor().submit(
+            _run_job, df, symbol=symbol, stamp=stamp, train_window=train_window, step=step,
+            queued_at=perf_counter(),
+        )
+        _JOBS[symbol] = {"stamp": stamp, "future": future}
+        return _payload(STATUS_PENDING, entry, queued=True)
+
+
+def _run_job(
+    df: pd.DataFrame,
+    *,
+    symbol: str,
+    stamp: str,
+    train_window: int,
+    step: int,
+    queued_at: float,
+) -> None:
+    started = perf_counter()
+    logger.info(
+        "backtest_job_started",
+        extra={"symbol": symbol, "queued_s": round(started - queued_at, 3)},
+    )
+    status = STATUS_READY
+    try:
+        # Resolved at call time so tests can substitute the computation.
         result = run_backtest(df, train_window=train_window, step=step)
-        _RESULTS[symbol] = (stamp, result)
-        return result
+    except Exception:
+        logger.exception("backtest_job_failed", extra={"symbol": symbol})
+        status = STATUS_FAILED
+        result = _empty_payload()
+    entry = {
+        "stamp": stamp,
+        "status": status,
+        "result": result,
+        "computedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "lastBar": _bar_label(df.index[-1]),
+    }
+    # Publish and retire the job in one step, and only if this job is still
+    # the one registered for the symbol — a cancelled predecessor never runs
+    # this body, and a successor must not be retired by mistake.
+    with _LOCK:
+        _RESULTS[symbol] = entry
+        job = _JOBS.get(symbol)
+        if job is not None and job["stamp"] == stamp:
+            del _JOBS[symbol]
+    if status == STATUS_READY:
+        logger.info(
+            "backtest_job_finished",
+            extra={
+                "symbol": symbol,
+                "duration_s": round(perf_counter() - started, 3),
+                "samples": result.get("samples", 0),
+            },
+        )
+
+
+def _bar_label(value: Any) -> str:
+    """The last bar as the UI shows a data stamp: a plain date for daily
+    bars (the only interval the endpoint fetches), the full timestamp for
+    anything with a time of day, `str()` for anything else."""
+    if isinstance(value, datetime):
+        if (value.hour, value.minute, value.second) == (0, 0, 0):
+            return value.date().isoformat()
+        return value.isoformat()
+    return str(value)
+
+
+def _reset_for_tests() -> None:
+    """Wait for the worker, then forget every job and result."""
+    shutdown(wait=True)
+    with _LOCK:
+        _JOBS.clear()
+        _RESULTS.clear()
 
 
 def run_backtest_for_history(

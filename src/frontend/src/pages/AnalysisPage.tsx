@@ -108,9 +108,16 @@ type BacktestResult = {
   step?: number | null;
 };
 
+type BacktestStatus = "ready" | "pending" | "failed";
+
 type BacktestPayload = {
   symbol: string;
   result: BacktestResult;
+  /** Fehlt bei einem Backend vor 2026-09-15 — dann verhaelt sich die Karte wie zuvor. */
+  status?: BacktestStatus;
+  queued?: boolean;
+  computedAt?: string | null;
+  lastBar?: string | null;
 };
 
 type DataQualityField = {
@@ -557,6 +564,19 @@ export function AnalysisPage() {
       apiFetch<BacktestPayload>(`/api/backtest/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
     staleTime: 30 * 60_000,
+    // Der Backtest rechnet im Hintergrund (18-165 s, gemessen 2026-09-11);
+    // der Endpunkt antwortet sofort mit `pending` und die Karte holt das
+    // Ergebnis nach. Der Poll endet bei `ready`/`failed`, bei einem Fehler
+    // der Anfrage selbst und spaetestens nach 60 Antworten (10 min) — ein
+    // Tab, der offen bleibt, darf nicht endlos anfragen. Der Zaehler laeuft
+    // ueber die Lebensdauer des Eintrags, nicht je Episode; bei Tagesbars
+    // ist das egal, bei Intraday-Bars waere er je Episode zu fuehren.
+    refetchInterval: (query) =>
+      query.state.status !== "error" &&
+      query.state.data?.status === "pending" &&
+      query.state.dataUpdateCount < 60
+        ? 10_000
+        : false,
   });
 
   const dataQualityQuery = useQuery({
@@ -756,7 +776,8 @@ export function AnalysisPage() {
       <FundamentalsDetailSection detail={research?.fundamentalsDetail} />
       <ModelPerformanceSection
         backtest={backtestQuery.data?.result}
-        modelTrainedAt={stock?.prediction?.modelTrainedAt}
+        status={backtestQuery.data?.status}
+        lastBar={backtestQuery.data?.lastBar}
       />
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
@@ -1896,13 +1917,48 @@ function DebtTable({
 
 function ModelPerformanceSection({
   backtest,
-  modelTrainedAt,
+  status,
+  lastBar,
 }: {
   backtest: BacktestResult | undefined;
-  modelTrainedAt?: string | null;
+  status?: BacktestStatus;
+  lastBar?: string | null;
 }) {
   const { t } = useTranslation();
-  if (!backtest || !backtest.samples) return null;
+  // Der Zeitpunkt der Kennzahlen ist der letzte Bar, den der Walk-Forward
+  // gesehen hat — der Datenstand selbst, nicht der Trainingszeitpunkt des
+  // Bildschirm-Modells (das ist ein anderes Modell).
+  const source = {
+    key: "model_performance",
+    provider: "Walk-Forward-Backtest (lokales Modell)",
+    available: true,
+    asOf: lastBar ?? null,
+    asOfKind: lastBar ? ("data" as const) : ("unknown" as const),
+  };
+  if (!backtest || !backtest.samples) {
+    // Regel K: eine Luecke wird benannt, nicht gefuellt. `pending` ohne
+    // Ergebnis heisst "wird gerechnet", `failed` heisst "ist gescheitert";
+    // nur `ready` ohne Ergebnis heisst "nichts zu zeigen" — dann keine Karte.
+    if (status !== "pending" && status !== "failed") return null;
+    return (
+      <section className="card space-y-2" data-testid="model-performance-section">
+        <header>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            {t("analysis.modelPerformance.title")}
+          </h2>
+          <p className="mt-1">
+            <SourceTip source={{ ...source, available: false }} />
+          </p>
+        </header>
+        <p
+          className={`text-xs ${status === "failed" ? "text-red-300" : "text-slate-400"}`}
+          data-testid={`model-performance-${status}`}
+        >
+          {t(`analysis.modelPerformance.${status}`)}
+        </p>
+      </section>
+    );
+  }
 
   const fmtPct = (value: number | null | undefined): string => {
     if (value == null || Number.isNaN(value)) return "—";
@@ -1945,26 +2001,16 @@ function ModelPerformanceSection({
             Herkunftskarte: die Guetezahlen stammen aus dem
             Walk-Forward-Lauf desselben Modells. */}
         <p className="mt-1">
-          <SourceTip
-            source={{
-              key: "model_performance",
-              provider: "Walk-Forward-Backtest (lokales Modell)",
-              available: true,
-              asOf: modelTrainedAt ?? null,
-              asOfKind: modelTrainedAt ? "trained" : "unknown",
-            }}
-          />
+          <SourceTip source={source} />
         </p>
         <p className="text-xs text-slate-500">
-          {t("analysis.modelPerformance.subtitle", {
-            count: backtest.samples,
-            trained: modelTrainedAt
-              ? t("analysis.modelPerformance.trainedAt", {
-                  when: new Date(modelTrainedAt).toLocaleString(),
-                })
-              : "",
-          })}
+          {t("analysis.modelPerformance.subtitle", { count: backtest.samples })}
         </p>
+        {status === "pending" ? (
+          <p className="text-xs text-slate-400" data-testid="model-performance-pending">
+            {t("analysis.modelPerformance.refreshing")}
+          </p>
+        ) : null}
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">

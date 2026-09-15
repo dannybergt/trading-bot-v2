@@ -168,73 +168,54 @@ class BacktestServiceTests(unittest.TestCase):
         from app import main as app_main
 
         real_payload = {"data": _synthetic_frame(504), "synthetic": False}
+        answer = {"status": "pending", "queued": True,
+                  "result": backtest_service._empty_payload(),
+                  "computedAt": None, "lastBar": None}
         with patch.object(app_main.service, "get_stock_data", return_value=real_payload), \
              patch.object(app_main.service, "get_asset_profile",
                           return_value={"symbol": "AAPL", "assetClass": "stock",
                                         "assetLabel": "Stock", "market": "equity",
                                         "exchange": "NASDAQ", "type": "STOCK", "isCrypto": False}), \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
-             patch.object(backtest_service, "run_backtest_serialized",
-                          return_value=backtest_service._empty_payload()) as run:
+             patch.object(backtest_service, "request_backtest", return_value=answer) as run:
             payload = app_main.get_symbol_backtest(
                 symbol="AAPL", current_user=MagicMock(), db=MagicMock()
             )
 
         self.assertFalse(payload["synthetic"])
+        self.assertEqual("pending", payload["status"])
+        self.assertTrue(payload["queued"])
         self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
         self.assertEqual(run.call_args.kwargs["train_window"], app_main.BACKTEST_TRAIN_WINDOW)
         self.assertEqual(run.call_args.kwargs["symbol"], "AAPL")
 
-    def test_serialized_backtests_never_overlap_and_repeat_for_free(self):
-        # Zwei gleichzeitige Backtests brauchten je 78-85 s statt ~20 s
-        # (verifier, 2026-09-11): jedes Ensemble-Mitglied trainiert auf allen
-        # Kernen, parallel nehmen sie sich nur die CPUs weg. Also: einer zur
-        # Zeit — und dieselben Bars fuer dasselbe Symbol nie zweimal.
-        import threading
-        import time
-        from unittest.mock import patch
+    def test_endpoint_polls_without_touching_a_provider(self):
+        # Waehrend ein Job laeuft, darf ein Poll weder das Asset-Profil noch
+        # die Kurshistorie holen: beides kann einen Anbieter-Aufruf kosten,
+        # und der yfinance-Pfad faellt bei Drossel still auf den synthetischen
+        # Platzhalter — die Antwort waere dann `ready` + leer, waehrend das
+        # echte Ergebnis ungesehen in der Registry laege (critic, 2026-09-15).
+        from unittest.mock import MagicMock, patch
         from app import backtest_service
+        from app import main as app_main
 
-        overlap = {"active": 0, "max": 0, "calls": 0}
-        guard = threading.Lock()
-
-        def slow_backtest(df, *, train_window, step):
-            with guard:
-                overlap["active"] += 1
-                overlap["calls"] += 1
-                overlap["max"] = max(overlap["max"], overlap["active"])
-            time.sleep(0.05)
-            with guard:
-                overlap["active"] -= 1
-            return {**backtest_service._empty_payload(), "samples": len(df)}
-
-        df = _synthetic_frame(30)
-        backtest_service._RESULTS.clear()
-        with patch.object(backtest_service, "run_backtest", side_effect=slow_backtest):
-            threads = [
-                threading.Thread(
-                    target=backtest_service.run_backtest_serialized,
-                    args=(df,), kwargs={"symbol": sym, "train_window": 5, "step": 5},
-                )
-                for sym in ("AAPL", "MSFT", "AAPL", "MSFT")
-            ]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-            # Wiederholung auf denselben Bars: kein Aufruf.
-            repeat = backtest_service.run_backtest_serialized(
-                df, symbol="AAPL", train_window=5, step=5
-            )
-            # Ein neuer Bar: neue Rechnung.
-            longer = _synthetic_frame(31)
-            backtest_service.run_backtest_serialized(
-                longer, symbol="AAPL", train_window=5, step=5
+        in_flight = {"status": "pending", "queued": True,
+                     "result": backtest_service._empty_payload(),
+                     "computedAt": None, "lastBar": None}
+        with patch.object(backtest_service, "peek", return_value=in_flight) as peek, \
+             patch.object(app_main.service, "get_stock_data") as history, \
+             patch.object(app_main.service, "get_asset_profile") as profile, \
+             patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None):
+            payload = app_main.get_symbol_backtest(
+                symbol="btc-usd", current_user=MagicMock(), db=MagicMock()
             )
 
-        self.assertEqual(overlap["max"], 1, "zwei Backtests liefen gleichzeitig")
-        self.assertEqual(overlap["calls"], 3)  # AAPL, MSFT, AAPL mit neuem Bar
-        self.assertEqual(repeat["samples"], 30)
+        peek.assert_called_once_with("BTC/USD")
+        history.assert_not_called()
+        profile.assert_not_called()
+        self.assertEqual("pending", payload["status"])
+        self.assertEqual("BTC/USD", payload["symbol"])
+
 
     def test_endpoint_refuses_synthetic_history(self):
         # Regel K: keine Kennzahl auf erfundenen Kursen. Der Platzhalter ist
@@ -260,6 +241,7 @@ class BacktestServiceTests(unittest.TestCase):
 
         run.assert_not_called()
         self.assertTrue(payload["synthetic"])
+        self.assertEqual(backtest_service.STATUS_READY, payload["status"])
         self.assertEqual(0, payload["result"]["samples"])
         self.assertIsNone(payload["result"]["accuracy"])
 
@@ -282,6 +264,196 @@ class BacktestServiceTests(unittest.TestCase):
         )
         # Sum of bucket counts must match samples
         self.assertEqual(result["samples"], sum(b["count"] for b in result["reliability"]))
+
+
+class BacktestRegistryTests(unittest.TestCase):
+    """The request never computes: it asks, and a single worker answers.
+
+    Measured 2026-09-11 (verifier): the walk-forward takes 18-165 s, nginx
+    cuts the request at 60 s. Every test here waits on a Future or an
+    Event, never on a sleep — a timing-based test was green at 53 s once.
+    """
+
+    def setUp(self):
+        from app import backtest_service
+        self.svc = backtest_service
+        self.svc._reset_for_tests()
+        self.addCleanup(self.svc._reset_for_tests)
+
+    def _blocking_backtest(self):
+        """A stand-in for `run_backtest` that holds until the test releases it
+        and counts its calls."""
+        import threading
+        gate = threading.Event()
+        self.addCleanup(gate.set)  # a failing assertion must not hang tearDown
+        calls = {"n": 0}
+
+        def fake(df, *, train_window, step):
+            calls["n"] += 1
+            gate.wait(5)
+            return {**self.svc._empty_payload(), "samples": len(df)}
+
+        return gate, calls, fake
+
+    def _wait_for_job(self, symbol):
+        job = self.svc._JOBS.get(symbol)
+        if job is not None:
+            job["future"].result(timeout=5)
+
+    def test_first_ask_is_pending_then_ready_with_a_data_stamp(self):
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        df = _synthetic_frame(30)
+        with patch.object(self.svc, "run_backtest", side_effect=fake):
+            first = self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+            self.assertEqual("pending", first["status"])
+            self.assertTrue(first["queued"])
+            self.assertEqual(0, first["result"]["samples"])
+            gate.set()
+            self._wait_for_job("AAPL")
+            second = self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual("ready", second["status"])
+        self.assertEqual(30, second["result"]["samples"])
+        self.assertEqual(str(df.index[-1]), second["lastBar"])
+        self.assertRegex(second["computedAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$")
+        self.assertEqual(1, calls["n"])
+        self.assertNotIn("AAPL", self.svc._JOBS)
+
+    def test_concurrent_asks_enqueue_one_job(self):
+        # Genau der verifier-Fall: zwei (hier vier) Anfragen zugleich. Ohne
+        # Lock sehen alle "kein Treffer, kein Job" und reihen viermal ein.
+        import threading
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        df = _synthetic_frame(30)
+        answers = []
+        with patch.object(self.svc, "run_backtest", side_effect=fake):
+            threads = [
+                threading.Thread(
+                    target=lambda: answers.append(
+                        self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+                    )
+                )
+                for _ in range(4)
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            self.assertEqual({"pending"}, {a["status"] for a in answers})
+            self.assertEqual("pending", self.svc.peek("AAPL")["status"])
+            gate.set()
+            self._wait_for_job("AAPL")
+            final = self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual(1, calls["n"])
+        self.assertEqual("ready", final["status"])
+        self.assertIsNone(self.svc.peek("AAPL"))
+
+    def test_new_bar_recomputes_and_serves_the_old_result_meanwhile(self):
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        gate.set()
+        df = _synthetic_frame(30)
+        with patch.object(self.svc, "run_backtest", side_effect=fake):
+            self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+            self._wait_for_job("AAPL")
+            gate.clear()
+            longer = _synthetic_frame(31)
+            meanwhile = self.svc.request_backtest(longer, symbol="AAPL", train_window=5, step=5)
+            self.assertEqual("pending", meanwhile["status"])
+            self.assertEqual(30, meanwhile["result"]["samples"])  # altes Ergebnis bleibt sichtbar
+            gate.set()
+            self._wait_for_job("AAPL")
+            after = self.svc.request_backtest(longer, symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual("ready", after["status"])
+        self.assertEqual(31, after["result"]["samples"])
+        self.assertEqual(2, calls["n"])
+
+    def test_waiting_job_with_stale_bars_is_replaced(self):
+        # Ein Job, der noch auf den Worker wartet, waehrend schon neuere Bars
+        # da sind, rechnet umsonst: er wird verworfen, nicht nachgeholt.
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        with patch.object(self.svc, "run_backtest", side_effect=fake):
+            # MSFT belegt den einen Worker; AAPL wartet.
+            self.svc.request_backtest(_synthetic_frame(30), symbol="MSFT", train_window=5, step=5)
+            self.svc.request_backtest(_synthetic_frame(30), symbol="AAPL", train_window=5, step=5)
+            stale = self.svc._JOBS["AAPL"]["future"]
+            self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+            fresh = self.svc._JOBS["AAPL"]["future"]
+            self.assertIsNot(stale, fresh)
+            self.assertTrue(stale.cancelled())
+            gate.set()
+            self._wait_for_job("MSFT")
+            self._wait_for_job("AAPL")
+            after = self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual("ready", after["status"])
+        self.assertEqual(31, after["result"]["samples"])
+        self.assertEqual(2, calls["n"])  # MSFT + AAPL(31); AAPL(30) lief nie
+        self.assertNotIn("AAPL", self.svc._JOBS)
+
+    def test_failed_job_is_reported_and_not_retried_for_the_same_bars(self):
+        from unittest.mock import patch
+        df = _synthetic_frame(30)
+        calls = {"n": 0}
+
+        def boom(df, *, train_window, step):
+            calls["n"] += 1
+            raise RuntimeError("training exploded")
+
+        with patch.object(self.svc, "run_backtest", side_effect=boom), \
+             self.assertLogs("app.backtest_service", level="ERROR") as logs:
+            self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+            self._wait_for_job("AAPL")
+            again = self.svc.request_backtest(df, symbol="AAPL", train_window=5, step=5)
+            longer = self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual("failed", again["status"])
+        self.assertEqual(0, again["result"]["samples"])
+        self.assertEqual("pending", longer["status"])  # neuer Bar: neuer Versuch
+        self.assertEqual(1, calls["n"])
+        self.assertTrue(any("backtest_job_failed" in line for line in logs.output))
+
+    def test_queue_is_capped_and_says_so(self):
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_MAX_JOBS", 3), \
+             self.assertLogs("app.backtest_service", level="WARNING") as logs:
+            for sym in ("A", "B", "C"):
+                self.assertTrue(
+                    self.svc.request_backtest(_synthetic_frame(30), symbol=sym, train_window=5, step=5)["queued"]
+                )
+            fourth = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
+            self.assertEqual("pending", fourth["status"])
+            self.assertFalse(fourth["queued"])
+            self.assertIsNone(self.svc.peek("D"))
+            gate.set()
+            for sym in ("A", "B", "C"):
+                self._wait_for_job(sym)
+            retried = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
+            self.assertTrue(retried["queued"])
+            self._wait_for_job("D")
+
+        self.assertEqual(4, calls["n"])
+        self.assertTrue(any("backtest_queue_full" in line for line in logs.output))
+
+    def test_peek_knows_nothing_without_a_job(self):
+        self.assertIsNone(self.svc.peek("AAPL"))
+
+    def test_last_bar_is_a_plain_date_for_daily_bars(self):
+        # Die Karte nennt den Datenstand; fuer Tagesbars ist "12.09.2024"
+        # ehrlicher als "12.09.2024, 00:00".
+        self.assertEqual("2024-09-12", self.svc._bar_label(pd.Timestamp("2024-09-12")))
+        self.assertEqual(
+            "2024-09-12T15:30:00+00:00",
+            self.svc._bar_label(pd.Timestamp("2024-09-12 15:30", tz="UTC")),
+        )
+        self.assertEqual("29", self.svc._bar_label(29))
 
 
 if __name__ == "__main__":

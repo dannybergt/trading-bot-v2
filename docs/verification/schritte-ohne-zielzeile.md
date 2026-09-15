@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 72 von 87 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 74 von 89 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
@@ -122,6 +122,24 @@ sich genommen aber kein Produktversprechen. `ui_analysis` prueft heute nur, dass
 ein Chart-Element rendert; die inhaltlichen Zusagen der Analyse-Seite haengen an
 Z02 und Z06 mit eigenen Schritten.
 
+### Backtest (2)
+
+`backtest never blocks the request path` · `ui_backtest_pending`
+
+Seit dem 2026-09-15 rechnet der Backtest im Hintergrund; der Endpunkt antwortet
+sofort mit `ready`, `pending` oder `failed`, die Karte holt das Ergebnis nach.
+Trennschaerfe, ehrlich je Umgebung: `backtest never blocks the request path`
+beweist ohne Providerzugang nur, dass der synthetische Pfad sofort und ohne
+Job `ready` + leer antwortet (Regel K) und dass ohne Token 401 kommt; erst mit
+echten Bars verlangt er `pending` beim ersten Aufruf und einen Poll unter einer
+Sekunde. Der Modus steht in der Ausgabe. `ui_backtest_pending` beantwortet
+`/api/backtest/*` auf CDP-Ebene selbst (erst `pending`, dann `ready`), weil der
+synthetische Host den Zweig sonst nie zeigt — bewiesen sind damit die
+Pending-Karte, das Nachholen ohne Reload, der Datenstand am Herkunftshinweis
+und dass der Poll danach **endet**; nicht bewiesen ist, dass das Backend selbst
+diese Folge liefert (das tun die Unit-Tests und der `verifier`). Gegenstand von
+**V5**.
+
 ### Warten auf eine Zielzeile
 
 `ui_auto_execution_limits_persist` · `ui_symbol_search` · `ui_token_persisted`
@@ -136,7 +154,7 @@ Codezeichen — sonst zaehlte ihn der Guard weiterhin zu dieser Liste.
 
 ## Vorschlaege an den Menschen
 
-Neue Zielsaetze schreibt der Agent nicht. Diese vier sind vorbereitet und warten
+Neue Zielsaetze schreibt der Agent nicht. Diese fuenf sind vorbereitet und warten
 auf eine Entscheidung.
 
 ### V1 — Der Alarm-Feed hat kein Versprechen
@@ -178,3 +196,18 @@ Betrifft: `ui_symbol_search`
 Einstieg in jede Analyse, im STATE als dauerhaft unbewiesen gefuehrt (Stufe 3,
 braucht Providerzugang). Eine Zielzeile wuerde diese Luecke im Katalog sichtbar
 machen, statt sie in einer Notiz zu fuehren.
+
+### V5 — Der Backtest rechnet nie auf Platzhalterkursen und nie im Anfragepfad
+
+Betrifft: `backtest never blocks the request path`, `ui_backtest_pending`
+
+Vorschlag fuer den Zielsatz: "Die Modellguete auf `/analysis/<symbol>` stammt
+aus einem Walk-Forward auf echten Kursen; die Seite wartet nie auf die
+Rechnung, zeigt waehrenddessen, dass gerechnet wird, und fuellt sich von
+selbst." Beobachtbares Kriterium: `/api/backtest/<symbol>` antwortet durch
+nginx immer mit 200 (`ready`/`pending`/`failed`), ein Poll bei laufendem Job
+unter einer Sekunde; auf Platzhalterkursen `ready` mit null Samples und
+`synthetic: true`. Hintergrund: der Endpunkt war vom ersten Tag an strukturell
+leer (kein Zeitraum lieferte genug Bars) und danach vier Verifier-Laeufe lang
+zu langsam fuer den Proxy (STATE 2026-09-11) — nichts davon war rot, weil keine
+Zielzeile es verlangte.

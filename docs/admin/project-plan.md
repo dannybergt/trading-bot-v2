@@ -144,7 +144,7 @@ Bereits umgesetzt (Welle 8, 2026-05-08):
 Bereits umgesetzt (ML-Persistenz + Backtest, 2026-05-08, Phase-4-Vorbedingung):
 
 - Per-Symbol-Modell-Persistenz: `app/ml_persistence.py` mit XGBoost-JSON unter `state/runtime/data/ml_models/<SYMBOL>.json` plus `<SYMBOL>.meta.json`. Default-TTL 24 h. `MarketDataService._get_or_train_predictor(symbol, df)` checkt Memory-Cache (1h) → Disk → Train+Persist. Damit lernt das Modell von Tag zu Tag, statt bei jedem Request neu zu starten
-- Walk-Forward-Backtest-Framework: `app/backtest_service.py::run_backtest(df, train_window, step)` trainiert in Slots, sammelt Predictions, berechnet Accuracy, Mann-Whitney-AUC, Brier-Score, Strategy-vs-Buy-Hold-Cum-Return und 10-Bucket-Reliability-Tabelle fuer Confidence-Calibration. Endpoint `GET /api/research/{symbol}/backtest`. Frontend `ModelPerformanceSection` auf `/analysis/<symbol>`
+- Walk-Forward-Backtest-Framework: `app/backtest_service.py::run_backtest(df, train_window, step)` trainiert in Slots, sammelt Predictions, berechnet Accuracy, Mann-Whitney-AUC, Brier-Score, Strategy-vs-Buy-Hold-Cum-Return und 10-Bucket-Reliability-Tabelle fuer Confidence-Calibration. Endpoint `GET /api/backtest/{symbol}` (seit 2026-09-15 asynchron: `status` ready/pending/failed, Rechnung im Hintergrund). Frontend `ModelPerformanceSection` auf `/analysis/<symbol>`
 
 Bereits umgesetzt (Audit-Log + Daily-Re-Train, 2026-05-08, Phase-4-Vorbedingung):
 
