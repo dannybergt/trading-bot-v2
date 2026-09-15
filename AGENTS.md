@@ -121,8 +121,8 @@ sauber dokumentierter Rest. Deshalb:
 
 - Nach dem Session-Ritual (§0) wird **nicht gefragt, womit es weitergehen soll**, sondern der
   nächste sinnvolle Schritt aus `STATE.md` genommen und abgearbeitet — und danach der nächste.
-  Eine Nachfrage ist nur an den Schwellen aus §13 richtig (irreversibel, fremde Ressourcen,
-  externe Kosten, Secrets, Merge/Tag nur auf `FREIGABE` nach §14).
+  Eine Nachfrage ist nur an den Eskalationsschwellen aus §13 richtig (vollständige Liste
+  dort — §2.7 kürzt sie nicht) sowie für Merge und Release-Tag (`FREIGABE`, §14).
 - Ein offener Thread wird **geschlossen oder umgewidmet**, nie nur mitgeschleppt. Was auf
   diesem Host nicht lösbar ist (anderer Host, Betreiber-Hand, fehlende Freigabe), wird in
   `STATE.md` als **„nicht hier lösbar"** mit dem konkreten Handgriff und dem Ort notiert —
