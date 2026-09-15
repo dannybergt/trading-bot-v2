@@ -1,5 +1,91 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-09-15T19:10Z: Backtest rechnet im Hintergrund — gebaut, unit-gruen, noch nicht nachgewiesen
+
+**Stand:** `main` auf `eb17b77`. Branch `fix/backtest-zwei-jahre` auf `main` rebased und mit Lease gepusht
+(`3ebf506`, PR #30 Entwurf, CI gruen, PR-Text auf D4-Stand). **Darauf liegt die Umsetzung von Option (a) als
+lokaler Commit** (s. `git log -1`) — **nicht gepusht**, Session-Ende ohne Push (Anweisung des Nutzers).
+
+**Entscheidung des Eigentuemers (2026-09-15):** Option (a) Hintergrund-Rechnung + `pending` statt (d) Thread-Deckel.
+ADR 2026-09-15 in `state/decisions.md`.
+
+**Tor K:** `critic` v1 **ÜBERARBEITEN** (sechs MAJOR — u. a. haette der Poll je Tick `get_stock_data` inkl.
+Bildschirm-Vorhersage gerechnet und waere unter yfinance-Drossel still auf `synthetic`/`ready` gekippt; Registry
+ohne Lock; Tests ohne Wartemechanismus; Poll ohne Ende; `pending`-Zweig ohne Beleg), v2 **ANNEHMEN MIT VORBEHALT**,
+alle fuenf Vorbehalte eingebaut (SW-Bypass im UI-Schritt, `asOfKind: "data"` + `lastBar`, Job-Abschluss mit
+Stempel-Identitaet, `peek` vor `get_asset_profile`, `addCleanup(event.set)`).
+
+```
+PLAN  Kein Backtest im Anfragepfad; Poll < 1 s; Karte fuellt sich selbst und hoert auf   Slices 4/6 · Tore 1/17
+│
+├─ Strang A: Backend
+│     ├─ [x] #1 Registry: peek-Kurzschluss, Lock, ready/pending/failed, Deckel   ⟨✓ · · · ·⟩  backtest_service.py, main.py, test_backtest_service.py
+│     └─ [x] #3 API-Harnisch "backtest never blocks the request path"          ⟨· · · · ·⟩  run-api-regression.sh, schritte-ohne-zielzeile.md
+├─ Strang B: Frontend
+│     ├─ [x] #2 Karte pending/refreshing/failed, Poll mit Ende, SourceTip=lastBar   ⟨· · · · ·⟩  AnalysisPage.tsx, de.json, en.json
+│     └─ [x] #2b ui_backtest_pending (CDP Fetch-Interception + SW-Bypass, Terminierung)   ⟨· · · · ·⟩  run-ui-regression.mjs
+├─ [~] #4 STATE + ADR + session-log + project-status + project-plan-Pfad   ⟨· · · · ·⟩  PR-Text steht aus
+└─ Abschluss
+      └─ [ ] #5 test.sh, api-regression, latency-probe, verifier, CI; Merge auf FREIGABE   ⟨· · · · ·⟩
+```
+
+**Was gebaut ist (alles ungeprueft am laufenden System — s. Luecken):**
+- `backtest_service`: `peek`, `request_backtest`, `_run_job`, `shutdown`, `_reset_for_tests`, `_bar_label`;
+  `ThreadPoolExecutor(max_workers=1)`, `_LOCK`, `_JOBS`/`_RESULTS` je Symbol, `BACKTEST_MAX_JOBS = 8`,
+  Cancel wartender veralteter Jobs, Logs `backtest_job_started/finished/failed`, `backtest_queue_full`.
+  `run_backtest_serialized` + `_RUN_LOCK` entfernt.
+- `main.py::get_symbol_backtest`: `peek(canonicalize_symbol(symbol))` **vor** Profil und Abruf; Antwort traegt
+  `status`, `queued`, `computedAt`, `lastBar`; synthetisch/Fehler → `ready` + leer; `on_shutdown` schliesst den Worker.
+- `AnalysisPage.tsx`: `refetchInterval` 10 s solange `pending`, Ende bei `ready`/`failed`/Fehler/60 Antworten;
+  Karte `pending` (ohne Ergebnis: Satz; mit altem Ergebnis: Zahlen + „wird neu gerechnet"), `failed` (rot),
+  `ready`+leer → wie bisher keine Karte; SourceTip nennt `lastBar` als Datenstand statt `modelTrainedAt`.
+  i18n-Schluessel `pending`/`refreshing`/`failed` in DE/EN, `trainedAt` und `{{trained}}` entfernt.
+- Harnisch: `ui_backtest_pending` (CDP `Fetch.enable` + `Network.setBypassServiceWorker`, erst `pending`, dann
+  `ready`, zaehlt weitere Requests 12 s lang, prueft den Datenstand am Herkunftshinweis);
+  `backtest never blocks the request path` (API; druckt den Modus; Realdaten: erster Aufruf `pending`, Poll < 1 s;
+  ohne Token 401). `schritte-ohne-zielzeile.md`: **74 von 89**, Abschnitt „Backtest (2)", Vorschlag **V5**.
+- `docs/admin/project-plan.md:147`: Endpunktpfad korrigiert (`/api/backtest/{symbol}`).
+
+**Tests:** neu `BacktestRegistryTests` (8: pending→ready mit Stempel, 4 parallele Anfragen = 1 Job, neuer Bar mit
+altem Ergebnis, wartender veralteter Job ersetzt, Job-Fehler → `failed` ohne Wiederholung, Queue-Deckel,
+`peek` ohne Job, `_bar_label`), `test_endpoint_polls_without_touching_a_provider`, zwei Endpunkt-Tests angepasst.
+**Gelaufen:** die 11 schnellen Backtest-Tests im Container (2-CPU-Deckel) **OK**; strukturelle Tests lokal
+(`test_i18n_bundles`, `test_metric_sources`, `test_page_i18n`, `test_harness_step_coverage`: 33) **OK**;
+Frontend-Image gebaut (`tsc -b && vite build` gruen, Bundle traegt `model-performance-pending`); Backend-Image
+gebaut (traegt `peek`/`_bar_label`). **Volle Suite `tbv2-unit-full`: Ergebnis s. Zeile unter dieser Liste.**
+Host-Load 47–168 durch fremde Stacks (`nex-grid-*`, `nexura-*`, `pulsight-*`); zwei Hintergrundlaeufe wurden
+vom Harness wegen Speicherknappheit abgebrochen.
+
+**Volle Unit-Suite (`discover`, Mounts wie `test.sh`, `--cpus 4`): 451 OK (skipped=1) in 254 s — 443 -> 451.**
+
+**Luecken (nichts davon ist nachgewiesen):** `verifier` **nicht gelaufen**; `SKIP_BUILD=1 tests/run-api-regression.sh`
+**nicht gelaufen**; `tests/run-event-loop-latency-probe.sh` **nicht gelaufen**; UI-Regression nur in der CI
+(kein `node`), und die CI hat den Stand **nicht gesehen** (nicht gepusht). Negativkontrollen fuer die neuen
+Unit-Tests sind strukturell (gegen `main` fehlen `peek`/`request_backtest` → AttributeError), nicht gefahren.
+
+**Naechster sinnvoller Schritt:** (1) `SKIP_BUILD=1 bash tests/run-api-regression.sh` (neuer Schritt druckt den
+Modus). (2) `bash tests/run-event-loop-latency-probe.sh`. (3) `verifier`: zwei parallele Erstaufrufe durch nginx,
+Poll < 1 s, `/api/health` waehrend des Jobs, `backtest_job_finished duration_s` mit/ohne Schleifen,
+Scanner-Zyklusdauer, Stempel-Stabilitaet zweier `ready`-Antworten (yfinance liefert auf diesem Host echte Bars —
+D4 zeigte `synthetic=False`). (4) `reviewer` + `security-reviewer` (Endpunkt-Diff); `ops-`/`migration-reviewer`
+nicht faellig. (5) Push mit Lease, PR-#30-Text nach §15, CI inkl. `ui_backtest_pending`. Danach unveraendert:
+**Analyse-Seite uebersetzen** (129 Literale).
+
+**Bewusst nicht angefasst:** `n_jobs=-1` je Ensemble-Mitglied (Folge-Slice `threadpoolctl` nur im Job-Thread,
+Ausloeser: `duration_s` ~165 s mit Schleifen); Workbox `NetworkOnly` fuer `/api/backtest/` (Produktfrage);
+Persistenz der Ergebnisse (ein Worker); `prepare_features`-Label; `"1y": 500`; Untertitel der Karte sagt
+„persisted predictor", der Walk-Forward trainiert aber je Block frisch (Wortlaut-Befund, eigener Schnitt).
+
+**Annahmen, widerrufbar:** 10-s-Poll und 60-Antworten-Deckel; `BACKTEST_MAX_JOBS = 8`; `lastBar` als Datenstand
+der Karte; `failed` als eigener Zustand mit rotem Satz; Poll-Antwort ohne Asset-Felder (die Seite liest sie nicht).
+
+**Wartet auf den Nutzer (§13):** `node` installieren (`sudo zypper install -y nodejs24`, freigegeben, nicht
+erfolgt); Zielzeile **V5** entscheiden; Stufe 3 unveraendert; PR #30 mergen erst nach Tor R/S/V/C und `FREIGABE`.
+
+**Allokierte Ports/Ressourcen:** keine Ports, keine eigenen Container (`tbv2-unit-full` nach dem Lauf entfernt).
+Fremd auf diesem Host, nicht angefasst: `nex-grid-*`, `nexura-*`, `pulsight-*`, `nex-im-*`,
+`pwdmgr-test-postgres` und namenlose Build-/Testcontainer anderer Sessions.
+
 ## SESSION-ABSCHLUSS 2026-09-11T10:45Z: Der Backtest, der nie gerechnet hat — und was sichtbar wurde, als er es tat
 
 **Stand:** `main` auf `d7e76af` (PR #29 gemergt: Gates laufen auf dem neuen Host). `fix/backtest-zwei-jahre`
