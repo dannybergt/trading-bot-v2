@@ -234,12 +234,14 @@ class BacktestServiceTests(unittest.TestCase):
                                         "assetLabel": "Stock", "market": "equity",
                                         "exchange": "", "type": "STOCK", "isCrypto": False}), \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
-             patch.object(backtest_service, "run_backtest") as run:
+             patch.object(backtest_service, "request_backtest") as ask:
             payload = app_main.get_symbol_backtest(
                 symbol="ZZZZNOPE123", current_user=MagicMock(), db=MagicMock()
             )
 
-        run.assert_not_called()
+        # Die Naht ist `request_backtest`, nicht `run_backtest`: ein Job
+        # liefe asynchron nach dem `with` weiter, und `run` bliebe still.
+        ask.assert_not_called()
         self.assertTrue(payload["synthetic"])
         self.assertEqual(backtest_service.STATUS_READY, payload["status"])
         self.assertEqual(0, payload["result"]["samples"])
@@ -323,12 +325,29 @@ class BacktestRegistryTests(unittest.TestCase):
     def test_concurrent_asks_enqueue_one_job(self):
         # Genau der verifier-Fall: zwei (hier vier) Anfragen zugleich. Ohne
         # Lock sehen alle "kein Treffer, kein Job" und reihen viermal ein.
+        # Der Wettlauf wird erzwungen: `_job_is_open` haelt jeden Thread an
+        # einer Barriere fest, bis alle vier im kritischen Abschnitt sind.
+        # Mit Lock kommt nur einer hinein, die Barriere reisst per Timeout
+        # und der Ablauf ist wie ohne sie; ohne Lock treffen sich alle vier
+        # und reihen viermal ein (Mutation `_LOCK = nullcontext()`: 4 != 1).
+        # Ohne Barriere war der Test unter dem GIL in 4 von 7 Laeufen gruen.
         import threading
         from unittest.mock import patch
         gate, calls, fake = self._blocking_backtest()
         df = _synthetic_frame(30)
         answers = []
-        with patch.object(self.svc, "run_backtest", side_effect=fake):
+        barrier = threading.Barrier(4, timeout=0.2)
+        real_is_open = self.svc._job_is_open
+
+        def is_open_after_meeting(job):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return real_is_open(job)
+
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "_job_is_open", side_effect=is_open_after_meeting):
             threads = [
                 threading.Thread(
                     target=lambda: answers.append(
@@ -396,6 +415,40 @@ class BacktestRegistryTests(unittest.TestCase):
         self.assertEqual(2, calls["n"])  # MSFT + AAPL(31); AAPL(30) lief nie
         self.assertNotIn("AAPL", self.svc._JOBS)
 
+    def test_running_job_with_stale_bars_finishes_and_the_next_poll_enqueues(self):
+        # Ein Job, der schon rechnet, laesst sich nicht abbrechen: neuere
+        # Bars bekommen `pending`, kein zweites Einreihen, und erst der
+        # naechste Poll nach dem Abschluss reiht den Nachfolger ein.
+        import threading
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        started = threading.Event()
+
+        def fake_that_announces(df, **kwargs):
+            started.set()
+            return fake(df, **kwargs)
+
+        with patch.object(self.svc, "run_backtest", side_effect=fake_that_announces):
+            self.svc.request_backtest(_synthetic_frame(30), symbol="AAPL", train_window=5, step=5)
+            running = self.svc._JOBS["AAPL"]["future"]
+            self.assertTrue(started.wait(5))  # der Worker rechnet — jetzt ist er nicht mehr abbrechbar
+            newer = self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+            self.assertEqual("pending", newer["status"])
+            self.assertIs(running, self.svc._JOBS["AAPL"]["future"])
+            self.assertFalse(running.cancelled())
+            gate.set()
+            self._wait_for_job("AAPL")
+            self.assertEqual(1, calls["n"])
+            poll = self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+            self.assertEqual("pending", poll["status"])
+            self.assertEqual(30, poll["result"]["samples"])  # das alte Ergebnis reist mit
+            self._wait_for_job("AAPL")
+            after = self.svc.request_backtest(_synthetic_frame(31), symbol="AAPL", train_window=5, step=5)
+
+        self.assertEqual("ready", after["status"])
+        self.assertEqual(31, after["result"]["samples"])
+        self.assertEqual(2, calls["n"])
+
     def test_failed_job_is_reported_and_not_retried_for_the_same_bars(self):
         from unittest.mock import patch
         df = _synthetic_frame(30)
@@ -431,12 +484,21 @@ class BacktestRegistryTests(unittest.TestCase):
             fourth = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
             self.assertEqual("pending", fourth["status"])
             self.assertFalse(fourth["queued"])
+            # Die Verweigerung bleibt fuer `peek` sichtbar: ein Poll darauf
+            # zahlt keinen Abruf und kann nicht auf den Platzhalter kippen.
+            held = self.svc.peek("D")
+            self.assertEqual("pending", held["status"])
+            self.assertFalse(held["queued"])
+            # Nach Ablauf der Haltezeit laesst `peek` den vollen Pfad wieder zu.
+            self.svc._REFUSED["D"] -= self.svc.BACKTEST_REFUSAL_HOLD_S
             self.assertIsNone(self.svc.peek("D"))
+            self.assertNotIn("D", self.svc._REFUSED)
             gate.set()
             for sym in ("A", "B", "C"):
                 self._wait_for_job(sym)
             retried = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
             self.assertTrue(retried["queued"])
+            self.assertNotIn("D", self.svc._REFUSED)
             self._wait_for_job("D")
 
         self.assertEqual(4, calls["n"])

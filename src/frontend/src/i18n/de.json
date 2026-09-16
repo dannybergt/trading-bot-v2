@@ -428,6 +428,7 @@
       "subtitle": "Walk-Forward-Backtest des persistierten Modells über die letzten {{count}} vorhergesagten Bars.",
       "pending": "Der Backtest wird gerechnet — diese Karte füllt sich von selbst, meist innerhalb einer Minute.",
       "refreshing": "Neue Bars sind da — der Backtest wird neu gerechnet; die Zahlen unten stammen aus dem vorigen Lauf.",
+      "stalled": "Der Backtest dauert länger als erwartet — die Karte fragt nicht mehr von selbst nach. Seite neu laden, um es erneut zu versuchen.",
       "failed": "Der Backtest ist für die aktuellen Bars gescheitert. Mit dem nächsten Bar wird es erneut versucht; das Server-Log nennt die Ursache.",
       "directionAccuracy": "Richtungs-Trefferquote",
       "strategyVsHold": "Strategie vs Buy-and-Hold",

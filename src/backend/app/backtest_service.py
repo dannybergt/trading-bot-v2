@@ -192,9 +192,21 @@ STATUS_FAILED = "failed"
 #: handful of times a day with several users.
 BACKTEST_MAX_JOBS = 8
 
+#: How long `peek` keeps answering `pending, queued: false` for a symbol the
+#: cap turned away. Without it every poll of a turned-away symbol misses the
+#: shortcut and pays the full path — asset profile, history, on-screen
+#: prediction — and can fall back to the synthetic placeholder under a
+#: throttled provider, which turns into `ready` + empty and ends the poll
+#: with nothing ever enqueued (reviewer, 2026-09-16). Longer than the card's
+#: poll interval so a refusal costs one full request per hold, not one per
+#: poll; short enough that a free slot is taken within a minute.
+BACKTEST_REFUSAL_HOLD_S = 30.0
+
 _LOCK = threading.Lock()
 _RESULTS: dict[str, dict[str, Any]] = {}
 _JOBS: dict[str, dict[str, Any]] = {}
+#: symbol -> perf_counter() of the last refusal by the cap
+_REFUSED: dict[str, float] = {}
 _executor: ThreadPoolExecutor | None = None
 
 
@@ -235,15 +247,22 @@ def _job_is_open(job: dict[str, Any] | None) -> bool:
 
 def peek(symbol: str) -> dict[str, Any] | None:
     """`pending` (with the last known result) while a job for `symbol` is
-    queued or running, else None. The endpoint calls this before it fetches
-    any history: a poll must not pay for a provider call or the on-screen
-    prediction, and it must not be able to fall back to the synthetic
-    placeholder while a real-data job is computing."""
+    queued or running, or for `BACKTEST_REFUSAL_HOLD_S` after the cap turned
+    it away (then `queued: false`); else None. The endpoint calls this
+    before it fetches any history: a poll must not pay for a provider call
+    or the on-screen prediction, and it must not be able to fall back to
+    the synthetic placeholder while a real-data job is computing or
+    waiting for a free slot."""
     with _LOCK:
         job = _JOBS.get(symbol)
-        if not _job_is_open(job):
-            return None
-        return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=True)
+        if _job_is_open(job):
+            return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=True)
+        refused_at = _REFUSED.get(symbol)
+        if refused_at is not None:
+            if perf_counter() - refused_at < BACKTEST_REFUSAL_HOLD_S:
+                return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=False)
+            del _REFUSED[symbol]
+        return None
 
 
 def request_backtest(
@@ -278,12 +297,14 @@ def request_backtest(
                 "backtest_queue_full",
                 extra={"symbol": symbol, "jobs": open_jobs, "max_jobs": BACKTEST_MAX_JOBS},
             )
+            _REFUSED[symbol] = perf_counter()
             return _payload(STATUS_PENDING, entry, queued=False)
         future = _get_executor().submit(
             _run_job, df, symbol=symbol, stamp=stamp, train_window=train_window, step=step,
             queued_at=perf_counter(),
         )
         _JOBS[symbol] = {"stamp": stamp, "future": future}
+        _REFUSED.pop(symbol, None)
         return _payload(STATUS_PENDING, entry, queued=True)
 
 
@@ -352,6 +373,7 @@ def _reset_for_tests() -> None:
     with _LOCK:
         _JOBS.clear()
         _RESULTS.clear()
+        _REFUSED.clear()
 
 
 def run_backtest_for_history(

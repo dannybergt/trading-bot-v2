@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
@@ -109,6 +109,12 @@ type BacktestResult = {
 };
 
 type BacktestStatus = "ready" | "pending" | "failed";
+
+/** Antworten, nach denen die Karte aufhoert zu pollen: 60 x 10 s = 10 min
+ *  bei freier Warteschlange; eine volle Schlange (8 x bis 165 s) kann
+ *  laenger brauchen, dann nennt die Karte das statt weiter "eine Minute"
+ *  zu versprechen. */
+const BACKTEST_MAX_POLLS = 60;
 
 type BacktestPayload = {
   symbol: string;
@@ -558,6 +564,7 @@ export function AnalysisPage() {
     staleTime: 5 * 60_000,
   });
 
+  const queryClient = useQueryClient();
   const backtestQuery = useQuery({
     queryKey: ["backtest", decoded],
     queryFn: () =>
@@ -567,17 +574,26 @@ export function AnalysisPage() {
     // Der Backtest rechnet im Hintergrund (18-165 s, gemessen 2026-09-11);
     // der Endpunkt antwortet sofort mit `pending` und die Karte holt das
     // Ergebnis nach. Der Poll endet bei `ready`/`failed`, bei einem Fehler
-    // der Anfrage selbst und spaetestens nach 60 Antworten (10 min) — ein
-    // Tab, der offen bleibt, darf nicht endlos anfragen. Der Zaehler laeuft
-    // ueber die Lebensdauer des Eintrags, nicht je Episode; bei Tagesbars
-    // ist das egal, bei Intraday-Bars waere er je Episode zu fuehren.
+    // der Anfrage selbst und spaetestens nach BACKTEST_MAX_POLLS Antworten
+    // — ein Tab, der offen bleibt, darf nicht endlos anfragen; die Karte
+    // sagt dann, dass es laenger dauert (`stalled`). `queued: false` heisst:
+    // die Warteschlange war voll, der Server haelt das 30 s — dann reicht
+    // ein Poll je Haltezeit. Der Zaehler laeuft ueber die Lebensdauer des
+    // Eintrags, nicht je Episode; bei Tagesbars ist das egal, bei
+    // Intraday-Bars waere er je Episode zu fuehren.
     refetchInterval: (query) =>
       query.state.status !== "error" &&
       query.state.data?.status === "pending" &&
-      query.state.dataUpdateCount < 60
-        ? 10_000
+      query.state.dataUpdateCount < BACKTEST_MAX_POLLS
+        ? query.state.data.queued === false
+          ? 30_000
+          : 10_000
         : false,
   });
+  // Der Zaehler lebt im Query-State, nicht im Hook-Ergebnis; jede Poll-
+  // Antwort rendert neu, damit ist der Wert hier so frisch wie die Karte.
+  const backtestStalled =
+    (queryClient.getQueryState(["backtest", decoded])?.dataUpdateCount ?? 0) >= BACKTEST_MAX_POLLS;
 
   const dataQualityQuery = useQuery({
     queryKey: ["data-quality", decoded],
@@ -777,6 +793,7 @@ export function AnalysisPage() {
       <ModelPerformanceSection
         backtest={backtestQuery.data?.result}
         status={backtestQuery.data?.status}
+        stalled={backtestStalled}
         lastBar={backtestQuery.data?.lastBar}
       />
       <ResearchDepthSection depth={research?.researchDepth} />
@@ -1918,13 +1935,19 @@ function DebtTable({
 function ModelPerformanceSection({
   backtest,
   status,
+  stalled,
   lastBar,
 }: {
   backtest: BacktestResult | undefined;
   status?: BacktestStatus;
+  /** Der Poll hat aufgehoert, obwohl noch `pending` — die Karte fuellt
+   *  sich nicht mehr von selbst und sagt das. */
+  stalled?: boolean;
   lastBar?: string | null;
 }) {
   const { t } = useTranslation();
+  const pendingKey = stalled ? "stalled" : "pending";
+  const refreshingKey = stalled ? "stalled" : "refreshing";
   // Der Zeitpunkt der Kennzahlen ist der letzte Bar, den der Walk-Forward
   // gesehen hat — der Datenstand selbst, nicht der Trainingszeitpunkt des
   // Bildschirm-Modells (das ist ein anderes Modell).
@@ -1954,7 +1977,9 @@ function ModelPerformanceSection({
           className={`text-xs ${status === "failed" ? "text-red-300" : "text-slate-400"}`}
           data-testid={`model-performance-${status}`}
         >
-          {t(`analysis.modelPerformance.${status}`)}
+          {status === "failed"
+            ? t("analysis.modelPerformance.failed")
+            : t(`analysis.modelPerformance.${pendingKey}`)}
         </p>
       </section>
     );
@@ -2008,7 +2033,7 @@ function ModelPerformanceSection({
         </p>
         {status === "pending" ? (
           <p className="text-xs text-slate-400" data-testid="model-performance-pending">
-            {t("analysis.modelPerformance.refreshing")}
+            {t(`analysis.modelPerformance.${refreshingKey}`)}
           </p>
         ) : null}
       </header>
