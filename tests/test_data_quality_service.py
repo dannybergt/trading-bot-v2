@@ -281,6 +281,43 @@ class PriceHistoryWiringTests(unittest.TestCase):
         price_field = next(f for f in report["fields"] if f["key"] == "price_history")
         self.assertEqual(price_field["confidence"], dq.FULL)
 
+    def test_stale_bars_are_partial_and_name_their_age(self):
+        # 260 Alpaca-Bars, deren juengster fuenf Monate alt ist, sind keine
+        # "full" Kurshistorie: Chart und Vorhersage stehen auf Vergangenheit,
+        # waehrend die Quote daneben aktuell ist (deployte Instanz
+        # 2026-09-16: AAPL endete am 2026-04-27). Das Badge muss das sagen.
+        import pandas as pd
+        from datetime import datetime, timedelta, timezone
+
+        end = datetime.now(timezone.utc) - timedelta(days=142)
+        idx = pd.date_range(end=end.replace(tzinfo=None), periods=260, freq="B")
+        frame = pd.DataFrame({"Close": [100 + i for i in range(260)]}, index=idx)
+        report = dq.evaluate_symbol_data_quality(
+            symbol="AAPL",
+            asset_class="stock",
+            research_payload={},
+            stock_payload={"data": frame, "provider": {"source": "Alpaca"}, "synthetic": False},
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.PARTIAL)
+        self.assertIn("stale", price_field["provider"])
+        self.assertIn("142 days", price_field["provider"])
+
+        # Frische Bars (juengster Bar heute) bleiben FULL — auch in der
+        # serialisierten Form des Endpunkts (`chart_data` mit `time`).
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        candles = [{"close": 100 + i, "time": today} for i in range(130)]
+        report = dq.evaluate_symbol_data_quality(
+            symbol="AAPL",
+            asset_class="stock",
+            research_payload={},
+            stock_payload={"chart_data": candles, "provider": {"source": "Alpaca"}, "synthetic": False},
+        )
+        price_field = next(f for f in report["fields"] if f["key"] == "price_history")
+        self.assertEqual(price_field["confidence"], dq.FULL)
+        # Ein langes Wochenende plus Feiertag (4 Tage) ist nicht "stale".
+        self.assertGreaterEqual(dq.STALE_BARS_AFTER_DAYS, 5)
+
     def test_missing_bars_names_the_payload_not_the_providers(self):
         # A payload that carries no countable bars is a contract break, not a
         # provider outage — `get_stock_data` falls back to the synthetic

@@ -185,7 +185,11 @@ export function PaperTradingPage() {
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.status === 400 && error.detail) {
-        const detail = error.detail as { reason?: string; breakdown?: GateBreakdown } | string;
+        const detail = error.detail as { reason?: string; breakdown?: GateBreakdown; symbol?: string } | string;
+        if (typeof detail === "object" && detail.reason === "no_price_for_symbol") {
+          setFormError(t("paperTrading.form.noPriceForSymbol", { symbol: detail.symbol ?? "" }));
+          return;
+        }
         if (typeof detail === "object" && detail.reason === "net_target_below_minimum") {
           const bd = detail.breakdown ?? {};
           setFormError(

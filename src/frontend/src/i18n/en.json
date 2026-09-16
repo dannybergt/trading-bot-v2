@@ -276,6 +276,7 @@
       "submitting": "Placing…",
       "rejected": "Order rejected by Net-Yield-Gate.",
       "rejectionDetail": "Net target {{net}}% below required {{minimum}}% (gross {{gross}}%, fees {{fees}}%, tax {{tax}}%).",
+      "noPriceForSymbol": "No provider has a price for \"{{symbol}}\" — is it a ticker symbol (e.g. AMZN, not AMAZON)? The order was not placed.",
       "errorGeneric": "Order could not be placed."
     },
     "openOrders": {

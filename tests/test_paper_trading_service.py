@@ -408,17 +408,53 @@ class PaperTradingServiceTests(unittest.TestCase):
         # 400 * (1 + 0.0005) = 400.20
         self.assertAlmostEqual(tx.price, 400.20, places=2)
 
-    def test_dispatch_pending_orders_skips_when_no_price(self):
-        paper_trading.place_order(
+    def test_place_order_rejects_symbol_without_a_price(self):
+        # "AMAZON" statt AMZN: kein Anbieter kennt einen Kurs. Frueher wurde
+        # die Order trotzdem angelegt und blieb still fuer immer `pending`
+        # (deployte Instanz, 21 h, 2026-09-16). Jetzt wird sie an der
+        # Grenze abgewiesen und nennt das Symbol.
+        with self.assertRaises(paper_trading.NoPriceForSymbol) as ctx:
+            paper_trading.place_order(
+                db=self.db,
+                user=self.user,
+                symbol="amazon",
+                side="buy",
+                qty=2,
+                limit_price=None,
+                target_price=None,
+                source="manual",
+                latest_close_provider=self._provider(None),
+            )
+        self.assertEqual(ctx.exception.symbol, "AMAZON")
+        self.assertEqual(self.db.query(PaperOrder).count(), 0)
+        # Eine Limit-Order traegt ihren Preis selbst und darf auf den Markt
+        # (oder auf einen gerade ausgefallenen Anbieter) warten.
+        order = paper_trading.place_order(
             db=self.db,
             user=self.user,
-            symbol="NOPRICE",
+            symbol="AMZN",
             side="buy",
             qty=1,
             limit_price=50.0,
             target_price=None,
             source="manual",
             latest_close_provider=self._provider(None),
+        )
+        self.assertEqual(order.status, "pending")
+
+    def test_dispatch_pending_orders_skips_when_no_price(self):
+        # Ein Anbieter-Ausfall *nach* dem Anlegen ist kein Grund, die Order
+        # zu verwerfen: sie bleibt pending, bis wieder ein Kurs da ist.
+        paper_trading.place_order(
+            db=self.db,
+            user=self.user,
+            symbol="NOPRICE",
+            side="buy",
+            qty=1,
+            limit_price=50.0,  # unter dem Markt von 100 -> bleibt pending
+            target_price=None,
+            source="manual",
+            latest_close_provider=self._provider(100.0),
         )
         filled = paper_trading.dispatch_pending_orders(self.db, self._provider(None))
         self.assertEqual(filled, 0)

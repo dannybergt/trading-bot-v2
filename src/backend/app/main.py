@@ -3193,6 +3193,18 @@ def create_paper_order(
             status_code=400,
             detail={"reason": exc.reason, "breakdown": exc.breakdown},
         )
+    except paper_trading.NoPriceForSymbol as exc:
+        audit_service.log_event(
+            db,
+            user_id=current_user.id,
+            action=audit_service.ACTION_PAPER_ORDER_PLACE_REJECTED,
+            outcome="denied",
+            details={"symbol": req.symbol, "side": req.side, "reason": "no_price_for_symbol"},
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"reason": "no_price_for_symbol", "symbol": exc.symbol},
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     audit_service.log_event(

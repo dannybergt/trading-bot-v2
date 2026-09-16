@@ -89,6 +89,15 @@ def _resolve_fee_multiplier(asset_class: str | None) -> float:
     return FEE_MULTIPLIER_BY_ASSET_CLASS.get(asset_class, DEFAULT_FEE_MULTIPLIER)
 
 
+class NoPriceForSymbol(ValueError):
+    """No provider produced a price for the symbol — usually a typo or a
+    name instead of a ticker (AMAZON vs AMZN)."""
+
+    def __init__(self, symbol: str):
+        super().__init__(f"no price available for symbol {symbol!r}")
+        self.symbol = symbol
+
+
 class NetYieldGateRejection(Exception):
     """Raised when the gate refuses to accept the order."""
 
@@ -309,6 +318,14 @@ def place_order(
         raise ValueError("symbol required")
 
     latest_close = latest_close_provider(canonical_symbol)
+    # A market order needs a price now; without one `_try_fill` leaves it
+    # pending forever and says nothing — a "AMAZON" (not a ticker) sat on
+    # the deployed instance for 21 hours as `pending` (2026-09-16). The
+    # gap is named here, at the boundary, with the symbol the user typed.
+    # A limit order may wait for the market (and for a provider that is
+    # down right now): it carries its own price and stays pending.
+    if limit_price is None and (latest_close is None or latest_close <= 0):
+        raise NoPriceForSymbol(canonical_symbol)
 
     asset_class: str | None = None
     if asset_class_resolver is not None:

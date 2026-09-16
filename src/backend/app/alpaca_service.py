@@ -112,10 +112,17 @@ class AlpacaService:
             # Check if this is a Crypto symbol
             is_crypto = '/' in symbol
 
+            # `sort=desc`: the data API pages ascending from `start` and
+            # `limit` cuts the page — so `start` plus `limit` returned the
+            # OLDEST `limit` bars of the window, and every chart on the
+            # deployed instance ended months in the past while the quote
+            # was current (2026-09-16: AAPL/AMZN/SPY ended 2026-04-27,
+            # BTC/USD 2025-12-29). Descending makes `limit` mean "the
+            # newest N"; the frame is re-sorted ascending below.
             if is_crypto:
-                bars = self.api.get_crypto_bars(symbol, mapped_tf, start=start, limit=limit).df
+                bars = self.api.get_crypto_bars(symbol, mapped_tf, start=start, limit=limit, sort=tradeapi.rest.Sort.Desc).df
             else:
-                bars = self.api.get_bars(symbol, mapped_tf, start=start, limit=limit, adjustment='all').df
+                bars = self.api.get_bars(symbol, mapped_tf, start=start, limit=limit, adjustment='all', sort=tradeapi.rest.Sort.Desc).df
                 
             if bars.empty:
                 return pd.DataFrame()
@@ -137,7 +144,7 @@ class AlpacaService:
             # Convert index to localized/unlocalized easily digestable stamp
             bars.index = bars.index.tz_convert('UTC').tz_localize(None)
 
-            return bars
+            return bars.sort_index()
         except Exception:
             logger.exception("alpaca_bars_df_fetch_failed symbol=%s timeframe=%s limit=%s", symbol, timeframe, limit)
             return pd.DataFrame()

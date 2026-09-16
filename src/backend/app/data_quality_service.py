@@ -20,6 +20,8 @@ opaque heuristic.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import os
 from typing import Any
 
@@ -217,7 +219,17 @@ def evaluate_symbol_data_quality(
         fields.append(_field("price_history", FALLBACK, "synthetic placeholder — no live provider data"))
     elif bars >= 30:
         provider = "Alpaca" if (stock.get("provider") or {}).get("source") == "Alpaca" else "yfinance / Alpha Vantage fallback"
-        fields.append(_field("price_history", FULL, provider))
+        age_days = _last_bar_age_days(stock)
+        if age_days is not None and age_days > STALE_BARS_AFTER_DAYS:
+            # Enough bars, but the newest is weeks old: the chart and the
+            # prediction rest on history, not on the market. 260 Alpaca
+            # bars ending 2026-04-27 graded FULL on 2026-09-16 while the
+            # quote beside them was current — nobody could see that from
+            # the badge (Regel K). Days are calendar days; the threshold
+            # covers a long weekend plus a holiday.
+            fields.append(_field("price_history", PARTIAL, f"{provider} — stale, last bar {age_days} days old"))
+        else:
+            fields.append(_field("price_history", FULL, provider))
     elif bars > 0:
         fields.append(_field("price_history", PARTIAL, "yfinance / Alpha Vantage fallback"))
     elif stock:
@@ -358,6 +370,40 @@ def evaluate_symbol_data_quality(
         "sources": sources,
         "upgradeHints": upgrades,
     }
+
+
+#: Calendar days after which the newest bar counts as stale. Daily bars
+#: are at most ~4 days old over a long weekend plus a holiday.
+STALE_BARS_AFTER_DAYS = 7
+
+
+def _last_bar_age_days(stock: dict[str, Any]) -> int | None:
+    """Calendar days between the newest bar and now, or None when the
+    payload carries no readable bar time. Same two shapes as
+    `_bar_count`: a DataFrame under `data` (DatetimeIndex) or the
+    serialised candles under `chart_data` (`time` as `YYYY-MM-DD[ HH:MM]`)."""
+    frame = stock.get("data")
+    last: datetime | None = None
+    if frame is not None:
+        try:
+            if len(frame) and hasattr(frame, "index"):
+                value = frame.index[-1]
+                last = value.to_pydatetime() if hasattr(value, "to_pydatetime") else value
+        except (TypeError, AttributeError, IndexError):
+            last = None
+    if last is None:
+        candles = stock.get("chart_data")
+        if candles:
+            try:
+                raw = str(candles[-1].get("time") or "")
+                last = datetime.fromisoformat(raw) if raw else None
+            except (ValueError, AttributeError, TypeError):
+                last = None
+    if not isinstance(last, datetime):
+        return None
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - last).days)
 
 
 def _bar_count(stock: dict[str, Any]) -> int:

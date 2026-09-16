@@ -276,6 +276,7 @@
       "submitting": "Wird platziert…",
       "rejected": "Order vom Net-Yield-Gate abgelehnt.",
       "rejectionDetail": "Netto-Ziel {{net}}% unter Mindestwert {{minimum}}% (brutto {{gross}}%, Gebühren {{fees}}%, Steuer {{tax}}%).",
+      "noPriceForSymbol": "Kein Anbieter liefert einen Kurs für „{{symbol}}“ — ist das ein Tickersymbol (z. B. AMZN statt AMAZON)? Die Order wurde nicht angelegt.",
       "errorGeneric": "Order konnte nicht platziert werden."
     },
     "openOrders": {
