@@ -25,6 +25,7 @@ from app.logging_config import (
 )
 configure_logging()
 
+from app.analysis import calculate_indicators
 from app.alpaca_service import AlpacaService
 from app.alpaca_stream import alpaca_stream
 from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_user, get_current_user
@@ -1691,6 +1692,7 @@ async def on_shutdown():
     # Nicht auf laufende Zyklen warten: ein haengender Provider-Aufruf darf
     # das Beenden des Containers nicht blockieren.
     shutdown_background_executor(wait=False)
+    backtest_service.shutdown(wait=False)
     await alpaca_stream.stop()
 
 
@@ -2845,6 +2847,16 @@ def run_composite_calibration(
     return report
 
 
+# Walk-forward retrain cadence for the on-demand backtest, an owner decision
+# (state/current-focus.md 2026-09-11). Measured on 504 daily bars (what
+# `period="2y"` fetches): one ensemble training is ~1.2 s, so `step=10` is 33
+# trainings and `step=30` is 11. Predictions are still emitted for every bar;
+# only the retrain cadence changes. The request never waits for the training
+# — see backtest_service for why.
+BACKTEST_TRAIN_WINDOW = 180
+BACKTEST_STEP = 30
+
+
 @app.get("/api/backtest/{symbol:path}")
 def get_symbol_backtest(
     symbol: str,
@@ -2853,39 +2865,75 @@ def get_symbol_backtest(
 ):
     """Walk-forward backtest of the persisted PricePredictor.
 
-    Pulls daily history (without the heavy news/fundamentals chain),
-    runs the backtest service, and returns accuracy + AUC + Brier
-    plus the cumulative strategy P&L vs buy-and-hold and a 10-bucket
-    reliability table for confidence calibration.
+    Answers immediately: `status` is `ready` with accuracy + AUC + Brier,
+    the cumulative strategy P&L vs buy-and-hold and a 10-bucket
+    reliability table once the job for these bars has run, `pending`
+    while it is queued or computing (the last known result rides along),
+    `failed` when it raised. The frontend polls while `pending`.
     """
+    canonical = canonicalize_symbol(symbol)
+    # A poll must cost nothing: no asset lookup, no history fetch, no
+    # on-screen prediction — and no chance to fall back to the synthetic
+    # placeholder while a real-data job is computing. This answer carries
+    # no asset fields; the page reads only `status` and `result` from here,
+    # and the asset lookup alone can cost a provider call once its cache
+    # expires (services.TICKER_INFO_TTL_SECONDS).
+    in_flight = backtest_service.peek(canonical)
+    if in_flight is not None:
+        return {"symbol": canonical, **in_flight}
+
     fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
     asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
-    canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
+    canonical = asset_profile.get("symbol") or canonical
+    nothing_to_compute = {
+        "symbol": canonical,
+        **asset_response_fields(asset_profile),
+        "status": backtest_service.STATUS_READY,
+        "queued": False,
+        "result": backtest_service._empty_payload(),
+        "computedAt": None,
+        "lastBar": None,
+    }
 
+    # Bars only — not `get_stock_data`: that one also trains and runs the
+    # on-screen prediction, fetches patterns and the composite, none of
+    # which this answer carries. The verifier measured that detour at 7–22 s
+    # per first call (cold predictor) and 25–287 s on the placeholder under
+    # a throttled provider (2026-09-16); the first answer must be `pending`
+    # within seconds, and a placeholder must be refused at once.
     try:
-        stock_data = service.get_stock_data(
+        bars, synthetic, _ = service.get_history_frame(
             symbol,
             period="2y",
             interval="1d",
-            user=None,
-            include_news=False,
-            include_fundamentals=False,
             # Das Profil steht drei Zeilen weiter oben schon fest.
             asset_profile=asset_profile,
         )
     except Exception:
         logger.exception("backtest_history_fetch_failed symbol=%s", symbol)
-        return {"symbol": canonical, "result": backtest_service._empty_payload()}
+        return nothing_to_compute
 
-    df = stock_data.get("data") if isinstance(stock_data, dict) else None
-    if df is None:
-        return {"symbol": canonical, "result": backtest_service._empty_payload()}
+    # Regel K (ADR 2026-08-05): no metric rides on fabricated prices. The
+    # placeholder is a seeded random walk — every symbol, including ones that
+    # do not exist, would yield the same accuracy table, and computing it
+    # costs minutes of CPU. Measured 2026-09-11: identical payloads for AAPL,
+    # MSFT and `ZZZZNOPE123`.
+    if synthetic:
+        return {**nothing_to_compute, "synthetic": True}
 
-    result = backtest_service.run_backtest(df, train_window=180, step=10)
+    # The walk-forward trains on the indicator columns; milliseconds, and
+    # the same frame the on-screen predictor would see.
+    answer = backtest_service.request_backtest(
+        calculate_indicators(bars),
+        symbol=canonical,
+        train_window=BACKTEST_TRAIN_WINDOW,
+        step=BACKTEST_STEP,
+    )
     return {
         "symbol": canonical,
         **asset_response_fields(asset_profile),
-        "result": result,
+        "synthetic": False,
+        **answer,
     }
 
 

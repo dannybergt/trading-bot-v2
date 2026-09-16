@@ -211,6 +211,116 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertEqual(payload["info"]["trailingPE"], 0.0)
         self.assertEqual(payload["info"]["assetClass"], "crypto")
 
+    def test_two_year_period_reaches_every_history_source(self):
+        # Der Backtest fragt mit period="2y" an. Drei Tabellen uebersetzen den
+        # Zeitraum (Alpaca-Bars, yfinance-Period, Platzhalter-Tage) — und jede
+        # fiel fuer einen unbekannten Wert still auf ihren Default: 130 Bars,
+        # "6mo", 180 Tage. run_backtest verlangt train_window + 5 = 185 Zeilen;
+        # kein Pfad hat sie je geliefert. Der Backtest war strukturell leer.
+        stock_profile = MarketDataService().get_asset_profile("AAPL", known_asset_class="stock")
+        recorded = {}
+
+        class _RecordingAlpaca(_FakeAlpaca):
+            def get_bars_df(self, symbol, timeframe="1Day", limit=100):
+                recorded["limit"] = limit
+                idx = pd.date_range("2024-01-01", periods=limit, freq="B")
+                return pd.DataFrame(
+                    {
+                        "Open": [100.0] * limit,
+                        "High": [101.0] * limit,
+                        "Low": [99.0] * limit,
+                        "Close": [100.0] * limit,
+                        "Volume": [1_000_000] * limit,
+                    },
+                    index=idx,
+                )
+
+        class _RecordingYfTicker:
+            def __init__(self, sym):
+                pass
+
+            def history(self, period=None, interval=None):
+                recorded["yf_period"] = period
+                return pd.DataFrame()
+
+        service = MarketDataService(_RecordingAlpaca())
+        _seed_fake_predictor(service, "AAPL")
+        with patch.object(service, "get_market_news", return_value={}):
+            payload = service.get_stock_data(
+                "AAPL",
+                period="2y",
+                interval="1d",
+                include_news=False,
+                include_fundamentals=False,
+                asset_profile=stock_profile,
+            )
+        self.assertGreaterEqual(
+            recorded["limit"], 500, f"2y fragt {recorded['limit']} Bars bei Alpaca an"
+        )
+        self.assertFalse(payload["synthetic"])
+        self.assertGreaterEqual(len(payload["data"].index), 500)
+
+        service = MarketDataService()  # ohne Alpaca: yfinance-Pfad
+        _seed_fake_predictor(service, "AAPL")
+        with patch("app.services.yf.Ticker", _RecordingYfTicker), patch(
+            "app.services.acquire_rate_limit", return_value=True
+        ), patch.object(service, "get_provider_history_df", return_value=pd.DataFrame()), patch.object(
+            service, "get_market_news", return_value={}
+        ):
+            payload = service.get_stock_data(
+                "AAPL",
+                period="2y",
+                interval="1d",
+                include_news=False,
+                include_fundamentals=False,
+                asset_profile=stock_profile,
+            )
+        self.assertEqual(recorded["yf_period"], "2y")
+        # ... und der Platzhalter, der danach greift, muss selbst genug Zeilen tragen.
+        self.assertTrue(payload["synthetic"])
+        self.assertGreaterEqual(len(payload["data"].index), 500)
+
+    def test_get_history_frame_returns_bars_without_a_prediction(self):
+        # Der Backtest-Endpunkt braucht Bars, sonst nichts. `get_stock_data`
+        # trainiert dazu den Bildschirm-Predictor (7-22 s kalt, verifier
+        # 2026-09-16) — `get_history_frame` darf ihn nicht einmal anfassen,
+        # und muss denselben Platzhalter mit derselben Kennzeichnung liefern
+        # wie der volle Pfad, damit Regel K auf beiden Wegen dasselbe sagt.
+        stock_profile = MarketDataService().get_asset_profile("AAPL", known_asset_class="stock")
+
+        class _RecordingAlpaca(_FakeAlpaca):
+            def get_bars_df(self, symbol, timeframe="1Day", limit=100):
+                idx = pd.date_range("2024-01-01", periods=limit, freq="B")
+                return pd.DataFrame(
+                    {"Open": [100.0] * limit, "High": [101.0] * limit, "Low": [99.0] * limit,
+                     "Close": [100.0] * limit, "Volume": [1_000_000] * limit},
+                    index=idx,
+                )
+
+        service = MarketDataService(_RecordingAlpaca())
+        with patch.object(service, "_get_or_train_predictor") as predictor:
+            bars, synthetic, profile = service.get_history_frame(
+                "AAPL", period="2y", interval="1d", asset_profile=stock_profile
+            )
+        predictor.assert_not_called()
+        self.assertFalse(synthetic)
+        self.assertGreaterEqual(len(bars.index), 500)
+        self.assertNotIn("RSI", bars.columns)  # rohe Bars, Indikatoren rechnet der Aufrufer
+        self.assertIs(profile, stock_profile)  # mitgegebenes Profil bleibt unangetastet
+
+        # Ohne Anbieter: derselbe Platzhalter, dieselbe Kennzeichnung wie der volle Pfad.
+        bare = MarketDataService()
+        _seed_fake_predictor(bare, "FAKE")
+        with patch.object(bare, "get_provider_history_df", return_value=pd.DataFrame()), patch.object(
+            bare, "get_market_news",
+            return_value={"items": [], "aggregate_score": 0.0, "aggregate_label": "neutral", "provider": None},
+        ), patch.object(bare, "get_ticker_info", return_value={}):
+            bars, synthetic, _ = bare.get_history_frame("FAKE", period="6mo", interval="1d")
+            full = bare.get_stock_data("FAKE", period="6mo", interval="1d")
+        self.assertTrue(synthetic)
+        self.assertTrue(full["synthetic"])
+        self.assertEqual(len(bars.index), len(full["data"].index))
+
     def test_get_stock_data_marks_synthetic_and_suppresses_recommendation(self):
         # When no provider returns bars, the chart falls back to a synthetic
         # random walk. The payload must be flagged synthetic AND the ML verdict

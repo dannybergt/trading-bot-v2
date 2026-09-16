@@ -1061,6 +1061,114 @@ async function run() {
       );
     }
 
+    // 8c. Backtest-Karte: `pending` -> Kennzahlen ohne Reload, und danach
+    // fragt die Seite nicht weiter. Das Backend rechnet den Backtest seit dem
+    // 2026-09-15 im Hintergrund und antwortet sofort mit `pending`; die Karte
+    // holt das Ergebnis per Poll nach. Ohne Providerzugang antwortet es hier
+    // aber `ready` + leer (Regel K: nichts auf Platzhalterkursen), die Karte
+    // rendert gar nicht — der `pending`-Zweig waere in diesem Lauf unsichtbar
+    // und ein Poll, der nie endet, bliebe es auch. Deshalb beantwortet der
+    // Schritt `/api/backtest/*` auf CDP-Ebene selbst: erst `pending`, dann
+    // `ready` mit einem vollen Ergebnis, und zaehlt jede weitere Anfrage.
+    //
+    // Der Service Worker (Workbox `NetworkFirst` fuer `/api/*`) bedient diese
+    // Requests sonst in seinem eigenen Target, wo `Fetch.enable` der Seite
+    // sie nicht sieht — daher der Bypass fuer die Dauer des Schritts.
+    await client.send("Network.enable");
+    await client.send("Network.setBypassServiceWorker", { bypass: true });
+    const backtestHits = [];
+    const backtestEmpty = {
+      samples: 0, accuracy: null, auc: null, brierScore: null, strategyReturnPct: null,
+      buyHoldReturnPct: null, reliability: [], trainWindow: null, step: null,
+    };
+    const backtestFull = {
+      samples: 12, accuracy: 0.5833, auc: 0.61, brierScore: 0.2401, strategyReturnPct: 3.21,
+      buyHoldReturnPct: 1.87, trainWindow: 180, step: 30,
+      reliability: [
+        { bucket: "40-50%", predictedMid: 0.45, actualUpRate: 0.4, count: 5 },
+        { bucket: "50-60%", predictedMid: 0.55, actualUpRate: 0.5714, count: 7 },
+      ],
+    };
+    const backtestAnswer = (status, result, extra) => ({
+      symbol: "VOO", synthetic: false, status, queued: true, result, ...extra,
+    });
+    const encodeBody = (payload) => Buffer.from(JSON.stringify(payload)).toString("base64");
+    const stopBacktestIntercept = client.on("Fetch.requestPaused", (params) => {
+      const url = params.request?.url || "";
+      if (!/\/api\/backtest\//.test(url)) {
+        client.send("Fetch.continueRequest", { requestId: params.requestId }).catch(() => {});
+        return;
+      }
+      backtestHits.push(Date.now());
+      const payload =
+        backtestHits.length === 1
+          ? backtestAnswer("pending", backtestEmpty, { computedAt: null, lastBar: null })
+          : backtestAnswer("ready", backtestFull, {
+              computedAt: "2026-09-15T10:00:00+00:00",
+              lastBar: "2026-09-12 00:00:00",
+            });
+      client
+        .send("Fetch.fulfillRequest", {
+          requestId: params.requestId,
+          responseCode: 200,
+          responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+          body: encodeBody(payload),
+        })
+        .catch(() => {});
+    });
+    await client.send("Fetch.enable", {
+      patterns: [{ urlPattern: "*/api/backtest/*", requestStage: "Request" }],
+    });
+    try {
+      await navigate(client, `${FRONTEND_URL}/analysis/VOO`);
+      await waitForCondition(
+        client,
+        "backtest card says it is being computed",
+        "!!document.querySelector('[data-testid=\"model-performance-pending\"]')",
+        20000,
+      );
+      // Der Poll laeuft alle 10 s; die zweite Antwort ist `ready`.
+      await waitForCondition(
+        client,
+        "backtest figures arrive without a reload",
+        `(() => {
+          const section = document.querySelector('[data-testid="model-performance-section"]');
+          if (!section || section.querySelector('[data-testid="model-performance-pending"]')) return false;
+          return (section.textContent || '').includes('Direction accuracy') && (section.textContent || '').includes('58.3%');
+        })()`,
+        30000,
+      );
+      const requestsUntilReady = backtestHits.length;
+      if (requestsUntilReady !== 2) {
+        throw new Error(
+          `expected exactly two backtest requests (pending, then ready), saw ${requestsUntilReady}`,
+        );
+      }
+      // Terminierung: nach `ready` darf kein weiterer Poll kommen. Das
+      // Intervall ist 10 s, also reichen 12 s Beobachtung fuer einen Beweis.
+      await sleep(12000);
+      if (backtestHits.length !== requestsUntilReady) {
+        throw new Error(
+          `the page kept polling /api/backtest after the result was ready (${backtestHits.length - requestsUntilReady} more request(s) within 12 s)`,
+        );
+      }
+      // Der Datenstand der Kennzahlen ist der letzte Bar, nicht "unbekannt".
+      const backtestTip = await client.evaluate(`
+        (() => {
+          const tip = document.querySelector('[data-testid="model-performance-section"] [data-testid="source-tip"]');
+          return tip ? tip.getAttribute('data-source-summary') || '' : '';
+        })()
+      `);
+      if (!backtestTip.includes("·")) {
+        throw new Error(`backtest card names no data stamp for its figures: "${backtestTip}"`);
+      }
+    } finally {
+      await client.send("Fetch.disable").catch(() => {});
+      stopBacktestIntercept();
+      await client.send("Network.setBypassServiceWorker", { bypass: false }).catch(() => {});
+    }
+    console.log("ui_backtest_pending ok [pending card shown, figures arrived on the second request, no further request within 12 s]");
+
     // 9. Alerts page (rule CRUD form)
     await navigate(client, `${FRONTEND_URL}/alerts`);
     await waitForCondition(

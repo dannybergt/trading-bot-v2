@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "../api/client";
@@ -108,9 +108,22 @@ type BacktestResult = {
   step?: number | null;
 };
 
+type BacktestStatus = "ready" | "pending" | "failed";
+
+/** Antworten, nach denen die Karte aufhoert zu pollen: 60 x 10 s = 10 min
+ *  bei freier Warteschlange; eine volle Schlange (8 x bis 165 s) kann
+ *  laenger brauchen, dann nennt die Karte das statt weiter "eine Minute"
+ *  zu versprechen. */
+const BACKTEST_MAX_POLLS = 60;
+
 type BacktestPayload = {
   symbol: string;
   result: BacktestResult;
+  /** Fehlt bei einem Backend vor 2026-09-15 — dann verhaelt sich die Karte wie zuvor. */
+  status?: BacktestStatus;
+  queued?: boolean;
+  computedAt?: string | null;
+  lastBar?: string | null;
 };
 
 type DataQualityField = {
@@ -551,13 +564,36 @@ export function AnalysisPage() {
     staleTime: 5 * 60_000,
   });
 
+  const queryClient = useQueryClient();
   const backtestQuery = useQuery({
     queryKey: ["backtest", decoded],
     queryFn: () =>
       apiFetch<BacktestPayload>(`/api/backtest/${encodeURIComponent(decoded)}`),
     enabled: !!decoded,
     staleTime: 30 * 60_000,
+    // Der Backtest rechnet im Hintergrund (18-165 s, gemessen 2026-09-11);
+    // der Endpunkt antwortet sofort mit `pending` und die Karte holt das
+    // Ergebnis nach. Der Poll endet bei `ready`/`failed`, bei einem Fehler
+    // der Anfrage selbst und spaetestens nach BACKTEST_MAX_POLLS Antworten
+    // — ein Tab, der offen bleibt, darf nicht endlos anfragen; die Karte
+    // sagt dann, dass es laenger dauert (`stalled`). `queued: false` heisst:
+    // die Warteschlange war voll, der Server haelt das 30 s — dann reicht
+    // ein Poll je Haltezeit. Der Zaehler laeuft ueber die Lebensdauer des
+    // Eintrags, nicht je Episode; bei Tagesbars ist das egal, bei
+    // Intraday-Bars waere er je Episode zu fuehren.
+    refetchInterval: (query) =>
+      query.state.status !== "error" &&
+      query.state.data?.status === "pending" &&
+      query.state.dataUpdateCount < BACKTEST_MAX_POLLS
+        ? query.state.data.queued === false
+          ? 30_000
+          : 10_000
+        : false,
   });
+  // Der Zaehler lebt im Query-State, nicht im Hook-Ergebnis; jede Poll-
+  // Antwort rendert neu, damit ist der Wert hier so frisch wie die Karte.
+  const backtestStalled =
+    (queryClient.getQueryState(["backtest", decoded])?.dataUpdateCount ?? 0) >= BACKTEST_MAX_POLLS;
 
   const dataQualityQuery = useQuery({
     queryKey: ["data-quality", decoded],
@@ -756,7 +792,9 @@ export function AnalysisPage() {
       <FundamentalsDetailSection detail={research?.fundamentalsDetail} />
       <ModelPerformanceSection
         backtest={backtestQuery.data?.result}
-        modelTrainedAt={stock?.prediction?.modelTrainedAt}
+        status={backtestQuery.data?.status}
+        stalled={backtestStalled}
+        lastBar={backtestQuery.data?.lastBar}
       />
       <ResearchDepthSection depth={research?.researchDepth} />
       <ResearchSignalsSection signals={research?.researchSignals} />
@@ -1896,13 +1934,63 @@ function DebtTable({
 
 function ModelPerformanceSection({
   backtest,
-  modelTrainedAt,
+  status,
+  stalled,
+  lastBar,
 }: {
   backtest: BacktestResult | undefined;
-  modelTrainedAt?: string | null;
+  status?: BacktestStatus;
+  /** Der Poll hat aufgehoert, obwohl noch `pending` — die Karte fuellt
+   *  sich nicht mehr von selbst und sagt das. */
+  stalled?: boolean;
+  lastBar?: string | null;
 }) {
   const { t } = useTranslation();
-  if (!backtest || !backtest.samples) return null;
+  const pendingKey = stalled ? "stalled" : "pending";
+  const refreshingKey = stalled ? "stalled" : "refreshing";
+  // Der Zeitpunkt der Kennzahlen ist der letzte Bar, den der Walk-Forward
+  // gesehen hat — der Datenstand selbst, nicht der Trainingszeitpunkt des
+  // Bildschirm-Modells (das ist ein anderes Modell).
+  const source = {
+    key: "model_performance",
+    provider: t("analysis.modelPerformance.provider"),
+    available: true,
+    asOf: lastBar ?? null,
+    asOfKind: lastBar ? ("data" as const) : ("unknown" as const),
+  };
+  if (!backtest || !backtest.samples) {
+    // Regel K: eine Luecke wird benannt, nicht gefuellt. `pending` ohne
+    // Ergebnis heisst "wird gerechnet", `failed` heisst "ist gescheitert";
+    // nur `ready` ohne Ergebnis heisst "nichts zu zeigen" — dann keine Karte.
+    if (status !== "pending" && status !== "failed") return null;
+    return (
+      <section className="card space-y-2" data-testid="model-performance-section">
+        <header>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            {t("analysis.modelPerformance.title")}
+          </h2>
+          <p className="mt-1">
+            {/* `pending`: die Quelle ist bekannt und arbeitet — "keine Quelle
+                geantwortet" waere ein Anbieterausfall, der nicht vorliegt.
+                `failed`: sie hat nicht geliefert. Ohne Kennzahlen gibt es
+                auch keinen Datenstand — `lastBar` eines gescheiterten Laufs
+                ist keiner (verifier 2026-09-16). */}
+            <SourceTip
+              source={{ ...source, available: status === "pending", asOf: null, asOfKind: "unknown" }}
+            />
+          </p>
+        </header>
+        <p
+          className={`text-xs ${status === "failed" ? "text-red-300" : "text-slate-400"}`}
+          data-testid={`model-performance-${status}`}
+        >
+          {status === "failed"
+            ? t("analysis.modelPerformance.failed")
+            : t(`analysis.modelPerformance.${pendingKey}`)}
+        </p>
+      </section>
+    );
+  }
 
   const fmtPct = (value: number | null | undefined): string => {
     if (value == null || Number.isNaN(value)) return "—";
@@ -1945,26 +2033,16 @@ function ModelPerformanceSection({
             Herkunftskarte: die Guetezahlen stammen aus dem
             Walk-Forward-Lauf desselben Modells. */}
         <p className="mt-1">
-          <SourceTip
-            source={{
-              key: "model_performance",
-              provider: "Walk-Forward-Backtest (lokales Modell)",
-              available: true,
-              asOf: modelTrainedAt ?? null,
-              asOfKind: modelTrainedAt ? "trained" : "unknown",
-            }}
-          />
+          <SourceTip source={source} />
         </p>
         <p className="text-xs text-slate-500">
-          {t("analysis.modelPerformance.subtitle", {
-            count: backtest.samples,
-            trained: modelTrainedAt
-              ? t("analysis.modelPerformance.trainedAt", {
-                  when: new Date(modelTrainedAt).toLocaleString(),
-                })
-              : "",
-          })}
+          {t("analysis.modelPerformance.subtitle", { count: backtest.samples })}
         </p>
+        {status === "pending" ? (
+          <p className="text-xs text-slate-400" data-testid="model-performance-pending">
+            {t(`analysis.modelPerformance.${refreshingKey}`)}
+          </p>
+        ) : null}
       </header>
 
       <dl className="grid gap-3 md:grid-cols-3">

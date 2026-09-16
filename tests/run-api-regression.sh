@@ -359,6 +359,67 @@ assert crypto_events_payload["provider"]["status"] == "unsupported", (
 )
 print("symbol events provider status names its cause ok")
 
+# The backtest never computes in the request path (2026-09-15): the endpoint
+# answers ready (result known or nothing to compute), pending (a job is
+# queued or running) or failed, and a poll while a job is open must not
+# touch a provider. What this run can prove depends on the host: without
+# provider access the history is synthetic, the endpoint refuses to compute
+# (Regel K) and answers ready + empty at once — the pending path is then
+# only covered by the unit tests. With real bars the first call must be
+# pending and a second call right after it must come back well under a
+# second, because it is served from the registry alone. The observed mode is
+# printed so nobody reads the synthetic case as the full proof.
+import time as _time
+started_backtest = _time.monotonic()
+backtest = requests.get(f"{base}/api/backtest/AAPL", headers=headers, timeout=30)
+first_backtest_s = _time.monotonic() - started_backtest
+backtest.raise_for_status()
+backtest_payload = backtest.json()
+assert backtest_payload["status"] in {"ready", "pending", "failed"}, (
+    f"backtest status is not a known state: {backtest_payload.get('status')!r}"
+)
+assert "result" in backtest_payload and "samples" in backtest_payload["result"], (
+    "backtest answer has no result block"
+)
+if backtest_payload.get("synthetic"):
+    assert backtest_payload["status"] == "ready", (
+        "synthetic history must not enqueue a job — nothing rides on placeholder prices"
+    )
+    assert backtest_payload["result"]["samples"] == 0, (
+        f"synthetic history produced {backtest_payload['result']['samples']} backtest samples"
+    )
+    # The seconds here are the provider chain timing out down to the
+    # placeholder, not a computation — the refusal itself is free.
+    backtest_mode = f"synthetic placeholder — refused without computing, {first_backtest_s:.2f} s incl. provider timeouts; pending path covered by unit tests only"
+elif backtest_payload["status"] == "ready" and backtest_payload["result"]["samples"] > 0:
+    # The registry lives as long as the process: a stack that already
+    # computed AAPL (an earlier run, the UI regression, a verifier) answers
+    # ready at once, and the pending path is simply not observed this run.
+    # Only a poll while a job is open has the peek shortcut, so there is no
+    # timing claim to make here either.
+    backtest_mode = f"real bars, already computed before this run ({backtest_payload['result']['samples']} samples) — pending path not observed"
+else:
+    assert backtest_payload["status"] == "pending", (
+        f"first real-data call should enqueue and answer pending, got {backtest_payload['status']!r}"
+    )
+    started_poll = _time.monotonic()
+    poll = requests.get(f"{base}/api/backtest/AAPL", headers=headers, timeout=30)
+    poll_s = _time.monotonic() - started_poll
+    poll.raise_for_status()
+    poll_status = poll.json()["status"]
+    assert poll_status in {"pending", "ready", "failed"}
+    if poll_status == "pending":
+        assert poll_s < 1.0, f"a poll while the job is open took {poll_s:.2f} s — it must not touch a provider"
+        backtest_mode = f"real bars — first call pending in {first_backtest_s:.2f} s, poll in {poll_s:.3f} s"
+    else:
+        # The job finished between the two calls; the poll ran the full path.
+        backtest_mode = f"real bars — first call pending in {first_backtest_s:.2f} s, job done before the poll ({poll_status})"
+unauthenticated_backtest = requests.get(f"{base}/api/backtest/AAPL", timeout=30)
+assert unauthenticated_backtest.status_code == 401, (
+    f"backtest without a token answered {unauthenticated_backtest.status_code}"
+)
+print(f"backtest never blocks the request path ok [{backtest_mode}]")
+
 crypto_research_full = requests.get(
     f"{base}/api/research/BTC/USD",
     headers=headers,

@@ -276,7 +276,7 @@ class MarketDataService:
             return pd.DataFrame()
         yf_period = {
             "1d": "5d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
-            "6mo": "6mo", "1y": "1y", "max": "max",
+            "6mo": "6mo", "1y": "1y", "2y": "2y", "max": "max",
         }.get(period, "6mo")
         hist = call_with_timeout(
             lambda: yf.Ticker(to_yfinance_symbol(symbol)).history(
@@ -481,27 +481,26 @@ class MarketDataService:
             TICKER_INFO_TTL_SECONDS,
         )
         
-    def get_stock_data(
+    def get_history_frame(
         self,
         symbol: str,
         period: str = "6mo",
         interval: str = "1d",
-        user=None,
         *,
-        include_news: bool = True,
-        include_fundamentals: bool = True,
         asset_profile: dict | None = None,
-    ):
-        """
-        Fetch historical data and calculate indicators.
+    ) -> tuple[pd.DataFrame, bool, dict]:
+        """Bare OHLCV bars for `symbol` — Alpaca, then the asset-class
+        provider, then yfinance for daily stock bars, then the synthetic
+        placeholder — without indicators, news, fundamentals or the on-screen
+        prediction. Returns `(bars, synthetic, asset_profile)`; the profile
+        comes back because the stock refinement may sharpen it when the
+        caller did not supply one.
 
-        `asset_profile` ist das bereits ermittelte Profil des Aufrufers. Wer es
-        mitgibt, bekommt genau diese Einstufung zurueck — die Funktion ermittelt
-        sie weder neu noch korrigiert sie sie ueber einen Stammdatenabruf. Das
-        ist keine Bequemlichkeit, sondern der Unterschied zwischen einem und
-        keinem yfinance-`.info`-Aufruf pro Symbol im Anfragepfad; und es haelt
-        die Einstufung, die der Nutzer sieht, mit der zusammen, mit der
-        gerechnet wird.
+        Split out of `get_stock_data` for the backtest endpoint: it needs
+        the bars and nothing else, and paid 7–22 s for a cold on-screen
+        prediction per first call (verifier, 2026-09-16) — with a throttled
+        provider even 25–287 s on the placeholder, only to learn it was
+        synthetic.
         """
         df = pd.DataFrame()
         used_synthetic = False
@@ -509,8 +508,13 @@ class MarketDataService:
         caller_supplied_profile = asset_profile is not None
         if not caller_supplied_profile:
             asset_profile = self.get_asset_profile(symbol)
-        provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
-        days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "max": 1000}
+        # Jede Zeitraum-Tabelle in diesem Dienst (hier, `get_yfinance_history_df`,
+        # `_generate_mock_data`) faellt fuer einen unbekannten Wert still auf
+        # ihren Default. So bekam der Backtest mit "2y" 130 Bars, "6mo" und 180
+        # Tage — und fand nie die 185 Zeilen fuer ein Trainingsfenster. Ein neuer
+        # Zeitraum gehoert in alle drei; `test_two_year_period_reaches_every_history_source`
+        # haelt das fuer "2y".
+        days_map = {"1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 260, "1y": 500, "2y": 504, "max": 1000}
         limit = days_map.get(period, 130)
         if self.alpaca:
             # map period/interval to alpaca args
@@ -535,7 +539,6 @@ class MarketDataService:
                 refined_profile = self.get_asset_profile(symbol, ticker_info=refined_ticker_info)
                 if refined_profile.get("assetClass") != asset_profile.get("assetClass"):
                     asset_profile = refined_profile
-                    provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
 
         if df.empty:
             df = self.get_provider_history_df(symbol, asset_profile=asset_profile, limit=limit)
@@ -551,7 +554,36 @@ class MarketDataService:
             logger.warning("market_data_empty_using_mock symbol=%s period=%s interval=%s", symbol, period, interval)
             df = self._generate_mock_data(symbol, period, interval)
             used_synthetic = True
-            
+        return df, used_synthetic, asset_profile
+
+    def get_stock_data(
+        self,
+        symbol: str,
+        period: str = "6mo",
+        interval: str = "1d",
+        user=None,
+        *,
+        include_news: bool = True,
+        include_fundamentals: bool = True,
+        asset_profile: dict | None = None,
+    ):
+        """
+        Fetch historical data and calculate indicators.
+
+        `asset_profile` ist das bereits ermittelte Profil des Aufrufers. Wer es
+        mitgibt, bekommt genau diese Einstufung zurueck — die Funktion ermittelt
+        sie weder neu noch korrigiert sie sie ueber einen Stammdatenabruf. Das
+        ist keine Bequemlichkeit, sondern der Unterschied zwischen einem und
+        keinem yfinance-`.info`-Aufruf pro Symbol im Anfragepfad; und es haelt
+        die Einstufung, die der Nutzer sieht, mit der zusammen, mit der
+        gerechnet wird.
+        """
+        caller_supplied_profile = asset_profile is not None
+        df, used_synthetic, asset_profile = self.get_history_frame(
+            symbol, period, interval, asset_profile=asset_profile
+        )
+        provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
+
         # Calculate Indicators
         df_analyzed = calculate_indicators(df)
         
@@ -731,7 +763,7 @@ class MarketDataService:
         from datetime import datetime, timedelta
         
         # Determine number of points based on period/interval
-        days_map = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "max": 1000}
+        days_map = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "max": 1000}
         days = days_map.get(period, 180)
         
         end_date = datetime.now()
