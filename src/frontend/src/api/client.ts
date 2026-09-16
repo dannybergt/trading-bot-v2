@@ -110,10 +110,15 @@ export async function apiFetch<T = unknown>(
       (payload && typeof payload === "object" && "detail" in payload
         ? (payload as { detail?: unknown }).detail
         : payload) ?? response.statusText;
+    // `detail` is what FastAPI put under `detail` — a string or the
+    // structured reason ({reason, breakdown|symbol}). Passing the whole
+    // payload here made every reader of `error.detail.reason` see
+    // `undefined`: the Net-Yield-Gate and the no-price rejection both
+    // rendered the generic sentence (verifier, 2026-09-16).
     throw new ApiError(
       response.status,
       typeof detail === "string" ? detail : `Request failed: ${response.status}`,
-      payload,
+      detail,
     );
   }
   return payload as T;
