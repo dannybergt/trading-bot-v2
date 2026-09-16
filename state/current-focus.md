@@ -1,5 +1,52 @@
 # Current Focus
 
+## SESSION-ABSCHLUSS 2026-09-16T16:05Z: Der Backtest, der nachgewiesen im Hintergrund rechnet — und die Vorhersage, die er nie brauchte
+
+**Stand:** `main` auf `eb17b77`. Branch `fix/backtest-zwei-jahre` auf `c67bd9a`, **mit Lease gepusht**, PR #30
+(Entwurf → Text nach §15 neu geschrieben, CI-Lauf ausstehend beim Schreiben dieser Zeile). Unit **451 -> 453 OK**
+(skipped=1). Vier Commits diese Session, jeder durch ein Tor gefunden, keiner durch Nachdenken:
+
+| Commit | Inhalt | Gefunden von |
+| --- | --- | --- |
+| `babcdad` | Abgewiesene Anfrage 30 s in der Registry halten (`_REFUSED`); Karte pollt bei `queued:false` alle 30 s, sagt nach 60 Antworten „dauert laenger" (`stalled`); api-regression vertraegt einen zweiten Lauf; Barriere im Concurrency-Test (Mutation ohne Lock 5/5 rot statt 3/7); N1/N2 | `reviewer` W1–W4, N1, N2 |
+| `3939121` | **`get_history_frame`** aus `get_stock_data` herausgezogen — der Endpunkt holt nur Bars + Indikatoren, keine Bildschirm-Vorhersage mehr im Anfragepfad; Wortlaut „refused at once in 8.83 s" und „keine Quelle geantwortet" ueber der `pending`-Karte | `verifier` B-02/B-15 widerlegt, K1 |
+| `c67bd9a` | Provider-Label der Modellguete i18n (DE/EN); kein Datenstand auf der Karte ohne Kennzahlen | `verifier` Nebenbefunde |
+| (dieser) | STATE, zwei ADR-Nachtraege, V5 geschaerft, session-log, project-status | — |
+
+**Tore diese Session:**
+- **R** `reviewer`: kein Blocker, W1–W4 + N1/N2 → alle umgesetzt (`babcdad`). `ops-`/`migration-reviewer` n/a (strukturell).
+- **S** `security-reviewer`: kein Blocker. gitleaks 2 Commits 0 Leaks; `pip-audit` 33 Advisories / `npm audit` 10 — **alle Vorbestand**, Lockfiles unveraendert (#3 HOCH, eigener PR, s. unten). #1 MITTEL (kein Nutzer-Kontingent am Endpunkt) und #2 NIEDRIG (Symbol ungeprueft) → offene Threads, nicht in diesem PR.
+- **V** `verifier`, zwei Laeufe (`artifacts/verification/20260916T140824Z-4bbcab8/`, `20260916T152855Z-3939121/`):
+  Lauf 1 auf `4bbcab8`: 10/15 nachgewiesen, **B-02 widerlegt** (Erstantwort 8,7–9,9 s isoliert, 22 s im Browser bei Load 17), **B-15 widerlegt** (synthetischer Pfad 24,9 s, unter Fremdlast 287 s), B-04 widerlegt (Polls > 1 s unter Last). Ursache aller drei: der Endpunkt rief `get_stock_data` und zahlte damit die kalte Bildschirm-Vorhersage (7–22 s), die die Antwort nicht traegt.
+  Lauf 2 auf `3939121`: **8/10 nachgewiesen** — Erstantwort **0,20/0,29 s** (mit Schleifen 0,48 s), synthetischer Pfad durch nginx **3,5 s**, Polls mit Schleifen **0/74 > 1 s** (max 0,49 s), zwei Erstaufrufe = ein Job, Stempel stabil, neuer Bar rechnet neu und traegt das alte Ergebnis mit, `failed` ohne Endlos-Poll, 401, Deckel-Sperre (7 Polls in 30 s ohne Historienabruf, danach voller Pfad), UI manuell per CDP: pending → gefuellt ohne Reload, Poll endet, Herkunftshinweis nennt die Quelle. **Nicht pruefbar: B-01** (Realdaten durch den Anbieter — yfinance-Crumb-Pfad 429 vom Host, Chart-API selbst 200).
+- **C** CI: nach dem Push, s. PR #30.
+- api-regression 2x gruen (Backtest-Schritt synthetisch: 8,84 s → **1,10 s**); Latenz-Sonde gruen (146 Pings, Median 9 ms, max 70 ms).
+
+**Luecken, benannt (verifier Lauf 2):** W1-Teilfall „Job A wird innerhalb der 30-s-Sperre von B fertig" nur im Unit-Test; `stalled` (60 Antworten) nur im Bundle; Deckel-Poll alle 30 s nur im Bundle; `ui_backtest_pending` nur in CI (kein `node`); B-01 s. o.
+
+**Offene Threads (hier, jetzt, machbar):**
+1. **Nutzer-Kontingent am Backtest-Endpunkt** (security-reviewer #1, MITTEL): Deckel ist global, kein Rate-Limit — ein Member bindet den Worker mit 8 Symbolen dauerhaft. `BACKTEST_MAX_JOBS_PER_USER` unter demselben Lock + Enqueue-Fenster am Endpunkt; `_enforce_rate_limit` aus `auth_routes.py` nach `app/rate_limit.py` heben. Eigener Schnitt nach Merge von #30. Ausloeser: zweiter Nutzer oder `backtest_queue_full` im Log.
+2. **`threadpoolctl.threadpool_limits` nur im Job-Thread** (ADR-Folgeschnitt): Jobdauer mit Schleifen 94 s statt 19 s bei Load 5–13 — `n_jobs=-1` je Ensemble-Mitglied konkurriert mit Retrain/Scanner. Messbar ueber `backtest_job_finished duration_s` und den Poll-Mitschnitt.
+3. **Symbol-Validierung vor `peek`** (security-reviewer #2, NIEDRIG): `is_plausible_symbol_query` existiert (`asset_metadata.py:36`), wird nur bei der Suche genutzt — gleiches Muster in `/api/stock`, `/api/research`; ein Schnitt fuer alle.
+4. **Analyse-Seite uebersetzen** (129 Literale, `OFFENE_SEITEN` in `tests/test_page_i18n.py`) — unveraendert der naechste Produktschritt nach #30.
+5. Nebenbefund: `provider_call_timeout` verlaesst den yfinance-Thread, der weiterlaeuft und seine Fehler unter der **naechsten** Request-ID loggt (Zuordnung irrefuehrend, kein Fehlverhalten).
+
+**Nicht hier loesbar (Betreiber):**
+- **Dependency-Advisories** (security-reviewer #3, HOCH, Vorbestand): starlette 0.41.3 (7), python-multipart 0.0.20 (6), pip, urllib3 1.26, python-jose 3.3.0 (Algorithm-Confusion hier nicht ausnutzbar: `algorithms=["HS256"]`), requests, lightgbm; npm: react-router-dom 7.x Open Redirect (Backslash in `<Link>`), vite. Eigener PR `security/deps-2026-09` mit Nachweis am laufenden Prozess (FastAPI-Bump zieht Starlette ueber ein Major). Dazu `pip-audit`/`npm audit` als blockierende CI-Schritte; Trivy-Action auf SHA pinnen und `exit-code: '1'` (#4).
+- **`node` installieren** (`sudo zypper install -y nodejs24`, freigegeben, nicht erfolgt) — bis dahin UI-Regression nur in CI.
+- **Zielzeile V5** entscheiden (`docs/verification/schritte-ohne-zielzeile.md:200`, heute geschaerft: „Poll bei offenem Job", Lastbedingung). Neue Beweisschritte ohne Zielzeile: Deckel-Sperre, `stalled`, Erstantwortzeit.
+- **B-01 Realdaten**: anderer Egress oder Alpaca-Key in `.env.local` (Alpaca ist erster Pfad in `get_history_frame`); alternativ Stufe 3 gegen die deployte Instanz.
+- **`artifacts/verification/stack-loops/pg/`** gehoert uid 70 (Postgres im Container) — `sudo rm -rf`, gitignored.
+- **PR #30 mergen**: erst CI gruen, dann `FREIGABE` (§14). Stufe 3 (Test-Account, VAPID, `FMP_API_KEY`) unveraendert.
+
+**Bewusst nicht angefasst:** `n_jobs=-1` (Thread 2); Workbox `NetworkOnly` fuer `/api/backtest/` (Produktfrage); Persistenz der Ergebnisse (ein Worker); `prepare_features`-Label; `"1y": 500`; Untertitel „persisted predictor" (Wortlaut, eigener Schnitt); Trivy/Dependencies (Betreiber-PR); 26 Test-Platzhalter-Schluessel, die gitleaks ausloesen (security-reviewer #5, `conftest.py`-Fixture oder `.gitleaks.toml`).
+
+**Annahmen, widerrufbar:** `BACKTEST_REFUSAL_HOLD_S = 30`; 30-s-Poll bei `queued:false`; `stalled`-Text verlangt Reload statt Wiederanlauf; `get_history_frame` gibt das Profil zurueck statt es zu mutieren; Provider-Label „Walk-forward backtest (local model)" auf Englisch.
+
+**Allokierte Ports/Ressourcen:** keine. Eigene Container (`tbv2-unit-full`, `tbv2-verify-*`, `trading-bot-v2-api-*`, `tbv2-loopprobe-*`) alle entfernt; keine Volumes angelegt. Fremd auf diesem Host, nicht angefasst: `pulsight-verify1x-*`, `nex-grid-*`, `nex-im-*`, namenlose Build-/Testcontainer anderer Sessions.
+
+**Naechster sinnvoller Schritt:** CI von PR #30 lesen (inkl. `ui_backtest_pending`); ist sie gruen → Rueckfrage `FREIGABE` fuer Merge #30. Danach Thread 1 (Nutzer-Kontingent) als `security/backtest-user-quota`, dann Thread 4 (Analyse-Seite uebersetzen).
+
 ## SESSION-ABSCHLUSS 2026-09-15T19:10Z: Backtest rechnet im Hintergrund — gebaut, unit-gruen, noch nicht nachgewiesen
 
 **Stand:** `main` auf `eb17b77`. Branch `fix/backtest-zwei-jahre` auf `main` rebased und mit Lease gepusht

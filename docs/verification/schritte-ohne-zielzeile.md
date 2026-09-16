@@ -205,9 +205,15 @@ Vorschlag fuer den Zielsatz: "Die Modellguete auf `/analysis/<symbol>` stammt
 aus einem Walk-Forward auf echten Kursen; die Seite wartet nie auf die
 Rechnung, zeigt waehrenddessen, dass gerechnet wird, und fuellt sich von
 selbst." Beobachtbares Kriterium: `/api/backtest/<symbol>` antwortet durch
-nginx immer mit 200 (`ready`/`pending`/`failed`), ein Poll bei laufendem Job
-unter einer Sekunde; auf Platzhalterkursen `ready` mit null Samples und
-`synthetic: true`. Hintergrund: der Endpunkt war vom ersten Tag an strukturell
-leer (kein Zeitraum lieferte genug Bars) und danach vier Verifier-Laeufe lang
-zu langsam fuer den Proxy (STATE 2026-09-11) — nichts davon war rot, weil keine
-Zielzeile es verlangte.
+nginx mit 200 (`ready`/`pending`/`failed`) in der Zeit, die der Kursabruf beim
+Anbieter kostet, und rechnet dabei nichts; ein Poll **bei offenem Job** unter
+einer Sekunde (nach `ready` zahlt ein Aufruf den Kursabruf erneut — das ist
+kein Poll mehr); auf Platzhalterkursen `ready` mit null Samples und
+`synthetic: true`. Die Zeitangaben gelten bei Host-Load unter der Kernzahl —
+darueber hungert der Prozess am eigenen Job (`n_jobs=-1`) und am Retrain, und
+die Sekunde reisst (verifier 2026-09-16: 1 von 55 Polls bei Load 7–14, 15 von
+74 bei Load 16–33). Hintergrund: der Endpunkt war vom ersten Tag an strukturell
+leer (kein Zeitraum lieferte genug Bars), danach vier Verifier-Laeufe lang zu
+langsam fuer den Proxy (STATE 2026-09-11), und zuletzt rechnete er im
+Anfragepfad die Bildschirm-Vorhersage, die die Antwort gar nicht traegt
+(2026-09-16) — nichts davon war rot, weil keine Zielzeile es verlangte.
