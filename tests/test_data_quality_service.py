@@ -292,6 +292,10 @@ class PriceHistoryWiringTests(unittest.TestCase):
         end = datetime.now(timezone.utc) - timedelta(days=142)
         idx = pd.date_range(end=end.replace(tzinfo=None), periods=260, freq="B")
         frame = pd.DataFrame({"Close": [100 + i for i in range(260)]}, index=idx)
+        # Business-Day-Index: faellt `end` auf ein Wochenende, endet er am
+        # Freitag davor — die Erwartung kommt deshalb aus dem Index, nicht
+        # aus der 142 (reviewer: montags/dienstags sonst rot).
+        expected_age = (datetime.now(timezone.utc) - idx[-1].to_pydatetime().replace(tzinfo=timezone.utc)).days
         report = dq.evaluate_symbol_data_quality(
             symbol="AAPL",
             asset_class="stock",
@@ -301,7 +305,7 @@ class PriceHistoryWiringTests(unittest.TestCase):
         price_field = next(f for f in report["fields"] if f["key"] == "price_history")
         self.assertEqual(price_field["confidence"], dq.PARTIAL)
         self.assertIn("stale", price_field["provider"])
-        self.assertIn("142 days", price_field["provider"])
+        self.assertIn(f"{expected_age} days", price_field["provider"])
 
         # Frische Bars (juengster Bar heute) bleiben FULL — auch in der
         # serialisierten Form des Endpunkts (`chart_data` mit `time`).

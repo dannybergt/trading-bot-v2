@@ -326,8 +326,23 @@ if is_synthetic:
     expected = {"fallback"}
     mode = f"synthetic placeholder ({bars} bars) — no provider reachable from this host"
 elif bars >= 30:
-    expected = {"full"}
-    mode = f"real bars ({bars})"
+    # Enough bars, but are they current? The grader calls a newest bar
+    # older than 7 calendar days "stale" and grades partial (2026-09-16:
+    # the deployed instance served 260 bars ending in April as full).
+    # The harness reads the same date the grader reads, so a stale host
+    # is reported as such instead of as a contradiction.
+    import datetime as _dt
+    last_time = str((stock_for_quality_payload.get("chart_data") or [{}])[-1].get("time") or "")
+    try:
+        last_bar_age_days = (_dt.datetime.utcnow() - _dt.datetime.fromisoformat(last_time)).days
+    except ValueError:
+        last_bar_age_days = None
+    if last_bar_age_days is not None and last_bar_age_days > 7:
+        expected = {"partial"}
+        mode = f"real bars ({bars}), stale — newest bar {last_bar_age_days} days old"
+    else:
+        expected = {"full"}
+        mode = f"real bars ({bars})"
 elif bars > 0:
     expected = {"partial"}
     mode = f"real bars ({bars}, partial)"

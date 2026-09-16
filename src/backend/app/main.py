@@ -1094,7 +1094,9 @@ class WatchlistAlertSettingsRequest(BaseModel):
 class PaperOrderRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    symbol: str
+    # Longest real ticker form in this app is "BTC/USD"-style; 24 matches
+    # `is_plausible_symbol_query`, which decides inside `place_order`.
+    symbol: str = Field(min_length=1, max_length=24)
     side: str
     qty: float = Field(gt=0)
     limit_price: float | None = Field(default=None, alias="limitPrice")

@@ -33,6 +33,10 @@ PARTIAL = "partial"    # Data present but from a fallback provider.
 FALLBACK = "fallback"  # Heuristic / mock / cached path.
 MISSING = "missing"    # No provider produced data; the section will be empty.
 
+#: Calendar days after which the newest bar counts as stale. Daily bars
+#: are at most ~4 days old over a long weekend plus a holiday.
+STALE_BARS_AFTER_DAYS = 7
+
 
 # Static catalogue used by the admin coverage matrix and the per-symbol
 # upgrade hints. Each entry encodes what the provider covers, the
@@ -372,37 +376,21 @@ def evaluate_symbol_data_quality(
     }
 
 
-#: Calendar days after which the newest bar counts as stale. Daily bars
-#: are at most ~4 days old over a long weekend plus a holiday.
-STALE_BARS_AFTER_DAYS = 7
-
-
 def _last_bar_age_days(stock: dict[str, Any]) -> int | None:
     """Calendar days between the newest bar and now, or None when the
-    payload carries no readable bar time. Same two shapes as
-    `_bar_count`: a DataFrame under `data` (DatetimeIndex) or the
-    serialised candles under `chart_data` (`time` as `YYYY-MM-DD[ HH:MM]`)."""
-    frame = stock.get("data")
-    last: datetime | None = None
-    if frame is not None:
-        try:
-            if len(frame) and hasattr(frame, "index"):
-                value = frame.index[-1]
-                last = value.to_pydatetime() if hasattr(value, "to_pydatetime") else value
-        except (TypeError, AttributeError, IndexError):
-            last = None
-    if last is None:
-        candles = stock.get("chart_data")
-        if candles:
-            try:
-                raw = str(candles[-1].get("time") or "")
-                last = datetime.fromisoformat(raw) if raw else None
-            except (ValueError, AttributeError, TypeError):
-                last = None
-    if not isinstance(last, datetime):
+    payload carries no readable bar time. The bar itself comes from
+    `metric_sources.last_bar_timestamp` — the same reading the source
+    card shows, so badge and card cannot disagree on the date."""
+    raw = metric_sources.last_bar_timestamp(stock)
+    if not raw:
         return None
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
+    try:
+        last = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    # Bar stamps carry no offset here; a few hours either way do not
+    # matter against a threshold of days.
+    last = last.replace(tzinfo=timezone.utc)
     return max(0, (datetime.now(timezone.utc) - last).days)
 
 

@@ -19,8 +19,11 @@ def _iso_timestamp(value):
     (deployed instance, 2026-09-16)."""
     if value is None or value == "":
         return None
-    if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value / 1_000_000_000, tz=timezone.utc).isoformat()
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(value / 1_000_000_000, tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)

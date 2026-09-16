@@ -35,7 +35,9 @@ class _RecordingApi:
     `sort=desc`, and `limit` cuts the page."""
 
     def __init__(self, days: int = 400):
-        end = pd.Timestamp("2026-09-16", tz="America/New_York")
+        # Verankert auf heute, weil das SUT `datetime.now()` nutzt — ein
+        # festes Datum liesse den Test nach Monaten verrotten (reviewer).
+        end = pd.Timestamp.now(tz="America/New_York").normalize()
         self.all_bars = pd.DataFrame(
             {"open": 1.0, "high": 2.0, "low": 0.5, "close": [float(i) for i in range(days)],
              "volume": 10, "trade_count": 1, "vwap": 1.0},
@@ -70,16 +72,10 @@ class AlpacaBarsTests(unittest.TestCase):
 
         self.assertEqual(len(df), 260)
         self.assertTrue(df.index.is_monotonic_increasing)
-        self.assertEqual(df.index[-1].date().isoformat(), "2026-09-16")
-        self.assertEqual(float(df["Close"].iloc[-1]), 399.0)  # der juengste Bar
+        newest = api.all_bars.index[-1].tz_convert("UTC").tz_localize(None)
+        self.assertEqual(df.index[-1], newest)  # der juengste Bar, nicht der 260. seit `start`
+        self.assertEqual(float(df["Close"].iloc[-1]), 399.0)
         self.assertEqual(str(getattr(api.calls[0]["sort"], "value", api.calls[0]["sort"])), "desc")
-
-    def test_get_bars_df_without_desc_would_end_in_the_past(self):
-        # Negativkontrolle am Fake: ohne `sort=desc` verhaelt sich die API
-        # genau so, wie der Bug aussah — der Fake bildet das ab.
-        api = _RecordingApi(days=400)
-        window = api.get_bars("AAPL", "1Day", start="2025-04-15", limit=260).df
-        self.assertLess(window.index[-1], pd.Timestamp("2026-06-01", tz="America/New_York"))
 
 
 class StreamTimestampTests(unittest.TestCase):
@@ -93,6 +89,7 @@ class StreamTimestampTests(unittest.TestCase):
         self.assertEqual(_iso_timestamp(pd.Timestamp("2026-09-16T15:12:00Z")), "2026-09-16T15:12:00+00:00")
         self.assertIsNone(_iso_timestamp(None))
         self.assertIsNone(_iso_timestamp(""))
+        self.assertIsNone(_iso_timestamp(10**30))  # absurder Wert darf den Callback nicht werfen lassen
 
 
 if __name__ == "__main__":

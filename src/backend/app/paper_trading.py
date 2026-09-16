@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
+from app.asset_metadata import is_plausible_symbol_query
 from app.models import PaperOrder, PaperTransaction, User
 
 logger = logging.getLogger(__name__)
@@ -316,6 +317,11 @@ def place_order(
     canonical_symbol = symbol.upper().strip()
     if not canonical_symbol:
         raise ValueError("symbol required")
+    # Shape check before the first provider call: a string no market
+    # would accept as a ticker must not cost the operator's provider
+    # quota (up to three lookups per attempt) or an order row.
+    if not is_plausible_symbol_query(canonical_symbol):
+        raise NoPriceForSymbol(canonical_symbol)
 
     latest_close = latest_close_provider(canonical_symbol)
     # A market order needs a price now; without one `_try_fill` leaves it
