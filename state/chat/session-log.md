@@ -5,7 +5,8 @@
   Erledigt: Befund — kein Key fehlt; `get_bars_df` lieferte die aeltesten N Bars (AAPL/AMZN/SPY bis 2026-04-27, BTC/USD bis 2025-12-29), die einzige Order (`AMAZON`, Market) hing 21 h still pending, Stream-Callback warf je Bar, Datenqualitaet sagte `full`. Branch `fix/juengste-bars-und-order-ohne-kurs`, PR #33: `sort=desc`; Market-Order ohne Kurs → 400 mit Symbol + Audit + Satz DE/EN; Symbol-Form vor dem Anbieter; Stale-Bewertung ueber `metric_sources.last_bar_timestamp`; `client.ts` reicht `detail` weiter (Vorbestand: jede Ablehnung wurde zum Allgemeinsatz); UI-Schritt `ui_paper_order_no_price`; ADR 2026-09-16 (zweiter Eintrag), V6/V7.
   Verifikation: Unit 459 OK, api-regression 3x gruen, reviewer (B1 + W1–W3 behoben, F1 → Thread), security-reviewer (kein Blocker, #1 uebernommen), verifier 2 Laeufe (Backend nachgewiesen; UI erst widerlegt, dann nachgewiesen EN/DE + Net-Yield), CI gruen inkl. neuem UI-Schritt. Alpaca-Fix nur per Unit + Mutation (`'2026-04-10' != '2026-09-16'`) — Nachweis auf der Instanz nach dem Merge.
   Fehler in der eigenen Arbeit: (a) Probe mit `period="5d"` (zu wenig fuer Indikatoren) — mit 6mo wiederholt; (b) erste Abweisung traf auch Limit-Orders und brach die providerlose api-regression — auf Market-Orders begrenzt; (c) Stale-Test war wochentagsabhaengig, Alpaca-Fake auf ein festes Datum verankert — vom reviewer gefunden; (d) den UI-Pfad nur per `tsc` geprueft — der verifier fand den `ApiError.detail`-Vorbestand.
-  Offen: s. STATE Threads 6–9; Merge #33 auf `FREIGABE`, danach Probe auf BC-KI01.
+  Abschluss: #33 auf `FREIGABE` gemergt (`e231fe6`), publish gruen, Watchtower 20:03 UTC; Probe auf BC-KI01 20:06 UTC: juengster Bar aller vier Symbole 2026-09-16, `isoformat` 0 — Ursache 1 nachgewiesen. STATE per Docs-PR nachgezogen.
+  Offen: s. STATE Threads 6–10.
   Ports: keine; eigene Container entfernt; fremde nicht angefasst.
 
 - Datum: 2026-09-16
