@@ -425,6 +425,7 @@
     },
     "modelPerformance": {
       "title": "Modell-Performance",
+      "provider": "Walk-Forward-Backtest (lokales Modell)",
       "subtitle": "Walk-Forward-Backtest des persistierten Modells über die letzten {{count}} vorhergesagten Bars.",
       "pending": "Der Backtest wird gerechnet — diese Karte füllt sich von selbst, meist innerhalb einer Minute.",
       "refreshing": "Neue Bars sind da — der Backtest wird neu gerechnet; die Zahlen unten stammen aus dem vorigen Lauf.",

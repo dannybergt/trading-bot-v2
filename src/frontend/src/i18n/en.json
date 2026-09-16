@@ -425,6 +425,7 @@
     },
     "modelPerformance": {
       "title": "Model performance",
+      "provider": "Walk-forward backtest (local model)",
       "subtitle": "Walk-forward backtest of the persisted predictor over the last {{count}} predicted bars.",
       "pending": "The backtest is being computed — this card fills in by itself, usually within a minute.",
       "refreshing": "New bars arrived — the backtest is being recomputed; the figures below are from the previous run.",

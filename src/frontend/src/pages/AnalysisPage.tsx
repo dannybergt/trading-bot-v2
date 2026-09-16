@@ -1953,7 +1953,7 @@ function ModelPerformanceSection({
   // Bildschirm-Modells (das ist ein anderes Modell).
   const source = {
     key: "model_performance",
-    provider: "Walk-Forward-Backtest (lokales Modell)",
+    provider: t("analysis.modelPerformance.provider"),
     available: true,
     asOf: lastBar ?? null,
     asOfKind: lastBar ? ("data" as const) : ("unknown" as const),
@@ -1971,9 +1971,13 @@ function ModelPerformanceSection({
           </h2>
           <p className="mt-1">
             {/* `pending`: die Quelle ist bekannt und arbeitet — "keine Quelle
-                geantwortet" waere ein Anbieterausfall, der nicht vorliegt
-                (verifier 2026-09-16). `failed`: sie hat nicht geliefert. */}
-            <SourceTip source={{ ...source, available: status === "pending" }} />
+                geantwortet" waere ein Anbieterausfall, der nicht vorliegt.
+                `failed`: sie hat nicht geliefert. Ohne Kennzahlen gibt es
+                auch keinen Datenstand — `lastBar` eines gescheiterten Laufs
+                ist keiner (verifier 2026-09-16). */}
+            <SourceTip
+              source={{ ...source, available: status === "pending", asOf: null, asOfKind: "unknown" }}
+            />
           </p>
         </header>
         <p
