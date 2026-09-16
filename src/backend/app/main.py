@@ -1094,7 +1094,9 @@ class WatchlistAlertSettingsRequest(BaseModel):
 class PaperOrderRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    symbol: str
+    # Longest real ticker form in this app is "BTC/USD"-style; 24 matches
+    # `is_plausible_symbol_query`, which decides inside `place_order`.
+    symbol: str = Field(min_length=1, max_length=24)
     side: str
     qty: float = Field(gt=0)
     limit_price: float | None = Field(default=None, alias="limitPrice")
@@ -3192,6 +3194,18 @@ def create_paper_order(
         raise HTTPException(
             status_code=400,
             detail={"reason": exc.reason, "breakdown": exc.breakdown},
+        )
+    except paper_trading.NoPriceForSymbol as exc:
+        audit_service.log_event(
+            db,
+            user_id=current_user.id,
+            action=audit_service.ACTION_PAPER_ORDER_PLACE_REJECTED,
+            outcome="denied",
+            details={"symbol": req.symbol, "side": req.side, "reason": "no_price_for_symbol"},
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"reason": "no_price_for_symbol", "symbol": exc.symbol},
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

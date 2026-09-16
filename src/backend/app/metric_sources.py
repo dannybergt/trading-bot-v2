@@ -91,7 +91,7 @@ def build_source_map(
         # Seite sagt bereits, dass die Kurse erfunden sind.
         entries.append(_entry("price_history", provider=None, available=False))
     else:
-        bars_as_of = _last_bar_timestamp(stock)
+        bars_as_of = last_bar_timestamp(stock)
         provider_source = (stock.get("provider") or {}).get("source") if isinstance(stock.get("provider"), dict) else None
         entries.append(
             _entry(
@@ -121,7 +121,7 @@ def build_source_map(
     )
 
     composite = stock.get("composite") if isinstance(stock.get("composite"), dict) and not synthetic else {}
-    composite_as_of = _last_bar_timestamp(stock) if composite else None
+    composite_as_of = last_bar_timestamp(stock) if composite else None
     entries.append(
         _entry(
             "composite",
@@ -380,8 +380,10 @@ def _entry(
     }
 
 
-def _last_bar_timestamp(stock: dict[str, Any]) -> str | None:
-    """Datum des juengsten Kursbalkens, in beiden Payload-Formen.
+def last_bar_timestamp(stock: dict[str, Any]) -> str | None:
+    """Datum des juengsten Kursbalkens, in beiden Payload-Formen —
+    `YYYY-MM-DD[ HH:MM[:SS]]`, ohne Zeitzone. Auch der Grader in
+    `data_quality_service` liest hierueber (Stale-Erkennung).
 
     `service.get_stock_data` liefert den DataFrame unter `data`,
     `GET /api/stock/{symbol}` die serialisierten Kerzen unter

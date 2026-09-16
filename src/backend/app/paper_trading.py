@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
+from app.asset_metadata import is_plausible_symbol_query
 from app.models import PaperOrder, PaperTransaction, User
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,15 @@ def _resolve_fee_multiplier(asset_class: str | None) -> float:
     if asset_class is None:
         return DEFAULT_FEE_MULTIPLIER
     return FEE_MULTIPLIER_BY_ASSET_CLASS.get(asset_class, DEFAULT_FEE_MULTIPLIER)
+
+
+class NoPriceForSymbol(ValueError):
+    """No provider produced a price for the symbol — usually a typo or a
+    name instead of a ticker (AMAZON vs AMZN)."""
+
+    def __init__(self, symbol: str):
+        super().__init__(f"no price available for symbol {symbol!r}")
+        self.symbol = symbol
 
 
 class NetYieldGateRejection(Exception):
@@ -307,8 +317,21 @@ def place_order(
     canonical_symbol = symbol.upper().strip()
     if not canonical_symbol:
         raise ValueError("symbol required")
+    # Shape check before the first provider call: a string no market
+    # would accept as a ticker must not cost the operator's provider
+    # quota (up to three lookups per attempt) or an order row.
+    if not is_plausible_symbol_query(canonical_symbol):
+        raise NoPriceForSymbol(canonical_symbol)
 
     latest_close = latest_close_provider(canonical_symbol)
+    # A market order needs a price now; without one `_try_fill` leaves it
+    # pending forever and says nothing — a "AMAZON" (not a ticker) sat on
+    # the deployed instance for 21 hours as `pending` (2026-09-16). The
+    # gap is named here, at the boundary, with the symbol the user typed.
+    # A limit order may wait for the market (and for a provider that is
+    # down right now): it carries its own price and stays pending.
+    if limit_price is None and (latest_close is None or latest_close <= 0):
+        raise NoPriceForSymbol(canonical_symbol)
 
     asset_class: str | None = None
     if asset_class_resolver is not None:

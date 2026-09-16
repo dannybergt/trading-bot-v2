@@ -1234,6 +1234,63 @@ async function run() {
     );
     console.log("ui_paper_trading ok");
 
+    // 10b'. Eine Market-Order fuer ein Symbol ohne Kurs wird an der Grenze
+    // abgewiesen — und die Seite sagt es mit dem getippten Symbol, nicht
+    // mit dem Allgemeinsatz. Der Grund fuer diesen Schritt (2026-09-16):
+    // eine "AMAZON"-Order stand auf der deployten Instanz 21 h still auf
+    // pending; und als das Backend dann 400 mit Grund antwortete, zeigte
+    // die Seite trotzdem "Order could not be placed.", weil `ApiError.detail`
+    // die ganze Antwort trug und `detail.reason` ins Leere griff — dasselbe
+    // galt seit dem Scaffold fuer die Net-Yield-Ablehnung. Der Host hat
+    // keinen Anbieter, jedes Symbol ist ohne Kurs: das stellt die Bedingung
+    // her, statt sie zu unterstellen.
+    await navigate(client, `${FRONTEND_URL}/paper-trading`);
+    await waitForCondition(
+      client,
+      "paper trading form",
+      "!!document.querySelector('[data-testid=\"paper-trading-page\"] form')",
+      15000,
+    );
+    await client.evaluate(`
+      (() => {
+        const setValue = (element, value) => {
+          const prototype = Object.getPrototypeOf(element);
+          const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+          descriptor.set.call(element, value);
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        const form = document.querySelector('[data-testid="paper-trading-page"] form');
+        const inputs = form.querySelectorAll('input');
+        const symbol = form.querySelector('input[placeholder="AAPL"]');
+        const qty = form.querySelector('input[type="number"]');
+        if (!symbol || !qty) throw new Error("paper trading form missing symbol/qty inputs (" + inputs.length + " inputs)");
+        setValue(symbol, "AMAZON");
+        setValue(qty, "2");
+        form.requestSubmit();
+        return true;
+      })()
+    `);
+    await waitForCondition(
+      client,
+      "paper order rejection names the symbol",
+      "(() => { const el = document.querySelector('[data-testid=\"paper-form-error\"]'); return !!el && el.textContent.includes('AMAZON'); })()",
+      15000,
+    );
+    const paperRejection = await client.evaluate(
+      "document.querySelector('[data-testid=\"paper-form-error\"]').textContent",
+    );
+    if (/could not be placed|konnte nicht platziert/i.test(paperRejection)) {
+      throw new Error(`paper order rejection fell back to the generic sentence: "${paperRejection}"`);
+    }
+    const openOrdersAfterRejection = await client.evaluate(
+      "(document.querySelector('[data-testid=\"paper-tab-content-openOrders\"]') || document.body).innerText",
+    );
+    if (/AMAZON/.test(openOrdersAfterRejection)) {
+      throw new Error("a rejected order still shows up in the open orders list");
+    }
+    console.log(`ui_paper_order_no_price ok [rejected with reason: "${paperRejection}"]`);
+
     // 10b. Auto-Execution: Risikolimits speichern.
     //
     // Der Grund fuer diesen Schritt (2026-08-05): der Aufrufer serialisierte

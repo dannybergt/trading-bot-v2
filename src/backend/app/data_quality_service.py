@@ -20,6 +20,8 @@ opaque heuristic.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import os
 from typing import Any
 
@@ -30,6 +32,10 @@ FULL = "full"          # Live data from the primary provider for this field.
 PARTIAL = "partial"    # Data present but from a fallback provider.
 FALLBACK = "fallback"  # Heuristic / mock / cached path.
 MISSING = "missing"    # No provider produced data; the section will be empty.
+
+#: Calendar days after which the newest bar counts as stale. Daily bars
+#: are at most ~4 days old over a long weekend plus a holiday.
+STALE_BARS_AFTER_DAYS = 7
 
 
 # Static catalogue used by the admin coverage matrix and the per-symbol
@@ -217,7 +223,17 @@ def evaluate_symbol_data_quality(
         fields.append(_field("price_history", FALLBACK, "synthetic placeholder — no live provider data"))
     elif bars >= 30:
         provider = "Alpaca" if (stock.get("provider") or {}).get("source") == "Alpaca" else "yfinance / Alpha Vantage fallback"
-        fields.append(_field("price_history", FULL, provider))
+        age_days = _last_bar_age_days(stock)
+        if age_days is not None and age_days > STALE_BARS_AFTER_DAYS:
+            # Enough bars, but the newest is weeks old: the chart and the
+            # prediction rest on history, not on the market. 260 Alpaca
+            # bars ending 2026-04-27 graded FULL on 2026-09-16 while the
+            # quote beside them was current — nobody could see that from
+            # the badge (Regel K). Days are calendar days; the threshold
+            # covers a long weekend plus a holiday.
+            fields.append(_field("price_history", PARTIAL, f"{provider} — stale, last bar {age_days} days old"))
+        else:
+            fields.append(_field("price_history", FULL, provider))
     elif bars > 0:
         fields.append(_field("price_history", PARTIAL, "yfinance / Alpha Vantage fallback"))
     elif stock:
@@ -358,6 +374,24 @@ def evaluate_symbol_data_quality(
         "sources": sources,
         "upgradeHints": upgrades,
     }
+
+
+def _last_bar_age_days(stock: dict[str, Any]) -> int | None:
+    """Calendar days between the newest bar and now, or None when the
+    payload carries no readable bar time. The bar itself comes from
+    `metric_sources.last_bar_timestamp` — the same reading the source
+    card shows, so badge and card cannot disagree on the date."""
+    raw = metric_sources.last_bar_timestamp(stock)
+    if not raw:
+        return None
+    try:
+        last = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    # Bar stamps carry no offset here; a few hours either way do not
+    # matter against a threshold of days.
+    last = last.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - last).days)
 
 
 def _bar_count(stock: dict[str, Any]) -> int:

@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 74 von 89 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 75 von 90 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
@@ -122,6 +122,19 @@ sich genommen aber kein Produktversprechen. `ui_analysis` prueft heute nur, dass
 ein Chart-Element rendert; die inhaltlichen Zusagen der Analyse-Seite haengen an
 Z02 und Z06 mit eigenen Schritten.
 
+### Paper-Trading-Formular (1)
+
+`ui_paper_order_no_price`
+
+Eine Market-Order fuer ein Symbol, fuer das kein Anbieter einen Kurs liefert,
+wird an der Grenze abgewiesen, und die Seite nennt das getippte Symbol statt des
+Allgemeinsatzes. Gefunden 2026-09-16: eine "AMAZON"-Order stand auf der
+deployten Instanz 21 h still auf pending; danach zeigte die Seite trotz
+400-mit-Grund nur "Order could not be placed." — `ApiError.detail` trug die
+ganze Antwort, `detail.reason` griff ins Leere, und dasselbe galt seit dem
+Scaffold fuer die Net-Yield-Ablehnung (Z03/Z06 (d) haben bis heute keinen
+UI-Beweisschritt fuer dieses Formular). Gegenstand von **V7**.
+
 ### Backtest (2)
 
 `backtest never blocks the request path` · `ui_backtest_pending`
@@ -196,6 +209,20 @@ Betrifft: `ui_symbol_search`
 Einstieg in jede Analyse, im STATE als dauerhaft unbewiesen gefuehrt (Stufe 3,
 braucht Providerzugang). Eine Zielzeile wuerde diese Luecke im Katalog sichtbar
 machen, statt sie in einer Notiz zu fuehren.
+
+### V7 — Eine Order ohne Kurs wird mit dem getippten Symbol abgewiesen
+
+Betrifft: `ui_paper_order_no_price`; dazu der api-regression-Schritt fehlt noch
+(Market-Order ohne Kurs -> 400 `no_price_for_symbol`, Audit `paper_order.place_rejected`).
+
+Vorschlag fuer den Zielsatz: "Eine Order, fuer die kein Anbieter einen Kurs
+liefert, wird an der Grenze abgewiesen — API 400 mit Grund und Symbol, Audit-
+Zeile, Satz in der Oberflaeche (DE/EN) — statt still pending zu bleiben."
+Beobachtbares Kriterium: Market-Order fuer ein Nicht-Symbol -> 400 + Satz mit dem
+Symbol, keine Order in der Liste; Limit-Order ohne Kurs -> pending (sie traegt
+ihren Preis selbst). Dazu gehoert als Kriterium zu Z07: der juengste Kursbalken
+ist hoechstens 7 Kalendertage alt, sonst sagt das Badge `stale` (V6, ADR
+2026-09-16 zweiter Eintrag) — beweisbar nur mit Anbieter (Stufe 3).
 
 ### V5 — Der Backtest rechnet nie auf Platzhalterkursen und nie im Anfragepfad
 

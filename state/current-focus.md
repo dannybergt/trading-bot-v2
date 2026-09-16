@@ -1,5 +1,29 @@
 # Current Focus
 
+## SESSION 2026-09-16 (2): Warum der Eigentuemer keine Live-Daten sah — Alpaca lieferte die aeltesten Bars, und eine Order ohne Kurs hing still
+
+**Ausloeser:** Frage des Eigentuemers nach dem Merge von #30: „warum kann ich noch immer nicht manuell Paper Trading machen, obwohl der Alpaca-Key drin ist, welcher Key fehlt, warum keine Live-Daten — pruefe selbst, seit Wochen kein Fortschritt."
+
+**Befund auf der Instanz (BC-KI01, `/data/trading-bot-v2`, Frontend `:18094`, Image nach Watchtower `8ceac0a`):**
+- **Kein Key fehlt** fuer Kurse und Paper Trading: `ALPACA_API_KEY`/`ALPACA_SECRET_KEY` (Container-ENV, fuer Kursdaten) und der Nutzer-Key in den Settings (User 2, fuer Alpaca-Konto/Orders) sind beide gesetzt; `alpaca_connected`, Konto ACTIVE, Paper. `FMP_API_KEY` ist leer (nur Termine/Fundamentals-Tiefe), VAPID leer (nur Push).
+- **Kursdaten:** `get_bars_df` lieferte die **aeltesten** N Bars (API blaettert ab `start`, `limit` schneidet) — AAPL/AMZN/SPY endeten am **2026-04-27**, BTC/USD am **2025-12-29**, waehrend der Tageskurs daneben aktuell war. Jeder Chart und jede Vorhersage stand auf April-Kursen; Datenqualitaet sagte `full`.
+- **Paper Trading:** die einzige Order des Nutzers (`AMAZON` — kein Ticker, Market, 2026-09-15 21:32) stand 21 h auf `pending`, weil ohne Kurs nie ein Fill kommt und niemand es sagt.
+- Alpaca-Stream warf je Bar `'int' … isoformat` — folgenlos (Frontend oeffnet `/ws` nicht), aber Log-Rauschen.
+
+**Gebaut (Branch `fix/juengste-bars-und-order-ohne-kurs`, 2 Commits, PR s. u.):** `sort=desc` in `get_bars_df` (jüngste N); Market-Order ohne Kurs → 400 `no_price_for_symbol` mit Symbol + Satz in DE/EN + Audit; Symbol-Formpruefung vor dem Anbieter; Stale-Bewertung (`partial`, „stale, last bar N days old" ab 7 Tagen) auf der gemeinsamen Lesart `metric_sources.last_bar_timestamp`; Stream-Zeitstempel robust. ADR 2026-09-16 (zweiter Eintrag).
+
+**Tore:** `reviewer` B1 (wochentagsabhaengiger Test) + W1–W3 → alle behoben (`15c3e1d`); `security-reviewer` kein Blocker, #1 (Symbol-Form) uebernommen. Unit **459 OK**, api-regression gruen (2x). `verifier` Lauf 1 (`15c3e1d`, `artifacts/verification/20260916T191804Z-15c3e1d/`): Backend **nachgewiesen** (400 + Audit + Symbol-Form, Provider-Zaehler 0), **UI widerlegt** — die Seite zeigte „Order could not be placed." statt des Satzes, weil `ApiError.detail` die ganze Antwort trug (Vorbestand seit Scaffold; traf auch die Net-Yield-Ablehnung). Behoben in `d0057cf` (client.ts) + neuer Harnisch-Schritt `ui_paper_order_no_price`. `verifier` Lauf 2 (`artifacts/verification/20260916T193657Z-d0057cf/`): **nachgewiesen** EN + DE (Satz nennt „AMAZON", keine Order, Konsole 0), Net-Yield-Ablehnung zeigt jetzt Zahlen (gross 1.00 / fees 2.00 / net -1.00 / min 5.00 = Rohbody), Limit-Order pending ohne Reload, Negativkontrollen ueber ersetzte Antworten bestanden. **CI gruen auf `d0057cf`** (PR #33) inkl. `ui_paper_order_no_price ok [rejected with reason: "No provider has a price for "AMAZON" …"]`. **Der Nachweis am echten Anbieter geht nur auf der Instanz** (dieser Host: yfinance 429, kein Alpaca-Key): nach dem Merge Probe im Backend-Container — juengster Bar = heute/gestern.
+
+**Offene Threads (neu):**
+6. **Limit-Order auf unbekanntem Symbol** haengt weiter still pending (reviewer F1): Aufloesung gegen Asset-Profil/`get_all_assets`, dann auch Limit-Orders abweisen; oder pending Orders mit „wartet auf Kurs" beschriften.
+7. **Katalog V6** vorschlagen/entscheiden: „juengster Kursbalken hoechstens 7 Tage alt, sonst `stale`" — Beweisschritt braucht Provider (Stufe 3 oder Alpaca-Key in der Regressionsumgebung). **Das ist die Zeile, die diesen Befund wochenlang unsichtbar liess.**
+8. **api-regression-Schritt** fuer „Market-Order ohne Kurs → 400 `no_price_for_symbol` + Audit" fehlt noch (UI-Schritt existiert seit `d0057cf`); V7 im Katalog entscheiden.
+9. Pending Order `AMAZON` (id 1) auf der Instanz: der Nutzer storniert sie in der UI (offene Orders → Abbrechen) — kein Skript gegen produktive Daten.
+
+**Nicht hier loesbar (Betreiber):** Stufe 3 (Test-Account `LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD`, Live-Smoke gegen `:18094`) — haette den Bars-Fehler am ersten Tag gezeigt; **`FREIGABE`** fuer PR #33 (Rueckfrage gestellt). Nach dem Merge: Watchtower zieht `latest` → Probe im Backend-Container (juengster Bar AAPL/AMZN/SPY/BTC-USD = heute/gestern, `isoformat`-Zaehler 0) → Ergebnis hier eintragen; erst dann ist Ursache 1 **nachgewiesen**, bis dahin BEHAUPTET (Unit + Mutation).
+
+**Allokierte Ports/Ressourcen:** keine; eigene Container entfernt. Restant fuer den Betreiber: `artifacts/verification/stack-{loops,15c3e1d,d0057cf}/pg/` (uid 70, gitignored, `sudo rm -rf`).
+
 ## SESSION-ABSCHLUSS 2026-09-16T16:05Z: Der Backtest, der nachgewiesen im Hintergrund rechnet — und die Vorhersage, die er nie brauchte
 
 **Stand:** `main` auf `eb17b77`. Branch `fix/backtest-zwei-jahre` auf `c67bd9a`, **mit Lease gepusht**, PR #30

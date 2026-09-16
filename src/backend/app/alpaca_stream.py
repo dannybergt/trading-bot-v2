@@ -1,10 +1,33 @@
 import os
 import asyncio
 import logging
+from datetime import datetime, timezone
 from alpaca_trade_api.stream import Stream
 from .websocket_manager import manager
 
 logger = logging.getLogger(__name__)
+
+
+def _iso_timestamp(value):
+    """ISO 8601 (UTC) for whatever the SDK hands over as a timestamp.
+
+    Stream trades arrive as `pd.Timestamp`, stream bars as a raw integer
+    of nanoseconds since the epoch (alpaca-trade-api 3.2.0 converts the
+    msgpack time only for `Trade`, not for `Bar`). The old
+    `.isoformat()` call raised on every bar and the SDK logged
+    "error during websocket communication" once per symbol per minute
+    (deployed instance, 2026-09-16)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(value / 1_000_000_000, tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
 
 class AlpacaStreamService:
     def __init__(self):
@@ -55,7 +78,7 @@ class AlpacaStreamService:
             "symbol": t.symbol,
             "price": t.price,
             "size": t.size,
-            "time": t.timestamp.isoformat() if hasattr(t, 'timestamp') and t.timestamp else None
+            "time": _iso_timestamp(getattr(t, "timestamp", None))
         }
         
         # Broadcast to all connected web UI clients
@@ -72,7 +95,7 @@ class AlpacaStreamService:
             "low": b.low,
             "close": b.close,
             "volume": b.volume,
-            "time": b.timestamp.isoformat() if hasattr(b, 'timestamp') and b.timestamp else None
+            "time": _iso_timestamp(getattr(b, "timestamp", None))
         }
         
         if self.loop and self.loop.is_running():
