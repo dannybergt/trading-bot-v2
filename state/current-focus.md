@@ -2,7 +2,7 @@
 
 ## SESSION 2026-09-16 (2): Warum der Eigentuemer keine Live-Daten sah — Alpaca lieferte die aeltesten Bars, und eine Order ohne Kurs hing still
 
-**Ausloeser:** Frage des Eigentuemers nach dem Merge von #30: „warum kann ich noch immer nicht manuell Paper Trading machen, obwohl der Alpaca-Key drin ist, welcher Key fehlt, warum keine Live-Daten — pruefe selbst, seit Wochen kein Fortschritt."
+**Stand:** `main` auf `e231fe6` (PR #33 gemergt). **Ausloeser:** Frage des Eigentuemers nach dem Merge von #30: „warum kann ich noch immer nicht manuell Paper Trading machen, obwohl der Alpaca-Key drin ist, welcher Key fehlt, warum keine Live-Daten — pruefe selbst, seit Wochen kein Fortschritt."
 
 **Befund auf der Instanz (BC-KI01, `/data/trading-bot-v2`, Frontend `:18094`, Image nach Watchtower `8ceac0a`):**
 - **Kein Key fehlt** fuer Kurse und Paper Trading: `ALPACA_API_KEY`/`ALPACA_SECRET_KEY` (Container-ENV, fuer Kursdaten) und der Nutzer-Key in den Settings (User 2, fuer Alpaca-Konto/Orders) sind beide gesetzt; `alpaca_connected`, Konto ACTIVE, Paper. `FMP_API_KEY` ist leer (nur Termine/Fundamentals-Tiefe), VAPID leer (nur Push).
@@ -20,7 +20,11 @@
 8. **api-regression-Schritt** fuer „Market-Order ohne Kurs → 400 `no_price_for_symbol` + Audit" fehlt noch (UI-Schritt existiert seit `d0057cf`); V7 im Katalog entscheiden.
 9. Pending Order `AMAZON` (id 1) auf der Instanz: der Nutzer storniert sie in der UI (offene Orders → Abbrechen) — kein Skript gegen produktive Daten.
 
-**Nicht hier loesbar (Betreiber):** Stufe 3 (Test-Account `LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD`, Live-Smoke gegen `:18094`) — haette den Bars-Fehler am ersten Tag gezeigt; **`FREIGABE`** fuer PR #33 (Rueckfrage gestellt). Nach dem Merge: Watchtower zieht `latest` → Probe im Backend-Container (juengster Bar AAPL/AMZN/SPY/BTC-USD = heute/gestern, `isoformat`-Zaehler 0) → Ergebnis hier eintragen; erst dann ist Ursache 1 **nachgewiesen**, bis dahin BEHAUPTET (Unit + Mutation).
+**PR #33 gemergt (`FREIGABE`, `e231fe6`), publish gruen, Watchtower hat die Instanz um 20:03 UTC umgestellt. Nachweis auf BC-KI01 (Probe im Backend-Container, 20:06 UTC):** juengster Bar AAPL/AMZN/SPY **2026-09-16** (vorher 2026-04-27), BTC/USD **2026-09-16** (vorher 2025-12-29); `latest_close AMZN` 245,96 = letzter Bar; Alpaca ACTIVE; `isoformat`-Fehler seit Start **0** (vorher 6/min); Datenqualitaet `price_history full`. **Ursache 1 damit NACHGEWIESEN am echten Anbieter.** Die pending Order `AMAZON` (id 1) laesst den Fill-Task weiter alle 180 s auf den Platzhalter laufen (3 `market_data_empty_using_mock` in 3 min), bis der Nutzer sie in der UI beendet.
+
+**Nicht hier loesbar (Betreiber):** Stufe 3 (Test-Account `LIVE_TEST_EMAIL`/`LIVE_TEST_PASSWORD`, Live-Smoke gegen `:18094`) — haette den Bars-Fehler am ersten Tag gezeigt. Nutzer beendet Order id 1 unter „Offene Orders".
+
+10. Datenqualitaets-Label nennt fuer Alpaca-Bars „yfinance / Alpha Vantage fallback" (`data_quality_service`: `provider.source == "Alpaca"` gilt nur fuer den ETF/Krypto-Snapshot; Aktien-Payload traegt `provider {}`). Konfidenz stimmt, Beschriftung nicht (Regel K, Wortlaut) — eigener kleiner Schnitt.
 
 **Allokierte Ports/Ressourcen:** keine; eigene Container entfernt. Restant fuer den Betreiber: `artifacts/verification/stack-{loops,15c3e1d,d0057cf}/pg/` (uid 70, gitignored, `sudo rm -rf`).
 
