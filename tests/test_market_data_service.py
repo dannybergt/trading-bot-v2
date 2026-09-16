@@ -280,6 +280,47 @@ class MarketDataServiceTests(unittest.TestCase):
         self.assertTrue(payload["synthetic"])
         self.assertGreaterEqual(len(payload["data"].index), 500)
 
+    def test_get_history_frame_returns_bars_without_a_prediction(self):
+        # Der Backtest-Endpunkt braucht Bars, sonst nichts. `get_stock_data`
+        # trainiert dazu den Bildschirm-Predictor (7-22 s kalt, verifier
+        # 2026-09-16) — `get_history_frame` darf ihn nicht einmal anfassen,
+        # und muss denselben Platzhalter mit derselben Kennzeichnung liefern
+        # wie der volle Pfad, damit Regel K auf beiden Wegen dasselbe sagt.
+        stock_profile = MarketDataService().get_asset_profile("AAPL", known_asset_class="stock")
+
+        class _RecordingAlpaca(_FakeAlpaca):
+            def get_bars_df(self, symbol, timeframe="1Day", limit=100):
+                idx = pd.date_range("2024-01-01", periods=limit, freq="B")
+                return pd.DataFrame(
+                    {"Open": [100.0] * limit, "High": [101.0] * limit, "Low": [99.0] * limit,
+                     "Close": [100.0] * limit, "Volume": [1_000_000] * limit},
+                    index=idx,
+                )
+
+        service = MarketDataService(_RecordingAlpaca())
+        with patch.object(service, "_get_or_train_predictor") as predictor:
+            bars, synthetic, profile = service.get_history_frame(
+                "AAPL", period="2y", interval="1d", asset_profile=stock_profile
+            )
+        predictor.assert_not_called()
+        self.assertFalse(synthetic)
+        self.assertGreaterEqual(len(bars.index), 500)
+        self.assertNotIn("RSI", bars.columns)  # rohe Bars, Indikatoren rechnet der Aufrufer
+        self.assertIs(profile, stock_profile)  # mitgegebenes Profil bleibt unangetastet
+
+        # Ohne Anbieter: derselbe Platzhalter, dieselbe Kennzeichnung wie der volle Pfad.
+        bare = MarketDataService()
+        _seed_fake_predictor(bare, "FAKE")
+        with patch.object(bare, "get_provider_history_df", return_value=pd.DataFrame()), patch.object(
+            bare, "get_market_news",
+            return_value={"items": [], "aggregate_score": 0.0, "aggregate_label": "neutral", "provider": None},
+        ), patch.object(bare, "get_ticker_info", return_value={}):
+            bars, synthetic, _ = bare.get_history_frame("FAKE", period="6mo", interval="1d")
+            full = bare.get_stock_data("FAKE", period="6mo", interval="1d")
+        self.assertTrue(synthetic)
+        self.assertTrue(full["synthetic"])
+        self.assertEqual(len(bars.index), len(full["data"].index))
+
     def test_get_stock_data_marks_synthetic_and_suppresses_recommendation(self):
         # When no provider returns bars, the chart falls back to a synthetic
         # random walk. The payload must be flagged synthetic AND the ML verdict

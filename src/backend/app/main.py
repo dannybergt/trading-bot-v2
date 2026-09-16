@@ -25,6 +25,7 @@ from app.logging_config import (
 )
 configure_logging()
 
+from app.analysis import calculate_indicators
 from app.alpaca_service import AlpacaService
 from app.alpaca_stream import alpaca_stream
 from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_user, get_current_user
@@ -2894,14 +2895,17 @@ def get_symbol_backtest(
         "lastBar": None,
     }
 
+    # Bars only — not `get_stock_data`: that one also trains and runs the
+    # on-screen prediction, fetches patterns and the composite, none of
+    # which this answer carries. The verifier measured that detour at 7–22 s
+    # per first call (cold predictor) and 25–287 s on the placeholder under
+    # a throttled provider (2026-09-16); the first answer must be `pending`
+    # within seconds, and a placeholder must be refused at once.
     try:
-        stock_data = service.get_stock_data(
+        bars, synthetic, _ = service.get_history_frame(
             symbol,
             period="2y",
             interval="1d",
-            user=None,
-            include_news=False,
-            include_fundamentals=False,
             # Das Profil steht drei Zeilen weiter oben schon fest.
             asset_profile=asset_profile,
         )
@@ -2909,21 +2913,21 @@ def get_symbol_backtest(
         logger.exception("backtest_history_fetch_failed symbol=%s", symbol)
         return nothing_to_compute
 
-    df = stock_data.get("data") if isinstance(stock_data, dict) else None
-    if df is None:
-        return nothing_to_compute
-
     # Regel K (ADR 2026-08-05): no metric rides on fabricated prices. The
     # placeholder is a seeded random walk — every symbol, including ones that
     # do not exist, would yield the same accuracy table, and computing it
     # costs minutes of CPU. Measured 2026-09-11: identical payloads for AAPL,
     # MSFT and `ZZZZNOPE123`.
-    synthetic = bool(stock_data.get("synthetic"))
     if synthetic:
         return {**nothing_to_compute, "synthetic": True}
 
+    # The walk-forward trains on the indicator columns; milliseconds, and
+    # the same frame the on-screen predictor would see.
     answer = backtest_service.request_backtest(
-        df, symbol=canonical, train_window=BACKTEST_TRAIN_WINDOW, step=BACKTEST_STEP
+        calculate_indicators(bars),
+        symbol=canonical,
+        train_window=BACKTEST_TRAIN_WINDOW,
+        step=BACKTEST_STEP,
     )
     return {
         "symbol": canonical,

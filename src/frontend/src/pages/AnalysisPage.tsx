@@ -1970,7 +1970,10 @@ function ModelPerformanceSection({
             {t("analysis.modelPerformance.title")}
           </h2>
           <p className="mt-1">
-            <SourceTip source={{ ...source, available: false }} />
+            {/* `pending`: die Quelle ist bekannt und arbeitet — "keine Quelle
+                geantwortet" waere ein Anbieterausfall, der nicht vorliegt
+                (verifier 2026-09-16). `failed`: sie hat nicht geliefert. */}
+            <SourceTip source={{ ...source, available: status === "pending" }} />
           </p>
         </header>
         <p

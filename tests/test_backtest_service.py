@@ -22,6 +22,21 @@ if not (BACKEND_ROOT / "app").exists():
 sys.path.insert(0, str(BACKEND_ROOT))
 
 
+def _raw_bars(rows: int = 504) -> pd.DataFrame:
+    """Bare OHLCV bars as a provider hands them over — what the endpoint
+    gets from `get_history_frame` before it computes the indicators."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed=7)
+    close = np.cumsum(rng.normal(0.3, 1.0, rows)) + 100
+    idx = pd.date_range("2024-01-01", periods=rows, freq="B")
+    return pd.DataFrame(
+        {"Open": close - 0.5, "High": close + 1.0, "Low": close - 1.0,
+         "Close": close, "Volume": [1_000_000] * rows},
+        index=idx,
+    )
+
+
 def _synthetic_frame(rows: int = 250) -> pd.DataFrame:
     """Trending close with noisy indicator columns so PricePredictor
     sees enough feature variation to make actual splits. Seeded RNG
@@ -167,11 +182,14 @@ class BacktestServiceTests(unittest.TestCase):
         from app import backtest_service
         from app import main as app_main
 
-        real_payload = {"data": _synthetic_frame(504), "synthetic": False}
+        profile = {"symbol": "AAPL", "assetClass": "stock", "assetLabel": "Stock",
+                   "market": "equity", "exchange": "NASDAQ", "type": "STOCK", "isCrypto": False}
+        real_bars = (_raw_bars(504), False, profile)
         answer = {"status": "pending", "queued": True,
                   "result": backtest_service._empty_payload(),
                   "computedAt": None, "lastBar": None}
-        with patch.object(app_main.service, "get_stock_data", return_value=real_payload), \
+        with patch.object(app_main.service, "get_history_frame", return_value=real_bars), \
+             patch.object(app_main.service, "get_stock_data") as full_path, \
              patch.object(app_main.service, "get_asset_profile",
                           return_value={"symbol": "AAPL", "assetClass": "stock",
                                         "assetLabel": "Stock", "market": "equity",
@@ -188,6 +206,12 @@ class BacktestServiceTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
         self.assertEqual(run.call_args.kwargs["train_window"], app_main.BACKTEST_TRAIN_WINDOW)
         self.assertEqual(run.call_args.kwargs["symbol"], "AAPL")
+        # Der Endpunkt holt Bars, nicht die Bildschirm-Vorhersage (verifier
+        # 2026-09-16: 7-22 s je Erstaufruf fuer eine Vorhersage, die die
+        # Antwort nicht traegt) — und der Job bekommt die Indikatorspalten.
+        full_path.assert_not_called()
+        handed_over = run.call_args.args[0]
+        self.assertIn("RSI", handed_over.columns)
 
     def test_endpoint_polls_without_touching_a_provider(self):
         # Waehrend ein Job laeuft, darf ein Poll weder das Asset-Profil noch
@@ -203,7 +227,7 @@ class BacktestServiceTests(unittest.TestCase):
                      "result": backtest_service._empty_payload(),
                      "computedAt": None, "lastBar": None}
         with patch.object(backtest_service, "peek", return_value=in_flight) as peek, \
-             patch.object(app_main.service, "get_stock_data") as history, \
+             patch.object(app_main.service, "get_history_frame") as history, \
              patch.object(app_main.service, "get_asset_profile") as profile, \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None):
             payload = app_main.get_symbol_backtest(
@@ -227,12 +251,11 @@ class BacktestServiceTests(unittest.TestCase):
         from app import backtest_service
         from app import main as app_main
 
-        synthetic_payload = {"data": _synthetic_frame(600), "synthetic": True}
-        with patch.object(app_main.service, "get_stock_data", return_value=synthetic_payload), \
-             patch.object(app_main.service, "get_asset_profile",
-                          return_value={"symbol": "ZZZZNOPE123", "assetClass": "stock",
-                                        "assetLabel": "Stock", "market": "equity",
-                                        "exchange": "", "type": "STOCK", "isCrypto": False}), \
+        profile = {"symbol": "ZZZZNOPE123", "assetClass": "stock", "assetLabel": "Stock",
+                   "market": "equity", "exchange": "", "type": "STOCK", "isCrypto": False}
+        synthetic_bars = (_raw_bars(600), True, profile)
+        with patch.object(app_main.service, "get_history_frame", return_value=synthetic_bars), \
+             patch.object(app_main.service, "get_asset_profile", return_value=profile), \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
              patch.object(backtest_service, "request_backtest") as ask:
             payload = app_main.get_symbol_backtest(

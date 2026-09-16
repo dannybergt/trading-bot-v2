@@ -481,27 +481,26 @@ class MarketDataService:
             TICKER_INFO_TTL_SECONDS,
         )
         
-    def get_stock_data(
+    def get_history_frame(
         self,
         symbol: str,
         period: str = "6mo",
         interval: str = "1d",
-        user=None,
         *,
-        include_news: bool = True,
-        include_fundamentals: bool = True,
         asset_profile: dict | None = None,
-    ):
-        """
-        Fetch historical data and calculate indicators.
+    ) -> tuple[pd.DataFrame, bool, dict]:
+        """Bare OHLCV bars for `symbol` — Alpaca, then the asset-class
+        provider, then yfinance for daily stock bars, then the synthetic
+        placeholder — without indicators, news, fundamentals or the on-screen
+        prediction. Returns `(bars, synthetic, asset_profile)`; the profile
+        comes back because the stock refinement may sharpen it when the
+        caller did not supply one.
 
-        `asset_profile` ist das bereits ermittelte Profil des Aufrufers. Wer es
-        mitgibt, bekommt genau diese Einstufung zurueck — die Funktion ermittelt
-        sie weder neu noch korrigiert sie sie ueber einen Stammdatenabruf. Das
-        ist keine Bequemlichkeit, sondern der Unterschied zwischen einem und
-        keinem yfinance-`.info`-Aufruf pro Symbol im Anfragepfad; und es haelt
-        die Einstufung, die der Nutzer sieht, mit der zusammen, mit der
-        gerechnet wird.
+        Split out of `get_stock_data` for the backtest endpoint: it needs
+        the bars and nothing else, and paid 7–22 s for a cold on-screen
+        prediction per first call (verifier, 2026-09-16) — with a throttled
+        provider even 25–287 s on the placeholder, only to learn it was
+        synthetic.
         """
         df = pd.DataFrame()
         used_synthetic = False
@@ -509,7 +508,6 @@ class MarketDataService:
         caller_supplied_profile = asset_profile is not None
         if not caller_supplied_profile:
             asset_profile = self.get_asset_profile(symbol)
-        provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
         # Jede Zeitraum-Tabelle in diesem Dienst (hier, `get_yfinance_history_df`,
         # `_generate_mock_data`) faellt fuer einen unbekannten Wert still auf
         # ihren Default. So bekam der Backtest mit "2y" 130 Bars, "6mo" und 180
@@ -541,7 +539,6 @@ class MarketDataService:
                 refined_profile = self.get_asset_profile(symbol, ticker_info=refined_ticker_info)
                 if refined_profile.get("assetClass") != asset_profile.get("assetClass"):
                     asset_profile = refined_profile
-                    provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
 
         if df.empty:
             df = self.get_provider_history_df(symbol, asset_profile=asset_profile, limit=limit)
@@ -557,7 +554,36 @@ class MarketDataService:
             logger.warning("market_data_empty_using_mock symbol=%s period=%s interval=%s", symbol, period, interval)
             df = self._generate_mock_data(symbol, period, interval)
             used_synthetic = True
-            
+        return df, used_synthetic, asset_profile
+
+    def get_stock_data(
+        self,
+        symbol: str,
+        period: str = "6mo",
+        interval: str = "1d",
+        user=None,
+        *,
+        include_news: bool = True,
+        include_fundamentals: bool = True,
+        asset_profile: dict | None = None,
+    ):
+        """
+        Fetch historical data and calculate indicators.
+
+        `asset_profile` ist das bereits ermittelte Profil des Aufrufers. Wer es
+        mitgibt, bekommt genau diese Einstufung zurueck — die Funktion ermittelt
+        sie weder neu noch korrigiert sie sie ueber einen Stammdatenabruf. Das
+        ist keine Bequemlichkeit, sondern der Unterschied zwischen einem und
+        keinem yfinance-`.info`-Aufruf pro Symbol im Anfragepfad; und es haelt
+        die Einstufung, die der Nutzer sieht, mit der zusammen, mit der
+        gerechnet wird.
+        """
+        caller_supplied_profile = asset_profile is not None
+        df, used_synthetic, asset_profile = self.get_history_frame(
+            symbol, period, interval, asset_profile=asset_profile
+        )
+        provider_snapshot = self.get_provider_snapshot(symbol, asset_profile=asset_profile)
+
         # Calculate Indicators
         df_analyzed = calculate_indicators(df)
         

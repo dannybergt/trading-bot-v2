@@ -388,7 +388,9 @@ if backtest_payload.get("synthetic"):
     assert backtest_payload["result"]["samples"] == 0, (
         f"synthetic history produced {backtest_payload['result']['samples']} backtest samples"
     )
-    backtest_mode = f"synthetic placeholder — refused at once in {first_backtest_s:.2f} s; pending path covered by unit tests only"
+    # The seconds here are the provider chain timing out down to the
+    # placeholder, not a computation — the refusal itself is free.
+    backtest_mode = f"synthetic placeholder — refused without computing, {first_backtest_s:.2f} s incl. provider timeouts; pending path covered by unit tests only"
 elif backtest_payload["status"] == "ready" and backtest_payload["result"]["samples"] > 0:
     # The registry lives as long as the process: a stack that already
     # computed AAPL (an earlier run, the UI regression, a verifier) answers
