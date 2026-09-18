@@ -88,6 +88,32 @@ class SymbolFormGateTests(unittest.TestCase):
         self.assertEqual("BTC/USD", app_main.require_symbol_form("btc-usd"))
         self.assertEqual("BRK.B", app_main.require_symbol_form("BRK.B"))
 
+    def test_watchlist_add_refuses_a_malformed_symbol_before_writing(self):
+        # Ein gespeicherter Nicht-Ticker ist nicht harmlos: Alarm-Dispatcher
+        # und Scanner fragen fuer jeden Eintrag je Zyklus die Anbieter, und die
+        # Analyse-Seite antwortet dafuer seit #35 mit 404. Deshalb 400 beim
+        # Anlegen — ein Schreibfehler des Aufrufers, keine fehlende Ressource.
+        user = MagicMock(id=7)
+        for raw in ("AMAZON INC", "A/../../V4/X", "<b>AAPL</b>"):
+            with self.subTest(symbol=raw):
+                db = MagicMock()
+                record = MagicMock(items=[])
+                with patch.object(app_main, "get_watchlist_record_or_404", return_value=record):
+                    with self.assertRaises(HTTPException) as caught:
+                        app_main.add_item("w1", app_main.WatchlistItemRequest(symbol=raw), current_user=user, db=db)
+                self.assertEqual(400, caught.exception.status_code)
+                self.assertIn(raw.upper(), caught.exception.detail)
+                db.add.assert_not_called()
+                db.commit.assert_not_called()
+        # Wohlgeformt wird geschrieben — kanonisch.
+        db = MagicMock()
+        record = MagicMock(items=[])
+        with patch.object(app_main, "get_watchlist_record_or_404", return_value=record), \
+             patch.object(app_main, "serialize_watchlist", return_value={}):
+            app_main.add_item("w1", app_main.WatchlistItemRequest(symbol="btc-usd"), current_user=user, db=db)
+        self.assertEqual("BTC/USD", db.add.call_args.args[0].symbol)
+        db.commit.assert_called_once()
+
     def test_detail_is_bounded(self):
         with self.assertRaises(HTTPException) as caught:
             app_main.require_symbol_form("X Y" * 100)

@@ -183,8 +183,8 @@ def build_search_result(
     }
 
 
-def require_symbol_form(symbol: str) -> str:
-    """The canonical symbol, or 404 before any provider is asked.
+def require_symbol_form(symbol: str, *, status_code: int = 404) -> str:
+    """The canonical symbol, or 404 (400 on a write) before any provider is asked.
 
     Every per-symbol read endpoint walks up to three providers and then the
     placeholder for whatever the path carries — `AMAZON INC`, `<b>AAPL</b>`, a
@@ -193,12 +193,14 @@ def require_symbol_form(symbol: str) -> str:
     same shape check guards `place_order` since #33). Not a validity check:
     a well-formed unknown ticker still goes to the providers, whose answer
     is the only one that can tell "unknown" from "down". 404 with the
-    string, so the page names the gap instead of drawing a placeholder.
+    string, so the page names the gap instead of drawing a placeholder; a
+    write (watchlist item) answers 400 for the same reason — the string is
+    the caller's, not a missing resource.
     """
     canonical = canonicalize_symbol(symbol)
     if not is_plausible_symbol_query(canonical):
         raise HTTPException(
-            status_code=404,
+            status_code=status_code,
             detail=f"No market lists a symbol of this form: {canonical[:40]!r}",
         )
     return canonical
@@ -1059,8 +1061,9 @@ class WatchlistItem(BaseModel):
 
 
 class WatchlistItemRequest(BaseModel):
-    symbol: str
-    name: str = ""
+    # 24 is the longest form `is_plausible_symbol_query` admits.
+    symbol: str = Field(min_length=1, max_length=64)
+    name: str = Field(default="", max_length=200)
     tags: List[str] = Field(default_factory=list)
 
 
@@ -1879,7 +1882,12 @@ def delete_watchlist(id: str, current_user: User = Depends(get_current_user), db
 @app.post("/api/watchlists/{id}/items")
 def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     record = get_watchlist_record_or_404(db, current_user, id)
-    canonical_symbol = canonicalize_symbol(item.symbol)
+    # A stored string no market lists is not inert: the alert dispatcher and
+    # the scanner run `get_stock_data`/`get_market_news` for every stored
+    # item, every cycle, against up to three providers — and the analysis
+    # page answers 404 for it since #35. Refuse it at the boundary with the
+    # same rule the read endpoints apply.
+    canonical_symbol = require_symbol_form(item.symbol, status_code=400)
     existing = next((current for current in record.items if canonicalize_symbol(current.symbol) == canonical_symbol), None)
     if existing:
         if item.name:

@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 77 von 92 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 78 von 93 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
@@ -39,9 +39,13 @@ sie erst nach einer Entscheidung.
 `watchlist add tagged item` · `watchlist add etf item` ·
 `watchlist update tagged item` · `watchlist list tags` · `watchlist news binding` ·
 `watchlist delete incl default` · `watchlist crypto delete` · `watchlist etf delete` ·
-`watchlist alert settings` · `ui_watchlists`
+`watchlist alert settings` · `watchlist refuses a symbol no market lists` · `ui_watchlists`
 
-Rundlauf und Schema der Watchlist-Bearbeitung. `watchlist create does not reseed
+Rundlauf und Schema der Watchlist-Bearbeitung. `watchlist refuses a symbol no
+market lists` ist die Schreibseite der Form-Grenze aus `symbol form is checked
+before any provider`: ein gespeicherter Nicht-Ticker kostete je Schleifenzyklus
+Anbieteraufrufe und endet auf der Analyse-Seite mit 404 — deshalb 400 beim
+Anlegen, bevor eine Zeile existiert. `watchlist create does not reseed
 defaults` bewacht einen konkreten Vorfall (Seeding aus dem Lesepfad liess
 geloeschte Startlisten wieder auferstehen) — ein Regressionsschutz, kein
 Versprechen.
