@@ -114,6 +114,72 @@ class SymbolFormGateTests(unittest.TestCase):
         self.assertEqual("BTC/USD", db.add.call_args.args[0].symbol)
         db.commit.assert_called_once()
 
+    def _item(self, item_id, symbol):
+        item = MagicMock()
+        item.id = item_id
+        item.watchlist_id = "w1"
+        item.symbol = symbol
+        item.name = ""
+        item.asset_class = None
+        item.tags = []
+        return item
+
+    def test_background_loops_skip_a_stored_symbol_without_ticker_form(self):
+        # Bestandszeilen (vor der Form-Grenze angelegt oder aus einer
+        # Sicherung) kosteten je Zyklus bis zu drei Anbieteraufrufe — die
+        # Schleifen ueberspringen sie jetzt und sagen es einmal je Zyklus.
+        record = MagicMock()
+        record.items = [self._item(1, "AMAZON INC"), self._item(2, "VOO")]
+        asked: list = []
+
+        def remember(symbol, **kwargs):
+            asked.append(symbol)
+            return {}
+
+        def tracked(item, **_kwargs):
+            return {"symbol": item.symbol, "name": "", "tags": [], "assetClass": "etf",
+                    "assetLabel": "ETF", "market": "equity", "exchange": "", "type": "ETF",
+                    "isCrypto": False, "provider": {}}
+
+        with patch.object(app_main, "get_or_create_watchlist_alert_setting", return_value=MagicMock()), \
+             patch.object(app_main, "apply_alert_notifications", return_value={"popupCount": 0, "pushCount": 0}), \
+             patch.object(app_main, "serialize_tracked_watchlist_item", side_effect=tracked) as serialize, \
+             patch.object(app_main.service, "get_stock_data", side_effect=remember), \
+             patch.object(app_main.service, "get_market_news", return_value={}), \
+             self.assertLogs("app.main", level="WARNING") as logs:
+            app_main.build_watchlist_alert_payload(MagicMock(), MagicMock(), record)
+        self.assertEqual(["VOO"], asked)
+        # Auch das Profil des toten Eintrags wird nicht mehr geholt.
+        self.assertEqual(["VOO"], [call.args[0].symbol for call in serialize.call_args_list])
+        self.assertTrue(any("watchlist_item_malformed_skipped" in line for line in logs.output))
+
+        # Scanner: dieselbe Sammelstelle.
+        asked.clear()
+        user = MagicMock(is_active=True)
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [user]
+        watchlist = MagicMock(items=[self._item(1, "AMAZON INC"), self._item(2, "AAPL")])
+        with patch.object(app_main, "SessionLocal", return_value=db), \
+             patch.object(app_main, "get_user_watchlist_records", return_value=[watchlist]), \
+             patch.object(app_main.service, "get_stock_data", side_effect=remember), \
+             patch.object(app_main, "backfill_watchlist_item_asset_classes", return_value=0), \
+             self.assertLogs("app.main", level="WARNING"):
+            app_main._auto_scanner_cycle()
+        self.assertEqual(["AAPL"], asked)
+
+    def test_watchlist_names_are_bounded_on_every_write_path(self):
+        from pydantic import ValidationError
+        too_long = "n" * (app_main.WATCHLIST_NAME_MAX + 1)
+        with self.assertRaises(ValidationError):
+            app_main.WatchlistItemRequest(symbol="AAPL", name=too_long)
+        with self.assertRaises(ValidationError):
+            app_main.UpdateWatchlistItemRequest(name=too_long)
+        with self.assertRaises(ValidationError):
+            app_main.CreateWatchlistRequest(name=too_long)
+        with self.assertRaises(ValidationError):
+            app_main.RenameWatchlistRequest(name=too_long)
+        app_main.UpdateWatchlistItemRequest(name="n" * app_main.WATCHLIST_NAME_MAX)
+
     def test_detail_is_bounded(self):
         with self.assertRaises(HTTPException) as caught:
             app_main.require_symbol_form("X Y" * 100)

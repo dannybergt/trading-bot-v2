@@ -353,6 +353,24 @@ def serialize_watchlist_item(
     )
 
 
+def stored_symbol_is_askable(record: WatchlistItemRecord) -> bool:
+    """Whether a stored item may be sent to a provider at all.
+
+    Rows written before the form check (#35, this branch) or restored from
+    a backup can carry a string no market lists; every background cycle
+    spent up to three provider calls on each of them. The read endpoints
+    answer 404 for such a row, the loops skip it — and say so, once per
+    cycle and row, so the operator can find and remove it (rename and
+    delete keep working on it)."""
+    if is_plausible_symbol_query(canonicalize_symbol(record.symbol)):
+        return True
+    logger.warning(
+        "watchlist_item_malformed_skipped",
+        extra={"item_id": record.id, "watchlist_id": record.watchlist_id},
+    )
+    return False
+
+
 def serialize_tracked_watchlist_item(
     record: WatchlistItemRecord, *, asset_class: str | None = None
 ) -> dict:
@@ -465,6 +483,7 @@ def build_watchlist_alert_payload(
             item, asset_class=stored_watchlist_item_asset_class(item)
         )
         for item in sorted(record.items, key=lambda current: current.id or 0)
+        if stored_symbol_is_askable(item)
     ]
 
     deadline = None if budget_seconds is None else monotonic() + budget_seconds
@@ -1060,15 +1079,22 @@ class WatchlistItem(BaseModel):
     isCrypto: bool = False
 
 
+#: Display names of watchlists and their items; one limit for every path
+#: that writes the column, or the cap is a cap on one door only.
+WATCHLIST_NAME_MAX = 200
+
+
 class WatchlistItemRequest(BaseModel):
-    # 24 is the longest form `is_plausible_symbol_query` admits.
+    # Wider than the 24 characters `is_plausible_symbol_query` admits on
+    # purpose: a string a little too long gets the named 400 from
+    # `require_symbol_form`, not a bare 422; 64 only stops the absurd.
     symbol: str = Field(min_length=1, max_length=64)
-    name: str = Field(default="", max_length=200)
+    name: str = Field(default="", max_length=WATCHLIST_NAME_MAX)
     tags: List[str] = Field(default_factory=list)
 
 
 class UpdateWatchlistItemRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=WATCHLIST_NAME_MAX)
     tags: List[str] | None = None
 
 class Watchlist(BaseModel):
@@ -1099,10 +1125,10 @@ class UpdateAlertRuleRequest(BaseModel):
 
 
 class CreateWatchlistRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=WATCHLIST_NAME_MAX)
 
 class RenameWatchlistRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=WATCHLIST_NAME_MAX)
 
 
 class WatchlistAlertSettingsRequest(BaseModel):
@@ -1173,7 +1199,8 @@ def _auto_scanner_cycle():
             for user in users:
                 for watchlist in get_user_watchlist_records(db, user):
                     for item in watchlist.items:
-                        unique_symbols.add(item.symbol)
+                        if stored_symbol_is_askable(item):
+                            unique_symbols.add(item.symbol)
 
             for sym in unique_symbols:
                 try:
