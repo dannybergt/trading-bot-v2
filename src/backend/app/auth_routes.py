@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app import audit_service
@@ -45,6 +45,10 @@ _RATE_LIMITS = {
     "login_per_account": SlidingWindowLimit(10, 900),
     "password_reset_request": SlidingWindowLimit(3, 900),
     "password_reset_confirm": SlidingWindowLimit(5, 900),
+    # Registration is open. Every account is a share of the backtest queue
+    # and a row in the database; five an hour per address is a household,
+    # not a script.
+    "register": SlidingWindowLimit(5, 3600),
 }
 
 
@@ -63,9 +67,17 @@ def _request_identity(request: Request, suffix: str = "") -> str:
 
 # --- Request/Response Models ---
 
+# Length limits at the boundary: an address longer than RFC 5321's 254
+# characters is no login attempt, and the e-mail is the key of the login
+# limiter before any account check — without a limit the body size is
+# what an unauthenticated caller makes the process hold.
+EMAIL_MAX_LENGTH = 254
+PASSWORD_MAX_LENGTH = 1024
+
+
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     is_admin: bool = False
 
     @field_validator("password")
@@ -77,9 +89,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
-    mfa_code: str | None = None
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    mfa_code: str | None = Field(default=None, max_length=16)
 
 
 class TokenResponse(BaseModel):
@@ -94,12 +106,12 @@ class RefreshRequest(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
-    email: str
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(max_length=512)
+    new_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
 
     @field_validator("new_password")
     @classmethod
@@ -175,8 +187,9 @@ class PushSubscriptionRequest(BaseModel):
 # --- Routes ---
 
 @router.post("/register", response_model=UserResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     """Register a new user. First user becomes admin."""
+    _enforce_rate_limit("register", _request_identity(request))
     # Check if email already exists
     existing = db.query(User).filter(User.email == req.email.lower()).first()
     if existing:

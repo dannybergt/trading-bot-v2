@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
+from urllib.parse import quote
 
 from app.rate_limit import acquire as acquire_rate_limit
 from app.sentiment import analyze_sentiment_basic
@@ -53,6 +54,14 @@ def isin_to_wkn(isin: str | None) -> str | None:
     if not candidate.isalnum():
         return None
     return candidate
+
+
+def _path_segment(symbol: str) -> str:
+    """The symbol as one URL path segment: upper-cased and percent-encoded
+    with "/" included, so nothing a caller passes can add path components
+    to the provider URL. The form check at the API boundary already refuses
+    such strings; this is the second lock on the same door."""
+    return quote(symbol.upper(), safe="")
 
 
 class FmpService:
@@ -111,7 +120,7 @@ class FmpService:
     def get_profile(self, symbol: str) -> dict[str, Any] | None:
         if not symbol:
             return None
-        payload = self._request(f"/profile/{symbol.upper()}")
+        payload = self._request(f"/profile/{_path_segment(symbol)}")
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
@@ -119,7 +128,7 @@ class FmpService:
     def get_key_metrics(self, symbol: str) -> dict[str, Any] | None:
         if not symbol:
             return None
-        payload = self._request(f"/key-metrics/{symbol.upper()}", params={"limit": 1})
+        payload = self._request(f"/key-metrics/{_path_segment(symbol)}", params={"limit": 1})
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
@@ -130,7 +139,7 @@ class FmpService:
         (`peRatioTTM`, `revenuePerShareTTM`, `dividendYieldTTM`, …)."""
         if not symbol:
             return None
-        payload = self._request(f"/key-metrics-ttm/{symbol.upper()}", params={"limit": 1})
+        payload = self._request(f"/key-metrics-ttm/{_path_segment(symbol)}", params={"limit": 1})
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
@@ -143,7 +152,7 @@ class FmpService:
         if not symbol:
             return []
         payload = self._request(
-            f"/income-statement/{symbol.upper()}",
+            f"/income-statement/{_path_segment(symbol)}",
             params={"period": period, "limit": max(1, min(limit, 12))},
         )
         return payload if isinstance(payload, list) else []
@@ -151,7 +160,7 @@ class FmpService:
     def get_ratios(self, symbol: str) -> dict[str, Any] | None:
         if not symbol:
             return None
-        payload = self._request(f"/ratios/{symbol.upper()}", params={"limit": 1})
+        payload = self._request(f"/ratios/{_path_segment(symbol)}", params={"limit": 1})
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
@@ -159,7 +168,7 @@ class FmpService:
     def get_etf_holdings(self, symbol: str) -> list[dict[str, Any]]:
         if not symbol:
             return []
-        payload = self._request(f"/etf-holder/{symbol.upper()}")
+        payload = self._request(f"/etf-holder/{_path_segment(symbol)}")
         if isinstance(payload, list):
             return payload
         return []
@@ -173,7 +182,7 @@ class FmpService:
         """
         if not symbol:
             return []
-        payload = self._request(f"/historical-price-full/stock_dividend/{symbol.upper()}")
+        payload = self._request(f"/historical-price-full/stock_dividend/{_path_segment(symbol)}")
         if isinstance(payload, dict):
             historical = payload.get("historical")
             if isinstance(historical, list):
@@ -186,7 +195,7 @@ class FmpService:
         """Recent stock-split history for the symbol."""
         if not symbol:
             return []
-        payload = self._request(f"/historical-price-full/stock_split/{symbol.upper()}")
+        payload = self._request(f"/historical-price-full/stock_split/{_path_segment(symbol)}")
         if isinstance(payload, dict):
             historical = payload.get("historical")
             if isinstance(historical, list):
@@ -201,7 +210,7 @@ class FmpService:
         if not symbol:
             return []
         payload = self._request(
-            f"/historical/earning_calendar/{symbol.upper()}",
+            f"/historical/earning_calendar/{_path_segment(symbol)}",
             params={"limit": max(1, min(limit, 50))},
         )
         if isinstance(payload, list):
@@ -213,7 +222,7 @@ class FmpService:
         if not symbol:
             return []
         payload = self._request(
-            f"/cash-flow-statement/{symbol.upper()}",
+            f"/cash-flow-statement/{_path_segment(symbol)}",
             params={"period": period, "limit": max(1, min(limit, 12))},
         )
         return payload if isinstance(payload, list) else []
@@ -223,7 +232,7 @@ class FmpService:
         if not symbol:
             return []
         payload = self._request(
-            f"/balance-sheet-statement/{symbol.upper()}",
+            f"/balance-sheet-statement/{_path_segment(symbol)}",
             params={"period": period, "limit": max(1, min(limit, 12))},
         )
         return payload if isinstance(payload, list) else []
@@ -232,7 +241,7 @@ class FmpService:
         """Latest aggregate analyst rating snapshot for the symbol."""
         if not symbol:
             return None
-        payload = self._request(f"/rating/{symbol.upper()}")
+        payload = self._request(f"/rating/{_path_segment(symbol)}")
         if isinstance(payload, list) and payload:
             return payload[0]
         return None
@@ -242,7 +251,7 @@ class FmpService:
         if not symbol:
             return []
         payload = self._request(
-            f"/analyst-estimates/{symbol.upper()}",
+            f"/analyst-estimates/{_path_segment(symbol)}",
             params={"period": period, "limit": max(1, min(limit, 12))},
         )
         return payload if isinstance(payload, list) else []
@@ -403,14 +412,14 @@ class FmpService:
         """Top institutional holders (Vanguard/BlackRock-style positions)."""
         if not symbol:
             return []
-        payload = self._request(f"/institutional-holder/{symbol.upper()}")
+        payload = self._request(f"/institutional-holder/{_path_segment(symbol)}")
         return payload if isinstance(payload, list) else []
 
     def get_earnings_surprises(self, symbol: str) -> list[dict[str, Any]]:
         """Historical EPS-actual vs EPS-estimate (beat/miss history)."""
         if not symbol:
             return []
-        payload = self._request(f"/earnings-surprises/{symbol.upper()}")
+        payload = self._request(f"/earnings-surprises/{_path_segment(symbol)}")
         return payload if isinstance(payload, list) else []
 
     def get_upcoming_earnings(
@@ -595,7 +604,7 @@ class FmpService:
         out: list[dict[str, Any]] = []
         for year in range(current_year, current_year - max(1, years_back), -1):
             payload = self._request(
-                f"/batch_earning_call_transcript/{symbol.upper()}",
+                f"/batch_earning_call_transcript/{_path_segment(symbol)}",
                 params={"year": year},
                 version="v4",
             )
@@ -719,7 +728,7 @@ class FmpService:
         params: dict[str, Any] = {"limit": max(1, min(limit, 100))}
         if filing_type:
             params["type"] = filing_type
-        payload = self._request(f"/sec_filings/{symbol.upper()}", params=params)
+        payload = self._request(f"/sec_filings/{_path_segment(symbol)}", params=params)
         return payload if isinstance(payload, list) else []
 
     def normalized_sec_filings(

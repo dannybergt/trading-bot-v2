@@ -135,12 +135,39 @@ class SlidingWindowLimitTests(unittest.TestCase):
         clock.t = 11.0
         # Vierter Aufruf: Sweep, danach nur der neue Schluessel.
         self.assertTrue(limit.try_acquire("d"))
-        self.assertEqual({"d"}, set(limit._hits))
+        self.assertEqual(1, len(limit._hits))
         # Ein Schluessel mit lebendem Treffer ueberlebt den Sweep.
         clock.t = 12.0
         for key in ("e", "f", "g"):
             self.assertTrue(limit.try_acquire(key))
-        self.assertEqual({"d", "e", "f", "g"}, set(limit._hits))
+        self.assertEqual(4, len(limit._hits))
+
+    def test_keys_are_held_as_digests_not_strings(self):
+        # Der Schluessel ist die getippte E-Mail, vor jeder Kontenpruefung:
+        # 200-kB-"Adressen" hielten das Doppelte ihrer Groesse im Prozess
+        # (security-reviewer 2026-09-18). Gehalten wird ein 16-Byte-Digest.
+        limit = SlidingWindowLimit(5, 10.0)
+        long_key = "x" * 300_000
+        self.assertTrue(limit.try_acquire(long_key))
+        self.assertTrue(limit.try_acquire(long_key))
+        self.assertEqual(1, len(limit._hits))
+        self.assertTrue(all(isinstance(k, bytes) and len(k) == 16 for k in limit._hits))
+        self.assertEqual(2, len(next(iter(limit._hits.values()))))
+
+    def test_key_cap_fails_closed(self):
+        clock = FakeClock()
+        limit = SlidingWindowLimit(1, 10.0, now=clock.now)
+        limit.MAX_KEYS = 3
+        for key in ("a", "b", "c"):
+            self.assertTrue(limit.try_acquire(key))
+        with self.assertLogs("app.rate_limit", level="WARNING") as logs:
+            self.assertFalse(limit.try_acquire("d"))
+        self.assertTrue(any("sliding_window_key_cap" in line for line in logs.output))
+        # Ein bekannter Schluessel bleibt unter dem Deckel erreichbar ...
+        self.assertFalse(limit.try_acquire("a"))  # ... und an seinem eigenen Limit.
+        # Sobald alte Schluessel ablaufen, macht der Deckel Platz.
+        clock.t = 11.0
+        self.assertTrue(limit.try_acquire("d"))
 
     def test_rejects_a_limit_or_window_that_would_never_admit(self):
         with self.assertRaises(ValueError):

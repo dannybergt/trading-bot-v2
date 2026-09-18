@@ -32,7 +32,7 @@ from fastapi import HTTPException  # noqa: E402
 from app import main as app_main  # noqa: E402
 
 
-MALFORMED = ("AMAZON INC", "A" * 25, "AAPL;DROP", "<b>AAPL</b>", "")
+MALFORMED = ("AMAZON INC", "A" * 25, "AAPL;DROP", "<b>AAPL</b>", "", "A/../../V4/X", "//X", "A/B/C")
 
 # Alle Dienstmethoden, die einer der Endpunkte als erstes ruft. Wird eine
 # davon bei einer Zeichenkette ohne Tickerform gerufen, steht die Pruefung

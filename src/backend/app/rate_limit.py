@@ -16,6 +16,7 @@ the backend ever scales horizontally.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 import time
@@ -109,22 +110,34 @@ class SlidingWindowLimit:
         self.limit = limit
         self.window_seconds = window_seconds
         self._now = now
-        self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._hits: dict[bytes, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
         self._calls = 0
 
-    #: Every this many calls, keys whose hits all expired are dropped. Keys
-    #: are caller-chosen (a login limit is keyed on the typed e-mail), so
-    #: without a sweep the map grows by one deque per string ever tried.
+    #: Keys are caller-chosen (the login limit is keyed on the typed e-mail,
+    #: before any account check), so the map is what an unauthenticated
+    #: caller can grow. Three locks on that: every SWEEP_EVERY calls, keys
+    #: whose hits all expired are dropped; keys are stored as a 16-byte
+    #: digest, never the string (fixed size, and no e-mail lingers in
+    #: memory); and past MAX_KEYS distinct live keys a new key is refused —
+    #: 429 for the flood, not an OOM for everyone (security-reviewer,
+    #: 2026-09-18: 200 kB "e-mails" held ~2x their size per request).
     SWEEP_EVERY = 1024
+    MAX_KEYS = 50_000
 
     def try_acquire(self, key: str) -> bool:
+        digest = hashlib.blake2b(key.encode("utf-8", "surrogatepass"), digest_size=16).digest()
         with self._lock:
             now = self._now()
             self._calls += 1
             if self._calls % self.SWEEP_EVERY == 0:
                 self._sweep_locked(now)
-            hits = self._hits[key]
+            if digest not in self._hits and len(self._hits) >= self.MAX_KEYS:
+                self._sweep_locked(now)
+                if len(self._hits) >= self.MAX_KEYS:
+                    logger.warning("sliding_window_key_cap", extra={"keys": len(self._hits)})
+                    return False
+            hits = self._hits[digest]
             while hits and hits[0] <= now - self.window_seconds:
                 hits.popleft()
             if len(hits) >= self.limit:

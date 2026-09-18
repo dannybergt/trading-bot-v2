@@ -33,11 +33,22 @@ def to_yfinance_symbol(symbol: str | None) -> str:
     return canonicalize_symbol(symbol).replace("/", "-")
 
 
+# One segment starts and ends alphanumeric (BRK.B, BF-B, 0700, A), a pair is
+# two segments around one "/" (BTC/USD). Never ".." or a second "/": the
+# symbol ends up in the path of outbound provider requests (FMP), and
+# "A/../../v4/x" was steering the operator's key to arbitrary provider
+# paths (security-reviewer, 2026-09-18).
+_SYMBOL_SEGMENT = r"[A-Z0-9](?:[A-Z0-9.-]{0,22}[A-Z0-9])?"
+_SYMBOL_FORM = re.compile(rf"{_SYMBOL_SEGMENT}(?:/{_SYMBOL_SEGMENT})?")
+
+
 def is_plausible_symbol_query(value: str | None) -> bool:
     normalized = normalize_symbol(value)
-    if not normalized or " " in normalized:
-        return False
-    return bool(re.fullmatch(r"[A-Z0-9./-]{1,24}", normalized))
+    return (
+        0 < len(normalized) <= 24
+        and ".." not in normalized
+        and _SYMBOL_FORM.fullmatch(normalized) is not None
+    )
 
 
 def symbol_looks_like_crypto(symbol: str | None) -> bool:
