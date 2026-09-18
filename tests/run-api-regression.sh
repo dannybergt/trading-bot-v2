@@ -555,6 +555,25 @@ assert watchlist_etf_item["assetLabel"] == "ETF"
 assert watchlist_etf_item["tags"] == ["core", "etf"]
 print("watchlist add etf item ok")
 
+# A stored string no market lists is not inert: the alert dispatcher and the
+# scanner ask the providers for every stored item, every cycle. Since #35 the
+# read endpoints refuse such a string with 404; the write path refuses it
+# with 400 before a row exists, and names it.
+watchlist_bad_item = requests.post(
+    f"{base}/api/watchlists/{watchlist_id}/items",
+    headers=headers,
+    json={"symbol": "AMAZON INC", "name": "not a ticker", "tags": []},
+    timeout=30,
+)
+assert watchlist_bad_item.status_code == 400, f"malformed watchlist symbol answered {watchlist_bad_item.status_code}: {watchlist_bad_item.text}"
+bad_item_detail = watchlist_bad_item.json().get("detail")
+assert isinstance(bad_item_detail, str) and "AMAZON INC" in bad_item_detail and "form" in bad_item_detail, bad_item_detail
+watchlist_after_bad = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlist_after_bad.raise_for_status()
+watchlist_after_bad_items = next(w for w in watchlist_after_bad.json() if w["id"] == watchlist_id)["items"]
+assert all(item["symbol"] != "AMAZON INC" for item in watchlist_after_bad_items), "a refused symbol must not be stored"
+print("watchlist refuses a symbol no market lists ok")
+
 watchlist_update_item = requests.put(
     f"{base}/api/watchlists/{watchlist_id}/items/BTC/USD",
     headers=headers,

@@ -1,5 +1,39 @@
 # Current Focus
 
+## SESSION 2026-09-18 (2): #35 gemergt, Watchlist-Schreibpfad und Schleifen — PR #36 wartet auf FREIGABE; BC-KI01 kann nicht mehr von Docker Hub ziehen
+
+**Stand:** `main` auf `afc6d52` (PR #35 gemergt auf `FREIGABE`, `publish` gruen, `sha-afc6d52` auf Docker Hub). Branch `security/watchlist-symbol-form` auf `6ed9498` (2 Commits, gepusht), **PR #36** (Text nach §15). Thread 1 der Liste vom 09-18 (1) geschlossen.
+
+**Instanz BC-KI01 — nicht hier loesbar, dringend:** Watchtower (`nexainer-watchtower`, Poll 60 s) bekommt seit **2026-09-18 15:46 lokal** von Docker Hub `401 Unauthorized` auf jeden Head-Request und danach `toomanyrequests: too many failed login attempts for username or IP address` — das gespeicherte Credential in `/root/.docker/config.json` (Stand 11.09.) wird abgelehnt, und der 60-s-Poll haelt die Sperre am Leben. Folge: **Mischstand** auf der Instanz — `trading-bot-v2-frontend-1` auf `afc6d52` (Pull um 16:35 kam durch), `trading-bot-v2-backend-1` weiter auf `097b61e` (`/api/health`). Fuer #35 harmlos (kein Frontend-Diff), aber der Backend-Stand von #35 (Nutzer-Anteil, Symbolform, Auth-Grenzen) laeuft dort **nicht**, und dasselbe trifft `nex-im`, `traefik` und alle anderen Watchtower-Container des Nodes. Handgriff: Docker-Hub-Token pruefen/erneuern und als root `docker login` auf BC-KI01 (oder `docker logout`, falls die Images oeffentlich sind — dann zieht Watchtower anonym); danach `/api/health` muss `afc6d52` melden. Nicht von hier: Anmeldedaten und globale Mutation am Node (§3).
+
+**Gebaut (PR #36):** `add_item` weist Nicht-Tickerformen mit 400 ab (`require_symbol_form(..., status_code=400)`); `stored_symbol_is_askable` — Scanner und Alarm-Dispatcher ueberspringen Bestandszeilen ohne Tickerform und loggen `watchlist_item_malformed_skipped` (`item_id`); `WATCHLIST_NAME_MAX = 200` an allen vier Schreibpfaden; Symbol max 64 (bewusst weiter als die Form, damit der benannte 400 kommt); api-regression `watchlist refuses a symbol no market lists` (78 von 93); ADR 2026-09-18 (zweiter Eintrag).
+
+**Tore:** R `reviewer` kein Blocker (W1/N1/N2/F1 uebernommen, N3 offen). S `security-reviewer` kein Blocker, gitleaks 0, Lockfiles unveraendert (pip-audit Vorbestand **33 -> 51** Advisories in zwei Tagen); #1/#3 behoben, #2 Thread. V `verifier` auf `63708b6` A–D nachgewiesen (400 in 10–18 ms, 0 Provider-Zeilen, DB leer, Bestandszeile bearbeitbar, UI-Satz woertlich, Negativkontrolle mit `main.py` von `afc6d52` speichert alles); **Folgepruefung der Schleifen auf `6ed9498`: 5/5 nachgewiesen** (`artifacts/verification/20260918T145400Z-6ed9498/` — 0 AMAZON-Zeilen, 2x Skip-Warnung, kein Backfill, `/alerts` 103 ms statt 34,9 s; Negativkontrolle mit `63708b6` zeigt 429 + Backfill). **CI gruen auf `6ed9498`.** C: CI auf #36 s. PR. Unit **480 OK**, api-regression 68 gruen.
+
+**Offene Threads (hier, jetzt, machbar):**
+1. **Deckel auf Watchlist-Eintraege je Nutzer** (security-reviewer #2, MITTEL): gleiche Kostenmechanik wie das Nutzer-Kontingent beim Backtest, mit wohlgeformten Symbolen; `WATCHLIST_MAX_ITEMS_PER_USER` (~200) in `add_item`/`create_watchlist`.
+2. **Einmal-Sweep** ueber Bestandszeilen ohne Tickerform als versioniertes Skript (§9) + Admin-Import zaehlt uebersprungene Zeilen im Audit-Event.
+3. 422-Listen (Pydantic) in der UI nur „Request failed: 422" (reviewer N3): `maxLength` an den Feldern oder `msg`-Abbildung im Client.
+4. security-reviewer #4 aus #35 (Anteil vor dem Profilabruf) — Ausloeser zweiter aktiver Nutzer.
+5. Login-Schluessel ist IP+E-Mail (verifier, Vorbestand) — zusaetzlich IP-allein-Fenster entscheiden.
+6. `threadpoolctl.threadpool_limits` nur im Job-Thread.
+7. **Analyse-Seite uebersetzen** — naechster Produktschritt.
+8. Limit-Order auf unbekanntem Symbol haengt still pending.
+9. Datenqualitaets-Label nennt fuer Alpaca-Bars den falschen Anbieter.
+10. Regel-K-Frage (verifier): uebersprungener Eintrag im Alerts-Payload unsichtbar (Liste 2, `trackedSymbols` 1) — `skippedSymbols` im Payload? Katalog entscheidet. react-query wiederholt 404 einmal; Such-Dropdown ueberlappt den Fehlertext auf der Watchlist-Seite (Layout).
+11. 26 Test-Platzhalter-Schluessel loesen gitleaks aus (`.gitleaks.toml` oder Fixture).
+
+**Nicht hier loesbar (Betreiber):**
+- **BC-KI01 Docker-Hub-Zugang** (s. o.) — davor kommt kein Backend-Stand mehr auf die Instanz.
+- **PR #36 mergen** — Rueckfrage `FREIGABE` gestellt.
+- Dependency-Advisories: PR `security/deps-2026-09` **vor** dem naechsten Release (51 pip-Advisories, 11 npm).
+- Katalogzeilen: V5-Ergaenzung Nutzer-Anteil, V6, V7, neue Zeile „Ein String, den kein Markt listet, erzeugt weder Anbieteraufruf noch Zeile (Lesen 404, Anlegen 400)" (Vorschlag des verifiers), 401-vor-404.
+- `node` installieren, Stufe 3, pending Order `AMAZON` (id 1) stornieren, `artifacts/verification/stack-{loops,15c3e1d,d0057cf,19c03d8}/pg/` mit `sudo rm -rf` — unveraendert.
+
+**Allokierte Ports/Ressourcen:** keine; eigene Container entfernt, keine Volumes. Fremd, nicht angefasst: `nex-rights-*`, `nex-grid-*`, `nex-expose-*`.
+
+**Naechster sinnvoller Schritt:** `FREIGABE` fuer #36; Betreiber stellt den Docker-Hub-Zugang auf BC-KI01 her, dann Nachweis von #35/#36 auf der Instanz (`/api/health` = Merge-Commit, `POST …/items` mit `AMAZON INC` → 400). Danach Thread 1 (Deckel je Nutzer) oder Thread 7 (Analyse-Seite uebersetzen).
+
 ## SESSION 2026-09-18: Nutzer-Anteil an der Backtest-Warteschlange, Symbolform vor dem Anbieter — PR #35 wartet auf FREIGABE
 
 **Stand:** `main` auf `097b61e`. Branch `security/backtest-user-quota` auf `cfaa469` (5 Commits, gepusht), **PR #35** (ready, Text nach §15). Threads 1, 3 und 8 der Liste vom 2026-09-16 geschlossen; dazu vier Befunde des `security-reviewer` und einer des `verifier` aus dieser Session behoben.

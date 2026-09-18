@@ -205,6 +205,7 @@ class AlertRequestPathTests(unittest.TestCase):
         record.id = "wl_profile"
         item = MagicMock()
         item.id = 1
+        item.symbol = "VOO"  # die Schleife fragt nur Eintraege mit Tickerform (2026-09-18)
         record.items = [item]
 
         tracked = {
