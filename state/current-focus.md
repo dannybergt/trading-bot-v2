@@ -1,5 +1,45 @@
 # Current Focus
 
+## SESSION 2026-09-18: Nutzer-Anteil an der Backtest-Warteschlange, Symbolform vor dem Anbieter — PR #35 wartet auf FREIGABE
+
+**Stand:** `main` auf `097b61e`. Branch `security/backtest-user-quota` auf `cfaa469` (5 Commits, gepusht), **PR #35** (ready, Text nach §15). Threads 1, 3 und 8 der Liste vom 2026-09-16 geschlossen; dazu vier Befunde des `security-reviewer` und einer des `verifier` aus dieser Session behoben.
+
+**Gebaut:**
+- `backtest_service`: Jobs tragen ihren Anfrager; `BACKTEST_MAX_JOBS_PER_USER = 3`, `BACKTEST_ENQUEUES_PER_USER = 12/600 s`; Reihenfolge Anteil -> Deckel -> Fenster unter `_LOCK`; Abweisung wie beim globalen Deckel (`pending, queued: false`, 30 s), Haltezeit je `(owner, symbol)` (reviewer W1), ein fertiger Job raeumt jede Haltezeit seines Symbols (verifier Nebenbefund 1). `peek(symbol, owner)`, Endpunkt gibt `owner=str(current_user.id)`.
+- `rate_limit.SlidingWindowLimit` (aus `auth_routes` gehoben): `monotonic`, `now` im Lock, Schluessel als 16-Byte-Digest, Sweep alle 1024 Aufrufe, `MAX_KEYS = 50_000` faellt geschlossen zu. Auth-Modelle mit `max_length` (E-Mail 254, Passwort 1024, MFA 16, Reset-Token 512); `register` 5/h je Adresse.
+- `main.require_symbol_form`: 404 mit der Zeichenkette vor jedem Dienstaufruf an 7 Lese-Endpunkten; `is_plausible_symbol_query` = ein Segment oder ein Paar um genau ein `/`, nie `..`; `fmp_service` quotet jedes Symbol als Pfadsegment.
+- api-regression: `symbol form is checked before any provider`, `paper order without a price is refused with the symbol` (Thread 8, V7); `schritte-ohne-zielzeile.md` 77 von 92.
+- ADR 2026-09-18.
+
+**Tore:** K n/a (2 Slices, keine Architektur/Auth-Modell-Aenderung). **R** `reviewer` kein Blocker; W1, N1, N2, F1, F3 uebernommen; N3, F2 offen. **S** `security-reviewer`: #1 HOCH (Limiter-Schluessel aus dem Login-Body, Vorbestand), #2 MITTEL (`..` im FMP-Pfad), #3 NIEDRIG (Register-Limit) behoben in `3f747c4`; #4 NIEDRIG Backlog. gitleaks 0, Lockfiles unveraendert. **V** `verifier` auf `19c03d8` (`artifacts/verification/20260918T135842Z-19c03d8/`): A–E **alle nachgewiesen** (Anteil/Fenster/Haltezeit in-process im Backend-Container mit blockierender Fake-Rechnung, HTTP mit zwei Nutzern, 42x 404 in 5–13 ms ohne Provider-Zeile, Login/Reset 429, Order ohne Kurs 400 + Audit, Analyse-Seite nennt den Satz; 401 vor 404). Nicht vom Verifier gesehen: `3f747c4`/`cfaa469` — dafuer Unit **477 OK** + api-regression **67 gruen** auf dem finalen Image. **C** CI gruen auf `19c03d8`; Lauf auf `cfaa469` s. PR.
+
+**Negativkontrollen:** Anteil/Fenster/Reihenfolge 3/3 rot ohne Schutz; Form-Gate rot, sobald ein Endpunkt die Pruefung verliert; W1 rot mit symbolweitem Eintrag.
+
+**Offene Threads (hier, jetzt, machbar):**
+1. **Form-Grenze am Schreibpfad** `add_item` (reviewer F2): gespeicherte Eintraege wie `AMAZON INC` enden auf der Analyse-Seite jetzt sichtbar mit 404; pruefen, ob Hintergrundschleifen/Alert-Dispatcher fuer solche Eintraege weiter Anbieter fragen, dann dieselbe Pruefung beim Anlegen.
+2. **security-reviewer #4**: Anteil/Fenster erst nach Profil- und History-Abruf entschieden — Ausloeser zweiter aktiver Nutzer.
+3. **Login-Schluessel ist IP+E-Mail** (verifier Nebenbefund 2, Vorbestand): je Konto und IP 5 Versuche, ueber Konten hinweg unbegrenzt (Konto-Deckel 10/900 s bleibt). Entscheiden: zusaetzlich IP-allein-Fenster.
+4. `threadpoolctl.threadpool_limits` nur im Job-Thread (Thread 2 vom 09-16).
+5. **Analyse-Seite uebersetzen** (Thread 4 vom 09-16) — naechster Produktschritt.
+6. Limit-Order auf unbekanntem Symbol haengt still pending (Thread 6 vom 09-16).
+7. Datenqualitaets-Label nennt fuer Alpaca-Bars den falschen Anbieter (Thread 10 vom 09-16).
+8. react-query wiederholt die 404 einmal (reviewer N3, harmlos).
+9. 26 Test-Platzhalter-Schluessel loesen gitleaks aus (security-reviewer #5 vom 09-16): `.gitleaks.toml`-Allowlist oder Fixture.
+
+**Nicht hier loesbar (Betreiber):**
+- **PR #35 mergen** — Rueckfrage `FREIGABE` gestellt (Session-Ende 2026-09-18). Nach dem Merge `publish.yml` beobachten; Watchtower zieht `latest` auf BC-KI01.
+- Katalog-Entscheidungen: V5 um den Nutzer-Anteil ergaenzen („ein Nutzer bindet den Worker mit hoechstens 3 gleichzeitigen und 12 Enqueues je 10 min; die Abweisung haelt nur fuer ihn"), V6 (juengster Bar <= 7 Tage), V7 (Order ohne Kurs), Zeile fuer „Anbieterkontingent wird nicht fuer Nicht-Symbole verbraucht", 401-vor-404-Reihenfolge.
+- Dependency-Advisories (PR `security/deps-2026-09`), `node` installieren, Stufe 3 (Test-Account/Live-Smoke), pending Order `AMAZON` (id 1) in der UI stornieren — unveraendert.
+- `artifacts/verification/stack-{loops,15c3e1d,d0057cf,19c03d8}/pg/` gehoeren uid 70 (gitignored): `sudo rm -rf`.
+
+**Bewusst nicht angefasst:** 429 am Backtest-Endpunkt; fairer Scheduler je Nutzer; i18n am Fehlerpfad der Analyse-Seite; `n_jobs=-1`; Workbox fuer `/api/backtest/`.
+
+**Annahmen, widerrufbar:** 3 Jobs / 12 Enqueues je 10 min je Nutzer; `MAX_KEYS = 50_000`; Register 5/h je Adresse; 404 (nicht 400) fuer eine Zeichenkette ohne Tickerform; Haltezeit endet mit dem Ergebnis des Symbols.
+
+**Allokierte Ports/Ressourcen:** keine. Eigene Container (`tbv2-unit-*`, `tbv2-verify-*`, `trading-bot-v2-api-*`) entfernt, keine Volumes angelegt. Fremd auf diesem Host, nicht angefasst: `nex-rights-*`, `nex-grid-*`.
+
+**Naechster sinnvoller Schritt:** `FREIGABE` fuer #35; danach Thread 1 (Form-Grenze am Schreibpfad + Schleifen pruefen) als `security/watchlist-symbol-form`, dann Thread 5 (Analyse-Seite uebersetzen).
+
 ## SESSION 2026-09-16 (2): Warum der Eigentuemer keine Live-Daten sah — Alpaca lieferte die aeltesten Bars, und eine Order ohne Kurs hing still
 
 **Stand:** `main` auf `e231fe6` (PR #33 gemergt). **Ausloeser:** Frage des Eigentuemers nach dem Merge von #30: „warum kann ich noch immer nicht manuell Paper Trading machen, obwohl der Alpaca-Key drin ist, welcher Key fehlt, warum keine Live-Daten — pruefe selbst, seit Wochen kein Fortschritt."
