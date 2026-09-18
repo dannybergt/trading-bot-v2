@@ -578,6 +578,26 @@ class BacktestRegistryTests(unittest.TestCase):
         self.assertTrue(any("backtest_user_quota_full" in line for line in logs.output))
         self.assertFalse(any("backtest_queue_full" in line for line in logs.output))
 
+    def test_a_finished_job_ends_the_hold_for_everyone_turned_away(self):
+        # u1 an seinem Anteil wird fuer S abgewiesen, u2 rechnet S. Sobald das
+        # Ergebnis da ist, darf u1 nicht bis zum Ende der Haltezeit `pending`
+        # neben einem fertigen Ergebnis lesen (verifier 2026-09-18).
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        df = _synthetic_frame(30)
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_MAX_JOBS_PER_USER", 1), \
+             self.assertLogs("app.backtest_service", level="WARNING"):
+            self.assertTrue(self.svc.request_backtest(_synthetic_frame(30), symbol="A", train_window=5, step=5, owner="u1")["queued"])
+            self.assertFalse(self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u1")["queued"])
+            self.assertFalse(self.svc.peek("S", owner="u1")["queued"])
+            self.assertTrue(self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u2")["queued"])
+            gate.set()
+            self._wait_for_job("A")
+            self._wait_for_job("S")
+        self.assertIsNone(self.svc.peek("S", owner="u1"))
+        self.assertEqual("ready", self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u1")["status"])
+
     def test_enqueues_per_user_are_windowed(self):
         # Der Anteil begrenzt, was gleichzeitig offen ist; das Fenster
         # begrenzt, wie oft ein Nutzer nachlegt, sobald ein Job fertig ist —
@@ -632,7 +652,7 @@ class BacktestRegistryTests(unittest.TestCase):
             self._wait_for_job("A")
         # Das Fenster (1 je 600 s) ist durch A belegt, nicht zusaetzlich durch B.
         self.assertFalse(window.try_acquire("u1"))
-        self.assertEqual(1, len(window._hits["u1"]))
+        self.assertEqual(1, sum(len(hits) for hits in window._hits.values()))
 
     def test_peek_knows_nothing_without_a_job(self):
         self.assertIsNone(self.svc.peek("AAPL"))

@@ -397,6 +397,11 @@ def _run_job(
         job = _JOBS.get(symbol)
         if job is not None and job["stamp"] == stamp:
             del _JOBS[symbol]
+        # A result is here now; a user the cap turned away for this symbol
+        # must read it on the next poll, not `pending` for the rest of the
+        # hold beside a finished result (verifier, 2026-09-18).
+        for key in [k for k in _REFUSED if k[1] == symbol]:
+            del _REFUSED[key]
     if status == STATUS_READY:
         logger.info(
             "backtest_job_finished",
