@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 75 von 90 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 77 von 92 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
@@ -100,12 +100,18 @@ Funktionen ab, nicht diese Ablaeufe.
 `stock asset metadata` · `crypto asset metadata` · `search asset metadata` ·
 `scanner asset metadata` · `research signals + macro context + social sentiment shape` ·
 `crypto research + crypto metrics shape` · `crypto research context` ·
-`etf research context` · `symbol events provider status names its cause`
+`etf research context` · `symbol events provider status names its cause` ·
+`symbol form is checked before any provider`
 
 Diese Schritte pruefen die **Form** der Antworten, nicht die Richtigkeit der
 Werte. `symbol events provider status names its cause` ist die Ausnahme: er
 verlangt, dass ein Anbieterausfall seine Ursache nennt — inhaltlich nahe an
-TBV2-Z06 (b), aber ohne dass der Katalog ihn fuehrt.
+TBV2-Z06 (b), aber ohne dass der Katalog ihn fuehrt. `symbol form is checked
+before any provider` bewacht die Grenze vor dem Anbieter: eine Zeichenkette
+ohne Tickerform (`AMAZON INC`, 25 Zeichen, Markup) bekommt auf jedem Lese-
+Endpunkt je Symbol sofort 404 mit der Zeichenkette im Grund, statt drei
+Anbieter und den Platzhalter zu durchlaufen (security-reviewer 2026-09-16);
+ein wohlgeformtes unbekanntes Symbol geht weiter zum Anbieter.
 
 ### Betrieb
 
@@ -122,13 +128,15 @@ sich genommen aber kein Produktversprechen. `ui_analysis` prueft heute nur, dass
 ein Chart-Element rendert; die inhaltlichen Zusagen der Analyse-Seite haengen an
 Z02 und Z06 mit eigenen Schritten.
 
-### Paper-Trading-Formular (1)
+### Paper-Trading-Formular (2)
 
-`ui_paper_order_no_price`
+`ui_paper_order_no_price` · `paper order without a price is refused with the symbol`
 
 Eine Market-Order fuer ein Symbol, fuer das kein Anbieter einen Kurs liefert,
 wird an der Grenze abgewiesen, und die Seite nennt das getippte Symbol statt des
-Allgemeinsatzes. Gefunden 2026-09-16: eine "AMAZON"-Order stand auf der
+Allgemeinsatzes; der API-Schritt (seit 2026-09-18) belegt den Vertrag dahinter —
+400 `no_price_for_symbol` mit Symbol, Audit-Zeile `paper_order.place_rejected`,
+keine Order-Zeile. Gefunden 2026-09-16: eine "AMAZON"-Order stand auf der
 deployten Instanz 21 h still auf pending; danach zeigte die Seite trotz
 400-mit-Grund nur "Order could not be placed." — `ApiError.detail` trug die
 ganze Antwort, `detail.reason` griff ins Leere, und dasselbe galt seit dem
@@ -212,8 +220,7 @@ machen, statt sie in einer Notiz zu fuehren.
 
 ### V7 — Eine Order ohne Kurs wird mit dem getippten Symbol abgewiesen
 
-Betrifft: `ui_paper_order_no_price`; dazu der api-regression-Schritt fehlt noch
-(Market-Order ohne Kurs -> 400 `no_price_for_symbol`, Audit `paper_order.place_rejected`).
+Betrifft: `ui_paper_order_no_price`, `paper order without a price is refused with the symbol`.
 
 Vorschlag fuer den Zielsatz: "Eine Order, fuer die kein Anbieter einen Kurs
 liefert, wird an der Grenze abgewiesen — API 400 mit Grund und Symbol, Audit-
