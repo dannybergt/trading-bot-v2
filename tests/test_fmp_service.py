@@ -36,6 +36,17 @@ class FmpServiceTests(unittest.TestCase):
             self.assertEqual([], service.get_etf_holdings("VOO"))
         get_mock.assert_not_called()
 
+    def test_symbol_is_one_path_segment(self):
+        # Zweites Schloss hinter der Formpruefung an der API-Grenze: was
+        # immer hier ankommt, wird ein Pfadsegment, nie mehrere.
+        service = FmpService(api_key="k")
+        with patch("app.fmp_service.acquire_rate_limit", return_value=True), \
+             patch("app.fmp_service.requests.get", return_value=_response([])) as get_mock:
+            service.get_profile("a/../../v4/x")
+        url = get_mock.call_args.args[0]
+        self.assertTrue(url.endswith("/profile/A%2F..%2F..%2FV4%2FX"), url)
+        self.assertNotIn("/../", url)
+
     def test_get_profile_returns_first_payload_entry(self):
         service = FmpService(api_key="k")
         with patch("app.fmp_service.acquire_rate_limit", return_value=True), \

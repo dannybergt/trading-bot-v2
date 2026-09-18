@@ -4,12 +4,10 @@ Authentication API routes: register, login, password reset, MFA.
 import logging
 import os
 import secrets
-import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app import audit_service
@@ -19,6 +17,7 @@ from app.models import User, PasswordResetToken
 from app.watchlist_seed import seed_default_watchlists
 from app.email_service import PasswordResetDeliveryError, send_password_reset_email
 from app.push_service import PushConfigurationError, PushService
+from app.rate_limit import SlidingWindowLimit
 from app.auth import (
     hash_password,
     verify_password,
@@ -39,29 +38,26 @@ from app.auth import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 _RATE_LIMITS = {
-    "login": (5, 300),
+    "login": SlidingWindowLimit(5, 300),
     # Per-account login limit: stricter than the per-IP one because an
     # attacker that rotates source IPs would otherwise bypass the per-IP
     # bucket entirely. 10 attempts per 15 minutes against a single email.
-    "login_per_account": (10, 900),
-    "password_reset_request": (3, 900),
-    "password_reset_confirm": (5, 900),
+    "login_per_account": SlidingWindowLimit(10, 900),
+    "password_reset_request": SlidingWindowLimit(3, 900),
+    "password_reset_confirm": SlidingWindowLimit(5, 900),
+    # Registration is open. Every account is a share of the backtest queue
+    # and a row in the database; five an hour per address is a household,
+    # not a script.
+    "register": SlidingWindowLimit(5, 3600),
 }
-_rate_limit_buckets = defaultdict(deque)
 
 
 def _enforce_rate_limit(scope: str, key: str):
-    limit, window_seconds = _RATE_LIMITS[scope]
-    bucket = _rate_limit_buckets[(scope, key)]
-    now = time.time()
-    while bucket and bucket[0] <= now - window_seconds:
-        bucket.popleft()
-    if len(bucket) >= limit:
+    if not _RATE_LIMITS[scope].try_acquire(key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please try again later.",
         )
-    bucket.append(now)
 
 
 def _request_identity(request: Request, suffix: str = "") -> str:
@@ -71,9 +67,17 @@ def _request_identity(request: Request, suffix: str = "") -> str:
 
 # --- Request/Response Models ---
 
+# Length limits at the boundary: an address longer than RFC 5321's 254
+# characters is no login attempt, and the e-mail is the key of the login
+# limiter before any account check — without a limit the body size is
+# what an unauthenticated caller makes the process hold.
+EMAIL_MAX_LENGTH = 254
+PASSWORD_MAX_LENGTH = 1024
+
+
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     is_admin: bool = False
 
     @field_validator("password")
@@ -85,9 +89,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
-    mfa_code: str | None = None
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    mfa_code: str | None = Field(default=None, max_length=16)
 
 
 class TokenResponse(BaseModel):
@@ -102,12 +106,12 @@ class RefreshRequest(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
-    email: str
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(max_length=512)
+    new_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
 
     @field_validator("new_password")
     @classmethod
@@ -183,8 +187,9 @@ class PushSubscriptionRequest(BaseModel):
 # --- Routes ---
 
 @router.post("/register", response_model=UserResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     """Register a new user. First user becomes admin."""
+    _enforce_rate_limit("register", _request_identity(request))
     # Check if email already exists
     existing = db.query(User).filter(User.email == req.email.lower()).first()
     if existing:

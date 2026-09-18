@@ -153,6 +153,7 @@ docker run --rm -i --network "${NETWORK_NAME}" "${BACKEND_IMAGE}" python - <<PY
 import io
 import json
 import requests
+import time as _time
 
 base = "http://backend:8000"
 email = "${ADMIN_EMAIL}"
@@ -254,6 +255,39 @@ assert crypto_payload["isCrypto"] is True
 assert crypto_payload["provider"]["source"] == "Alpha Vantage"
 assert crypto_payload["provider"]["status"] in {"live", "partial", "unavailable"}
 print("crypto asset metadata ok")
+
+# The symbol's form is checked before any provider is asked (2026-09-18):
+# a string no market lists — "AMAZON INC", a 25-character run, markup — used
+# to walk Alpaca, Alpha Vantage, yfinance and the placeholder on every
+# per-symbol read endpoint and answer 200 with fabricated bars. Now it is
+# 404 at once, and the reason names the string. A well-formed unknown
+# ticker still goes to the providers: only they can tell "unknown" from
+# "down", so that one must not be a 404 by form.
+for malformed in ("AMAZON INC", "A" * 25, "<b>AAPL</b>"):
+    for path in ("stock", "research", "backtest", "data-quality", "events", "news"):
+        started_form = _time.monotonic()
+        refused = requests.get(
+            f"{base}/api/{path}/{requests.utils.quote(malformed, safe='')}",
+            headers=headers,
+            timeout=30,
+        )
+        form_s = _time.monotonic() - started_form
+        assert refused.status_code == 404, (
+            f"/api/{path}/{malformed!r} answered {refused.status_code}, not 404 by form"
+        )
+        form_detail = refused.json().get("detail")
+        assert isinstance(form_detail, str) and "form" in form_detail and malformed.upper() in form_detail, (
+            f"/api/{path}/{malformed!r}: the refusal does not name the string: {form_detail!r}"
+        )
+        # Before any provider: a refusal that paid a provider timeout first
+        # costs the provider chain (tens of seconds on this host), a refusal
+        # by form costs auth and a regex — 3 s leaves room for a loaded host.
+        assert form_s < 3.0, f"/api/{path}/{malformed!r} took {form_s:.2f} s to refuse — was a provider asked first?"
+well_formed_unknown = requests.get(f"{base}/api/stock/ZZZZNOPE123", headers=headers, timeout=60)
+assert not (well_formed_unknown.status_code == 404 and "form" in str(well_formed_unknown.json().get("detail"))), (
+    "a well-formed unknown ticker must reach the providers, not be refused by form"
+)
+print("symbol form is checked before any provider ok")
 
 stock_research = requests.get(
     f"{base}/api/research/AAPL",
@@ -384,7 +418,6 @@ print("symbol events provider status names its cause ok")
 # pending and a second call right after it must come back well under a
 # second, because it is served from the registry alone. The observed mode is
 # printed so nobody reads the synthetic case as the full proof.
-import time as _time
 started_backtest = _time.monotonic()
 backtest = requests.get(f"{base}/api/backtest/AAPL", headers=headers, timeout=30)
 first_backtest_s = _time.monotonic() - started_backtest
@@ -939,6 +972,40 @@ if paper_order["status"] == "pending":
     cancel_resp.raise_for_status()
     assert cancel_resp.json()["status"] == "cancelled"
     print("paper trading cancel ok")
+
+# A market order needs a price now. Without one it used to be created
+# pending and never filled — an "AMAZON" order sat 21 h on the deployed
+# instance (2026-09-16). This environment has no provider, so a well-formed
+# unknown ticker has no price here either: the boundary must answer 400
+# with the reason and the symbol, write the audit row, and create no order.
+# ui_paper_order_no_price proves the sentence on the page; this step
+# proves the API contract behind it (V7 in schritte-ohne-zielzeile.md).
+orders_before_no_price = {
+    o["id"] for o in requests.get(f"{base}/api/paper-trading/orders", headers=headers, timeout=30).json()["orders"]
+}
+no_price = requests.post(
+    f"{base}/api/paper-trading/orders",
+    headers=headers,
+    json={"symbol": "ZZZZNOPE123", "side": "buy", "qty": 1, "source": "manual"},
+    timeout=60,
+)
+assert no_price.status_code == 400, f"market order without a price answered {no_price.status_code}: {no_price.text}"
+no_price_detail = no_price.json().get("detail")
+assert isinstance(no_price_detail, dict) and no_price_detail.get("reason") == "no_price_for_symbol", no_price_detail
+assert no_price_detail.get("symbol") == "ZZZZNOPE123", no_price_detail
+orders_after_no_price = {
+    o["id"] for o in requests.get(f"{base}/api/paper-trading/orders", headers=headers, timeout=30).json()["orders"]
+}
+assert orders_after_no_price == orders_before_no_price, "a refused market order must not leave an order row behind"
+rejected_audit = requests.get(
+    f"{base}/api/admin/audit-events", headers=headers, params={"limit": 20}, timeout=30
+)
+rejected_audit.raise_for_status()
+assert any(
+    item.get("action") == "paper_order.place_rejected" and item.get("outcome") == "denied"
+    for item in rejected_audit.json()["items"]
+), "expected a paper_order.place_rejected audit row"
+print("paper order without a price is refused with the symbol ok")
 
 # --- Auto-Execution: Risikolimits und Not-Halt ---
 # Beide Endpunkte hatten bis 2026-08-05 gar keine Regressionsabdeckung, waehrend

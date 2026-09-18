@@ -183,6 +183,27 @@ def build_search_result(
     }
 
 
+def require_symbol_form(symbol: str) -> str:
+    """The canonical symbol, or 404 before any provider is asked.
+
+    Every per-symbol read endpoint walks up to three providers and then the
+    placeholder for whatever the path carries — `AMAZON INC`, `<b>AAPL</b>`, a
+    120-character string — and each attempt spends the operator's provider
+    quota on a string no market lists (security-reviewer, 2026-09-16; the
+    same shape check guards `place_order` since #33). Not a validity check:
+    a well-formed unknown ticker still goes to the providers, whose answer
+    is the only one that can tell "unknown" from "down". 404 with the
+    string, so the page names the gap instead of drawing a placeholder.
+    """
+    canonical = canonicalize_symbol(symbol)
+    if not is_plausible_symbol_query(canonical):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No market lists a symbol of this form: {canonical[:40]!r}",
+        )
+    return canonical
+
+
 def get_search_fallback_result(query_upper: str) -> dict | None:
     if not is_plausible_symbol_query(query_upper):
         return None
@@ -2301,6 +2322,7 @@ PERIOD_MAP = {
 
 @app.get("/api/stock/{symbol:path}")
 def get_stock_analysis(symbol: str, timeframe: str = "6M", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_symbol_form(symbol)
     tf = PERIOD_MAP.get(timeframe, PERIOD_MAP["6M"])
     period, interval = tf
     
@@ -2382,6 +2404,7 @@ def get_symbol_research(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_symbol_form(symbol)
     fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
     asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
     provider_snapshot = service.get_provider_snapshot(symbol, asset_profile=asset_profile)
@@ -2544,6 +2567,7 @@ def get_symbol_data_quality(
     `DataQualitySection` so a buy/sell recommendation is never opaque
     about its data foundation.
     """
+    require_symbol_form(symbol)
     fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
     asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
     canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
@@ -2873,14 +2897,14 @@ def get_symbol_backtest(
     while it is queued or computing (the last known result rides along),
     `failed` when it raised. The frontend polls while `pending`.
     """
-    canonical = canonicalize_symbol(symbol)
+    canonical = require_symbol_form(symbol)
     # A poll must cost nothing: no asset lookup, no history fetch, no
     # on-screen prediction — and no chance to fall back to the synthetic
     # placeholder while a real-data job is computing. This answer carries
     # no asset fields; the page reads only `status` and `result` from here,
     # and the asset lookup alone can cost a provider call once its cache
     # expires (services.TICKER_INFO_TTL_SECONDS).
-    in_flight = backtest_service.peek(canonical)
+    in_flight = backtest_service.peek(canonical, owner=str(current_user.id))
     if in_flight is not None:
         return {"symbol": canonical, **in_flight}
 
@@ -2930,6 +2954,7 @@ def get_symbol_backtest(
         symbol=canonical,
         train_window=BACKTEST_TRAIN_WINDOW,
         step=BACKTEST_STEP,
+        owner=str(current_user.id),
     )
     return {
         "symbol": canonical,
@@ -2956,6 +2981,7 @@ def get_symbol_events(
     - `unconfigured`: no FMP key is set. An operator action fixes this.
     - `unavailable`: FMP answered but had nothing for this symbol.
     """
+    require_symbol_form(symbol)
     fallback_name = get_user_watchlist_symbol_name(db, current_user, symbol)
     asset_profile = service.get_asset_profile(symbol, fallback_name=fallback_name)
     canonical = asset_profile.get("symbol") or canonicalize_symbol(symbol)
@@ -3149,6 +3175,7 @@ def get_news_hub_feed(
 
 @app.get("/api/news/{symbol:path}")
 def get_stock_news(symbol: str, current_user: User = Depends(get_current_user)):
+    require_symbol_form(symbol)
     return service.get_market_news(symbol)
 
 
@@ -3514,6 +3541,7 @@ def get_alpaca_activities(limit: int = 100, current_user: User = Depends(get_cur
 
 @app.get("/api/alpaca/bars/{symbol:path}")
 def get_alpaca_bars(symbol: str, timeframe: str = "1Day", current_user: User = Depends(get_current_user)):
+    require_symbol_form(symbol)
     # Bars are market data, we can optionally use user credentials if available, 
     # but fallback to system API for users who haven't set keys yet to ensure charts render.
     secret_key = decrypt_secret(current_user.alpaca_secret_key)

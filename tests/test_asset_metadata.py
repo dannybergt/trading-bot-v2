@@ -48,6 +48,16 @@ class AssetMetadataTests(unittest.TestCase):
         self.assertTrue(is_plausible_symbol_query("BTC/USD"))
         self.assertFalse(is_plausible_symbol_query("APPLE INC"))
 
+    def test_symbol_form_is_one_segment_or_one_pair(self):
+        # Das Symbol steht im Pfad ausgehender Anbieter-Requests (FMP):
+        # `..` und ein zweites `/` lenkten den Betreiber-Key auf beliebige
+        # Anbieter-Pfade (security-reviewer 2026-09-18). Echte Formen bleiben:
+        for ok in ("A", "AAPL", "BRK.B", "BF-B", "0700", "BTC/USD", "SAP.DE", "ZZZZNOPE123"):
+            self.assertTrue(is_plausible_symbol_query(ok), ok)
+        for bad in ("A/../../V4/X", "//X", ".", "-", "A/B/C", ".AAPL", "AAPL.", "BTC/", "/USD",
+                    "A..B", "A" * 25, "", " ", "AAPL;DROP", "<b>AAPL</b>", "^GSPC"):
+            self.assertFalse(is_plausible_symbol_query(bad), bad)
+
 
 if __name__ == "__main__":
     unittest.main()

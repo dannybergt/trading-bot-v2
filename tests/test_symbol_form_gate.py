@@ -1,0 +1,98 @@
+"""Die Symbolform wird geprueft, bevor ein Anbieter gefragt wird.
+
+Jeder Lese-Endpunkt je Symbol laeuft fuer das, was im Pfad steht, bis zu
+drei Anbieter und den Platzhalter ab — auch fuer `AMAZON INC`, `<b>AAPL</b>` oder
+eine 120 Zeichen lange Zeichenkette. Jeder Versuch kostet das Kontingent
+des Betreibers fuer eine Zeichenkette, die kein Markt fuehrt
+(security-reviewer 2026-09-16; `place_order` prueft die Form seit #33).
+
+Geprueft wird je Endpunkt:
+  1. eine Zeichenkette ohne Tickerform endet mit 404 und nennt sie,
+  2. dabei wird kein Dienst aufgerufen — die Pruefung steht VOR dem
+     ersten Aufruf, nicht dahinter,
+  3. eine wohlgeformte, aber unbekannte Zeichenkette geht weiter zum
+     Anbieter: die Form ist kein Gueltigkeitsurteil.
+"""
+import os
+import sys
+from pathlib import Path
+import unittest
+from unittest.mock import MagicMock, patch
+
+os.environ.setdefault("JWT_SECRET", "12345678901234567890123456789012")
+os.environ.setdefault("APP_ENCRYPTION_KEY", "abcdefghijklmnopqrstuvwx12345678")
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent / "src" / "backend"
+if not (BACKEND_ROOT / "app").exists():
+    BACKEND_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_ROOT))
+
+from fastapi import HTTPException  # noqa: E402
+
+from app import main as app_main  # noqa: E402
+
+
+MALFORMED = ("AMAZON INC", "A" * 25, "AAPL;DROP", "<b>AAPL</b>", "", "A/../../V4/X", "//X", "A/B/C")
+
+# Alle Dienstmethoden, die einer der Endpunkte als erstes ruft. Wird eine
+# davon bei einer Zeichenkette ohne Tickerform gerufen, steht die Pruefung
+# an der falschen Stelle.
+SERVICE_ENTRY_POINTS = (
+    "get_asset_profile",
+    "get_stock_data",
+    "get_history_frame",
+    "get_market_news",
+    "get_provider_snapshot",
+    "get_ticker_info",
+)
+
+
+def _endpoints():
+    user = MagicMock(id=7, alpaca_api_key=None, alpaca_secret_key=None)
+    db = MagicMock()
+    return {
+        "stock": lambda s: app_main.get_stock_analysis(s, current_user=user, db=db),
+        "research": lambda s: app_main.get_symbol_research(s, current_user=user, db=db),
+        "data_quality": lambda s: app_main.get_symbol_data_quality(s, current_user=user, db=db),
+        "backtest": lambda s: app_main.get_symbol_backtest(s, current_user=user, db=db),
+        "events": lambda s: app_main.get_symbol_events(s, current_user=user, db=db),
+        "news": lambda s: app_main.get_stock_news(s, current_user=user),
+        "alpaca_bars": lambda s: app_main.get_alpaca_bars(s, current_user=user),
+    }
+
+
+class SymbolFormGateTests(unittest.TestCase):
+    def test_malformed_symbol_is_refused_before_any_provider(self):
+        for name, call in _endpoints().items():
+            for raw in MALFORMED:
+                with self.subTest(endpoint=name, symbol=raw), \
+                     patch.multiple(app_main.service, **{m: MagicMock() for m in SERVICE_ENTRY_POINTS}) as mocks, \
+                     patch.object(app_main, "get_user_watchlist_symbol_name") as watchlist_name, \
+                     patch.object(app_main.backtest_service, "peek") as peek:
+                    with self.assertRaises(HTTPException) as caught:
+                        call(raw)
+                    self.assertEqual(404, caught.exception.status_code)
+                    # Der Grund nennt die Zeichenkette (Regel K), gekuerzt.
+                    self.assertIn("form", caught.exception.detail)
+                    self.assertIn(raw[:40].upper().strip(), caught.exception.detail)
+                    for method, mock in mocks.items():
+                        mock.assert_not_called()
+                    watchlist_name.assert_not_called()
+                    peek.assert_not_called()
+
+    def test_well_formed_unknown_symbol_still_reaches_the_provider(self):
+        # Die Form ist kein Gueltigkeitsurteil: ob `ZZZZNOPE123` existiert,
+        # weiss nur der Anbieter — und nur er kann "unbekannt" von "gerade
+        # nicht erreichbar" unterscheiden.
+        self.assertEqual("ZZZZNOPE123", app_main.require_symbol_form("zzzznope123"))
+        self.assertEqual("BTC/USD", app_main.require_symbol_form("btc-usd"))
+        self.assertEqual("BRK.B", app_main.require_symbol_form("BRK.B"))
+
+    def test_detail_is_bounded(self):
+        with self.assertRaises(HTTPException) as caught:
+            app_main.require_symbol_form("X Y" * 100)
+        self.assertLess(len(caught.exception.detail), 120)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,21 +1,26 @@
-"""Token-bucket rate limiter for outbound provider calls.
+"""Rate limiters: token buckets for outbound provider calls, a sliding
+window for inbound requests.
 
 Each provider gets its own bucket sized to the worst-case allowed cadence.
 The bucket is thread-safe so background tasks (auto-scanner, watchlist alert
 dispatcher, backup scheduler) can share it with HTTP request threads without
-clashing.
+clashing. `SlidingWindowLimit` counts hits per key (client, account, user)
+over a fixed window; the login and password-reset routes raise 429 on it,
+the backtest registry turns an enqueue away on it.
 
-This is intentionally minimal: no distributed coordination, no Redis, no
-sliding window. Single-process throttling is sufficient for the current
+This is intentionally minimal: no distributed coordination, no Redis.
+Single-process throttling is sufficient for the current
 deployment shape and avoids a new infra dependency. Move to a shared store if
 the backend ever scales horizontally.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 import time
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -80,6 +85,74 @@ class TokenBucket:
             # Sleep is outside the lock so other threads can refill if a token
             # becomes available concurrently.
             self._sleep(max(0.001, wait))
+
+
+class SlidingWindowLimit:
+    """At most `limit` hits per `key` in any `window_seconds`.
+
+    `try_acquire(key)` records a hit and answers True, or answers False
+    without recording when the key is at its limit — a refused attempt does
+    not extend the window. Process-local like the buckets above; the same
+    lid applies (a second backend process needs a shared store).
+    """
+
+    def __init__(
+        self,
+        limit: int,
+        window_seconds: float,
+        *,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._now = now
+        self._hits: dict[bytes, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+        self._calls = 0
+
+    #: Keys are caller-chosen (the login limit is keyed on the typed e-mail,
+    #: before any account check), so the map is what an unauthenticated
+    #: caller can grow. Three locks on that: every SWEEP_EVERY calls, keys
+    #: whose hits all expired are dropped; keys are stored as a 16-byte
+    #: digest, never the string (fixed size, and no e-mail lingers in
+    #: memory); and past MAX_KEYS distinct live keys a new key is refused —
+    #: 429 for the flood, not an OOM for everyone (security-reviewer,
+    #: 2026-09-18: 200 kB "e-mails" held ~2x their size per request).
+    SWEEP_EVERY = 1024
+    MAX_KEYS = 50_000
+
+    def try_acquire(self, key: str) -> bool:
+        digest = hashlib.blake2b(key.encode("utf-8", "surrogatepass"), digest_size=16).digest()
+        with self._lock:
+            now = self._now()
+            self._calls += 1
+            if self._calls % self.SWEEP_EVERY == 0:
+                self._sweep_locked(now)
+            if digest not in self._hits and len(self._hits) >= self.MAX_KEYS:
+                self._sweep_locked(now)
+                if len(self._hits) >= self.MAX_KEYS:
+                    logger.warning("sliding_window_key_cap", extra={"keys": len(self._hits)})
+                    return False
+            hits = self._hits[digest]
+            while hits and hits[0] <= now - self.window_seconds:
+                hits.popleft()
+            if len(hits) >= self.limit:
+                return False
+            hits.append(now)
+            return True
+
+    def _sweep_locked(self, now: float) -> None:
+        cutoff = now - self.window_seconds
+        for key in [k for k, hits in self._hits.items() if not hits or hits[-1] <= cutoff]:
+            del self._hits[key]
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()
 
 
 class ProviderRateLimitRegistry:

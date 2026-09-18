@@ -196,8 +196,9 @@ class BacktestServiceTests(unittest.TestCase):
                                         "exchange": "NASDAQ", "type": "STOCK", "isCrypto": False}), \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None), \
              patch.object(backtest_service, "request_backtest", return_value=answer) as run:
+            user = MagicMock(id=7)
             payload = app_main.get_symbol_backtest(
-                symbol="AAPL", current_user=MagicMock(), db=MagicMock()
+                symbol="AAPL", current_user=user, db=MagicMock()
             )
 
         self.assertFalse(payload["synthetic"])
@@ -206,6 +207,8 @@ class BacktestServiceTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["step"], app_main.BACKTEST_STEP)
         self.assertEqual(run.call_args.kwargs["train_window"], app_main.BACKTEST_TRAIN_WINDOW)
         self.assertEqual(run.call_args.kwargs["symbol"], "AAPL")
+        # Der Anteil je Nutzer braucht den Nutzer: der Endpunkt nennt ihn.
+        self.assertEqual(run.call_args.kwargs["owner"], str(user.id))
         # Der Endpunkt holt Bars, nicht die Bildschirm-Vorhersage (verifier
         # 2026-09-16: 7-22 s je Erstaufruf fuer eine Vorhersage, die die
         # Antwort nicht traegt) — und der Job bekommt die Indikatorspalten.
@@ -230,11 +233,14 @@ class BacktestServiceTests(unittest.TestCase):
              patch.object(app_main.service, "get_history_frame") as history, \
              patch.object(app_main.service, "get_asset_profile") as profile, \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None):
+            user = MagicMock(id=7)
             payload = app_main.get_symbol_backtest(
-                symbol="btc-usd", current_user=MagicMock(), db=MagicMock()
+                symbol="btc-usd", current_user=user, db=MagicMock()
             )
 
-        peek.assert_called_once_with("BTC/USD")
+        peek.assert_called_once()
+        self.assertEqual("BTC/USD", peek.call_args.args[0])
+        self.assertEqual(str(user.id), peek.call_args.kwargs["owner"])
         history.assert_not_called()
         profile.assert_not_called()
         self.assertEqual("pending", payload["status"])
@@ -513,19 +519,140 @@ class BacktestRegistryTests(unittest.TestCase):
             self.assertEqual("pending", held["status"])
             self.assertFalse(held["queued"])
             # Nach Ablauf der Haltezeit laesst `peek` den vollen Pfad wieder zu.
-            self.svc._REFUSED["D"] -= self.svc.BACKTEST_REFUSAL_HOLD_S
+            self.svc._REFUSED[(None, "D")] -= self.svc.BACKTEST_REFUSAL_HOLD_S
             self.assertIsNone(self.svc.peek("D"))
-            self.assertNotIn("D", self.svc._REFUSED)
+            self.assertNotIn((None, "D"), self.svc._REFUSED)
             gate.set()
             for sym in ("A", "B", "C"):
                 self._wait_for_job(sym)
             retried = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
             self.assertTrue(retried["queued"])
-            self.assertNotIn("D", self.svc._REFUSED)
+            self.assertNotIn((None, "D"), self.svc._REFUSED)
             self._wait_for_job("D")
 
         self.assertEqual(4, calls["n"])
         self.assertTrue(any("backtest_queue_full" in line for line in logs.output))
+
+    def test_one_user_cannot_fill_the_queue(self):
+        # Der globale Deckel begrenzt den Prozess, nicht den Nutzer: ohne
+        # eigenen Anteil fuellt ein Member alle Plaetze und jeder andere liest
+        # `queued: false`, solange er pollt (security-reviewer 2026-09-16).
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_MAX_JOBS_PER_USER", 2), \
+             self.assertLogs("app.backtest_service", level="WARNING") as logs:
+            for sym in ("A", "B"):
+                self.assertTrue(
+                    self.svc.request_backtest(_synthetic_frame(30), symbol=sym, train_window=5, step=5, owner="u1")["queued"]
+                )
+            third = self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u1")
+            self.assertEqual("pending", third["status"])
+            self.assertFalse(third["queued"])
+            # Die Abweisung haelt wie beim globalen Deckel: ein Poll darauf
+            # zahlt keinen Abruf — aber nur fuer diesen Nutzer. Fuer jeden
+            # anderen ist das Symbol frei (reviewer W1: sonst hielte ein
+            # Member an seinem Anteil beliebige Symbole fuer alle).
+            self.assertFalse(self.svc.peek("C", owner="u1")["queued"])
+            self.assertIsNone(self.svc.peek("C", owner="u2"))
+            self.assertIsNone(self.svc.peek("C"))
+            # Ein zweiter Nutzer bekommt seinen Platz — und den offenen Job
+            # des ersten liest er ueber `peek`, ohne selbst einen zu besitzen.
+            other = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5, owner="u2")
+            self.assertTrue(other["queued"])
+            self.assertTrue(self.svc.peek("A")["queued"])
+            self.assertEqual("u1", self.svc._JOBS["A"]["owner"])
+            # Interne Aufrufer ohne Eigentuemer unterliegen nur dem globalen Deckel.
+            self.assertTrue(
+                self.svc.request_backtest(_synthetic_frame(30), symbol="E", train_window=5, step=5)["queued"]
+            )
+            gate.set()
+            for sym in ("A", "B", "D", "E"):
+                self._wait_for_job(sym)
+            self.svc._REFUSED.pop(("u1", "C"), None)
+            retried = self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u1")
+            self.assertTrue(retried["queued"])
+            self._wait_for_job("C")
+
+        self.assertEqual(5, calls["n"])
+        self.assertTrue(any("backtest_user_quota_full" in line for line in logs.output))
+        self.assertFalse(any("backtest_queue_full" in line for line in logs.output))
+
+    def test_a_finished_job_ends_the_hold_for_everyone_turned_away(self):
+        # u1 an seinem Anteil wird fuer S abgewiesen, u2 rechnet S. Sobald das
+        # Ergebnis da ist, darf u1 nicht bis zum Ende der Haltezeit `pending`
+        # neben einem fertigen Ergebnis lesen (verifier 2026-09-18).
+        from unittest.mock import patch
+        gate, calls, fake = self._blocking_backtest()
+        df = _synthetic_frame(30)
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_MAX_JOBS_PER_USER", 1), \
+             self.assertLogs("app.backtest_service", level="WARNING"):
+            self.assertTrue(self.svc.request_backtest(_synthetic_frame(30), symbol="A", train_window=5, step=5, owner="u1")["queued"])
+            self.assertFalse(self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u1")["queued"])
+            self.assertFalse(self.svc.peek("S", owner="u1")["queued"])
+            self.assertTrue(self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u2")["queued"])
+            gate.set()
+            self._wait_for_job("A")
+            self._wait_for_job("S")
+        self.assertIsNone(self.svc.peek("S", owner="u1"))
+        self.assertEqual("ready", self.svc.request_backtest(df, symbol="S", train_window=5, step=5, owner="u1")["status"])
+
+    def test_enqueues_per_user_are_windowed(self):
+        # Der Anteil begrenzt, was gleichzeitig offen ist; das Fenster
+        # begrenzt, wie oft ein Nutzer nachlegt, sobald ein Job fertig ist —
+        # sonst haelt ein Member den einen Worker mit der Watchlist dauerhaft.
+        from unittest.mock import patch
+        from app.rate_limit import SlidingWindowLimit
+        gate, calls, fake = self._blocking_backtest()
+        gate.set()  # Jobs enden sofort; nur das Fenster zaehlt hier.
+        window = SlidingWindowLimit(2, 600.0)
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_ENQUEUES_PER_USER", window), \
+             self.assertLogs("app.backtest_service", level="WARNING") as logs:
+            for sym in ("A", "B"):
+                self.assertTrue(
+                    self.svc.request_backtest(_synthetic_frame(30), symbol=sym, train_window=5, step=5, owner="u1")["queued"]
+                )
+                self._wait_for_job(sym)
+            third = self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u1")
+            self.assertFalse(third["queued"])
+            self.assertEqual("pending", third["status"])
+            self.assertIn(("u1", "C"), self.svc._REFUSED)
+            # Ein Poll auf ein fertiges Symbol ist frei — er zaehlt nicht.
+            self.assertEqual("ready", self.svc.request_backtest(_synthetic_frame(30), symbol="A", train_window=5, step=5, owner="u1")["status"])
+            # Ein anderer Nutzer hat sein eigenes Fenster.
+            self.assertTrue(
+                self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u2")["queued"]
+            )
+            self._wait_for_job("C")
+
+        self.assertEqual(3, calls["n"])
+        self.assertTrue(any("backtest_user_window_full" in line for line in logs.output))
+
+    def test_refusal_by_share_does_not_spend_the_window(self):
+        # Reihenfolge der Pruefungen: wer an seinem Anteil scheitert, verliert
+        # keinen Eintrag im Fenster — sonst kostete jeder Poll auf ein
+        # abgewiesenes Symbol nach der Haltezeit einen Enqueue.
+        from unittest.mock import patch
+        from app.rate_limit import SlidingWindowLimit
+        gate, calls, fake = self._blocking_backtest()
+        window = SlidingWindowLimit(1, 600.0)
+        with patch.object(self.svc, "run_backtest", side_effect=fake), \
+             patch.object(self.svc, "BACKTEST_MAX_JOBS_PER_USER", 1), \
+             patch.object(self.svc, "BACKTEST_ENQUEUES_PER_USER", window), \
+             self.assertLogs("app.backtest_service", level="WARNING"):
+            self.assertTrue(
+                self.svc.request_backtest(_synthetic_frame(30), symbol="A", train_window=5, step=5, owner="u1")["queued"]
+            )
+            self.assertFalse(
+                self.svc.request_backtest(_synthetic_frame(30), symbol="B", train_window=5, step=5, owner="u1")["queued"]
+            )
+            gate.set()
+            self._wait_for_job("A")
+        # Das Fenster (1 je 600 s) ist durch A belegt, nicht zusaetzlich durch B.
+        self.assertFalse(window.try_acquire("u1"))
+        self.assertEqual(1, sum(len(hits) for hits in window._hits.values()))
 
     def test_peek_knows_nothing_without_a_job(self):
         self.assertIsNone(self.svc.peek("AAPL"))
