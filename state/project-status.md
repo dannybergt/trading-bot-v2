@@ -8,7 +8,7 @@
 
 ## Gesichert verifiziert
 
-- **2026-09-18 (2) Nicht-Ticker werden beim Anlegen abgewiesen, Schleifen ueberspringen Bestandszeilen (PR #36, verifier auf `63708b6`):** `POST /api/watchlists/{id}/items` mit `AMAZON INC`/`A/../../V4/X`/`<b>AAPL</b>` → 400 in 10–18 ms, kein Anbieteraufruf, keine Zeile; Bestandszeile bleibt bearbeitbar; Negativkontrolle mit `main.py` von `afc6d52` speichert alle vier. **Instanz-Befund:** BC-KI01 zieht seit 2026-09-18 15:46 nicht mehr von Docker Hub (Credential 401 → Lockout); Backend dort auf `097b61e`.
+- **2026-09-18 (2) Nicht-Ticker werden beim Anlegen abgewiesen, Schleifen ueberspringen Bestandszeilen (PR #36, verifier auf `63708b6`):** `POST /api/watchlists/{id}/items` mit `AMAZON INC`/`A/../../V4/X`/`<b>AAPL</b>` → 400 in 10–18 ms, kein Anbieteraufruf, keine Zeile; Bestandszeile bleibt bearbeitbar; Negativkontrolle mit `main.py` von `afc6d52` speichert alle vier. **Instanz-Befund:** BC-KI01 zieht seit 2026-09-18T13:46Z nicht mehr von Docker Hub (Credential 401 → Lockout); Backend dort auf `097b61e`.
 
 - **2026-09-18 Nutzer-Anteil an der Backtest-Warteschlange, Symbolform vor dem Anbieter (PR #35 `cfaa469`, verifier A–E nachgewiesen auf `19c03d8`):** ein Nutzer haelt hoechstens 3 offene Jobs und 12 Enqueues je 10 min, die Abweisung haelt nur fuer ihn und endet mit dem Ergebnis; eine Zeichenkette ohne Tickerform bekommt auf allen sieben Lese-Endpunkten 404 in Millisekunden, ohne dass ein Anbieter gefragt wird (`A/../../V4/X` eingeschlossen); Login-/Reset-Sperre unveraendert 429 nach dem Lift in `SlidingWindowLimit`, Auth-Body begrenzt, Register 5/h; Market-Order ohne Kurs 400 + Audit im API-Harnisch.
 
