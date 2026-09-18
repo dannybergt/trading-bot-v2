@@ -2904,7 +2904,7 @@ def get_symbol_backtest(
     # no asset fields; the page reads only `status` and `result` from here,
     # and the asset lookup alone can cost a provider call once its cache
     # expires (services.TICKER_INFO_TTL_SECONDS).
-    in_flight = backtest_service.peek(canonical)
+    in_flight = backtest_service.peek(canonical, owner=str(current_user.id))
     if in_flight is not None:
         return {"symbol": canonical, **in_flight}
 

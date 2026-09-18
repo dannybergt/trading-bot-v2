@@ -280,8 +280,9 @@ for malformed in ("AMAZON INC", "A" * 25, "<b>AAPL</b>"):
             f"/api/{path}/{malformed!r}: the refusal does not name the string: {form_detail!r}"
         )
         # Before any provider: a refusal that paid a provider timeout first
-        # would be several seconds, not milliseconds.
-        assert form_s < 1.0, f"/api/{path}/{malformed!r} took {form_s:.2f} s to refuse — was a provider asked first?"
+        # costs the provider chain (tens of seconds on this host), a refusal
+        # by form costs auth and a regex — 3 s leaves room for a loaded host.
+        assert form_s < 3.0, f"/api/{path}/{malformed!r} took {form_s:.2f} s to refuse — was a provider asked first?"
 well_formed_unknown = requests.get(f"{base}/api/stock/ZZZZNOPE123", headers=headers, timeout=60)
 assert not (well_formed_unknown.status_code == 404 and "form" in str(well_formed_unknown.json().get("detail"))), (
     "a well-formed unknown ticker must reach the providers, not be refused by form"

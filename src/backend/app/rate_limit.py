@@ -111,10 +111,19 @@ class SlidingWindowLimit:
         self._now = now
         self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._calls = 0
+
+    #: Every this many calls, keys whose hits all expired are dropped. Keys
+    #: are caller-chosen (a login limit is keyed on the typed e-mail), so
+    #: without a sweep the map grows by one deque per string ever tried.
+    SWEEP_EVERY = 1024
 
     def try_acquire(self, key: str) -> bool:
-        now = self._now()
         with self._lock:
+            now = self._now()
+            self._calls += 1
+            if self._calls % self.SWEEP_EVERY == 0:
+                self._sweep_locked(now)
             hits = self._hits[key]
             while hits and hits[0] <= now - self.window_seconds:
                 hits.popleft()
@@ -122,6 +131,11 @@ class SlidingWindowLimit:
                 return False
             hits.append(now)
             return True
+
+    def _sweep_locked(self, now: float) -> None:
+        cutoff = now - self.window_seconds
+        for key in [k for k, hits in self._hits.items() if not hits or hits[-1] <= cutoff]:
+            del self._hits[key]
 
     def reset(self) -> None:
         with self._lock:

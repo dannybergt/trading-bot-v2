@@ -233,11 +233,14 @@ class BacktestServiceTests(unittest.TestCase):
              patch.object(app_main.service, "get_history_frame") as history, \
              patch.object(app_main.service, "get_asset_profile") as profile, \
              patch.object(app_main, "get_user_watchlist_symbol_name", return_value=None):
+            user = MagicMock(id=7)
             payload = app_main.get_symbol_backtest(
-                symbol="btc-usd", current_user=MagicMock(), db=MagicMock()
+                symbol="btc-usd", current_user=user, db=MagicMock()
             )
 
-        peek.assert_called_once_with("BTC/USD")
+        peek.assert_called_once()
+        self.assertEqual("BTC/USD", peek.call_args.args[0])
+        self.assertEqual(str(user.id), peek.call_args.kwargs["owner"])
         history.assert_not_called()
         profile.assert_not_called()
         self.assertEqual("pending", payload["status"])
@@ -516,15 +519,15 @@ class BacktestRegistryTests(unittest.TestCase):
             self.assertEqual("pending", held["status"])
             self.assertFalse(held["queued"])
             # Nach Ablauf der Haltezeit laesst `peek` den vollen Pfad wieder zu.
-            self.svc._REFUSED["D"] -= self.svc.BACKTEST_REFUSAL_HOLD_S
+            self.svc._REFUSED[(None, "D")] -= self.svc.BACKTEST_REFUSAL_HOLD_S
             self.assertIsNone(self.svc.peek("D"))
-            self.assertNotIn("D", self.svc._REFUSED)
+            self.assertNotIn((None, "D"), self.svc._REFUSED)
             gate.set()
             for sym in ("A", "B", "C"):
                 self._wait_for_job(sym)
             retried = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5)
             self.assertTrue(retried["queued"])
-            self.assertNotIn("D", self.svc._REFUSED)
+            self.assertNotIn((None, "D"), self.svc._REFUSED)
             self._wait_for_job("D")
 
         self.assertEqual(4, calls["n"])
@@ -547,8 +550,12 @@ class BacktestRegistryTests(unittest.TestCase):
             self.assertEqual("pending", third["status"])
             self.assertFalse(third["queued"])
             # Die Abweisung haelt wie beim globalen Deckel: ein Poll darauf
-            # zahlt keinen Abruf.
-            self.assertFalse(self.svc.peek("C")["queued"])
+            # zahlt keinen Abruf — aber nur fuer diesen Nutzer. Fuer jeden
+            # anderen ist das Symbol frei (reviewer W1: sonst hielte ein
+            # Member an seinem Anteil beliebige Symbole fuer alle).
+            self.assertFalse(self.svc.peek("C", owner="u1")["queued"])
+            self.assertIsNone(self.svc.peek("C", owner="u2"))
+            self.assertIsNone(self.svc.peek("C"))
             # Ein zweiter Nutzer bekommt seinen Platz — und den offenen Job
             # des ersten liest er ueber `peek`, ohne selbst einen zu besitzen.
             other = self.svc.request_backtest(_synthetic_frame(30), symbol="D", train_window=5, step=5, owner="u2")
@@ -562,7 +569,7 @@ class BacktestRegistryTests(unittest.TestCase):
             gate.set()
             for sym in ("A", "B", "D", "E"):
                 self._wait_for_job(sym)
-            self.svc._REFUSED.pop("C", None)
+            self.svc._REFUSED.pop(("u1", "C"), None)
             retried = self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u1")
             self.assertTrue(retried["queued"])
             self._wait_for_job("C")
@@ -591,7 +598,7 @@ class BacktestRegistryTests(unittest.TestCase):
             third = self.svc.request_backtest(_synthetic_frame(30), symbol="C", train_window=5, step=5, owner="u1")
             self.assertFalse(third["queued"])
             self.assertEqual("pending", third["status"])
-            self.assertIn("C", self.svc._REFUSED)
+            self.assertIn(("u1", "C"), self.svc._REFUSED)
             # Ein Poll auf ein fertiges Symbol ist frei — er zaehlt nicht.
             self.assertEqual("ready", self.svc.request_backtest(_synthetic_frame(30), symbol="A", train_window=5, step=5, owner="u1")["status"])
             # Ein anderer Nutzer hat sein eigenes Fenster.

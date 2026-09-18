@@ -211,7 +211,10 @@ BACKTEST_REFUSAL_HOLD_S = 30.0
 #: symbols; twelve enqueues per ten minutes is more than the analysis page
 #: asks for in normal use (one per symbol and new bar) and still bounds a
 #: member cycling through the watchlist to ~12 x job duration of worker
-#: time per window. A refusal answers like the global cap — `pending`,
+#: time per window. Accepted edge: right after a restart the registry is
+#: empty, and the first member to open more than twelve symbols in ten
+#: minutes waits up to the hold on the thirteenth — a cold start once a
+#: deploy, not a steady state. A refusal answers like the global cap — `pending`,
 #: `queued: false`, held for BACKTEST_REFUSAL_HOLD_S — so the card waits
 #: instead of erroring. Jobs are shared: a second user asking for a symbol
 #: that is already open gets `pending` from `peek` and owns nothing.
@@ -221,8 +224,12 @@ BACKTEST_ENQUEUES_PER_USER = SlidingWindowLimit(12, 600.0)
 _LOCK = threading.Lock()
 _RESULTS: dict[str, dict[str, Any]] = {}
 _JOBS: dict[str, dict[str, Any]] = {}
-#: symbol -> perf_counter() of the last refusal by the cap
-_REFUSED: dict[str, float] = {}
+#: (owner, symbol) -> perf_counter() of the last refusal. Owner None is the
+#: global cap and holds the symbol for everyone; a refusal by a user's own
+#: share or window holds it for that user alone — otherwise one member at
+#: their limit would keep a symbol `queued: false` for every other member
+#: for as long as they poll (reviewer W1, 2026-09-18).
+_REFUSED: dict[tuple[str | None, str], float] = {}
 _executor: ThreadPoolExecutor | None = None
 
 
@@ -261,23 +268,25 @@ def _job_is_open(job: dict[str, Any] | None) -> bool:
     return job is not None and not job["future"].done()
 
 
-def peek(symbol: str) -> dict[str, Any] | None:
+def peek(symbol: str, owner: str | None = None) -> dict[str, Any] | None:
     """`pending` (with the last known result) while a job for `symbol` is
-    queued or running, or for `BACKTEST_REFUSAL_HOLD_S` after the cap turned
-    it away (then `queued: false`); else None. The endpoint calls this
-    before it fetches any history: a poll must not pay for a provider call
-    or the on-screen prediction, and it must not be able to fall back to
-    the synthetic placeholder while a real-data job is computing or
-    waiting for a free slot."""
+    queued or running, or for `BACKTEST_REFUSAL_HOLD_S` after the global
+    cap turned it away or `owner`'s share/window did (then `queued: false`);
+    else None. The endpoint calls this before it fetches any history: a
+    poll must not pay for a provider call or the on-screen prediction, and
+    it must not be able to fall back to the synthetic placeholder while a
+    real-data job is computing or waiting for a free slot."""
     with _LOCK:
         job = _JOBS.get(symbol)
         if _job_is_open(job):
             return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=True)
-        refused_at = _REFUSED.get(symbol)
-        if refused_at is not None:
+        for key in ((None, symbol), (owner, symbol)):
+            refused_at = _REFUSED.get(key)
+            if refused_at is None:
+                continue
             if perf_counter() - refused_at < BACKTEST_REFUSAL_HOLD_S:
                 return _payload(STATUS_PENDING, _RESULTS.get(symbol), queued=False)
-            del _REFUSED[symbol]
+            del _REFUSED[key]
         return None
 
 
@@ -321,14 +330,14 @@ def request_backtest(
                     extra={"symbol": symbol, "user": owner, "jobs": owned,
                            "max_jobs_per_user": BACKTEST_MAX_JOBS_PER_USER},
                 )
-                _REFUSED[symbol] = perf_counter()
+                _REFUSED[(owner, symbol)] = perf_counter()
                 return _payload(STATUS_PENDING, entry, queued=False)
         if len(open_jobs) >= BACKTEST_MAX_JOBS:
             logger.warning(
                 "backtest_queue_full",
                 extra={"symbol": symbol, "jobs": len(open_jobs), "max_jobs": BACKTEST_MAX_JOBS},
             )
-            _REFUSED[symbol] = perf_counter()
+            _REFUSED[(None, symbol)] = perf_counter()
             return _payload(STATUS_PENDING, entry, queued=False)
         # Last, because a granted enqueue is spent even when it is refused
         # further down — and nothing is refused further down.
@@ -339,14 +348,15 @@ def request_backtest(
                        "enqueues": BACKTEST_ENQUEUES_PER_USER.limit,
                        "window_s": BACKTEST_ENQUEUES_PER_USER.window_seconds},
             )
-            _REFUSED[symbol] = perf_counter()
+            _REFUSED[(owner, symbol)] = perf_counter()
             return _payload(STATUS_PENDING, entry, queued=False)
         future = _get_executor().submit(
             _run_job, df, symbol=symbol, stamp=stamp, train_window=train_window, step=step,
             queued_at=perf_counter(),
         )
         _JOBS[symbol] = {"stamp": stamp, "future": future, "owner": owner}
-        _REFUSED.pop(symbol, None)
+        _REFUSED.pop((None, symbol), None)
+        _REFUSED.pop((owner, symbol), None)
         return _payload(STATUS_PENDING, entry, queued=True)
 
 

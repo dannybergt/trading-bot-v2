@@ -124,6 +124,24 @@ class SlidingWindowLimitTests(unittest.TestCase):
         limit.reset()
         self.assertTrue(limit.try_acquire("a"))
 
+    def test_expired_keys_are_swept(self):
+        # Schluessel waehlt der Aufrufer (Login: die getippte E-Mail); ohne
+        # Sweep bliebe je erfundener Zeichenkette eine Deque fuer immer.
+        clock = FakeClock()
+        limit = SlidingWindowLimit(1, 10.0, now=clock.now)
+        limit.SWEEP_EVERY = 4
+        for key in ("a", "b", "c"):
+            self.assertTrue(limit.try_acquire(key))
+        clock.t = 11.0
+        # Vierter Aufruf: Sweep, danach nur der neue Schluessel.
+        self.assertTrue(limit.try_acquire("d"))
+        self.assertEqual({"d"}, set(limit._hits))
+        # Ein Schluessel mit lebendem Treffer ueberlebt den Sweep.
+        clock.t = 12.0
+        for key in ("e", "f", "g"):
+            self.assertTrue(limit.try_acquire(key))
+        self.assertEqual({"d", "e", "f", "g"}, set(limit._hits))
+
     def test_rejects_a_limit_or_window_that_would_never_admit(self):
         with self.assertRaises(ValueError):
             SlidingWindowLimit(0, 10.0)
