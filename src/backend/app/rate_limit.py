@@ -1,12 +1,15 @@
-"""Token-bucket rate limiter for outbound provider calls.
+"""Rate limiters: token buckets for outbound provider calls, a sliding
+window for inbound requests.
 
 Each provider gets its own bucket sized to the worst-case allowed cadence.
 The bucket is thread-safe so background tasks (auto-scanner, watchlist alert
 dispatcher, backup scheduler) can share it with HTTP request threads without
-clashing.
+clashing. `SlidingWindowLimit` counts hits per key (client, account, user)
+over a fixed window; the login and password-reset routes raise 429 on it,
+the backtest registry turns an enqueue away on it.
 
-This is intentionally minimal: no distributed coordination, no Redis, no
-sliding window. Single-process throttling is sufficient for the current
+This is intentionally minimal: no distributed coordination, no Redis.
+Single-process throttling is sufficient for the current
 deployment shape and avoids a new infra dependency. Move to a shared store if
 the backend ever scales horizontally.
 """
@@ -16,6 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -80,6 +84,48 @@ class TokenBucket:
             # Sleep is outside the lock so other threads can refill if a token
             # becomes available concurrently.
             self._sleep(max(0.001, wait))
+
+
+class SlidingWindowLimit:
+    """At most `limit` hits per `key` in any `window_seconds`.
+
+    `try_acquire(key)` records a hit and answers True, or answers False
+    without recording when the key is at its limit — a refused attempt does
+    not extend the window. Process-local like the buckets above; the same
+    lid applies (a second backend process needs a shared store).
+    """
+
+    def __init__(
+        self,
+        limit: int,
+        window_seconds: float,
+        *,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._now = now
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def try_acquire(self, key: str) -> bool:
+        now = self._now()
+        with self._lock:
+            hits = self._hits[key]
+            while hits and hits[0] <= now - self.window_seconds:
+                hits.popleft()
+            if len(hits) >= self.limit:
+                return False
+            hits.append(now)
+            return True
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()
 
 
 class ProviderRateLimitRegistry:

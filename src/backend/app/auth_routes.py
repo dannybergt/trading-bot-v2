@@ -4,8 +4,6 @@ Authentication API routes: register, login, password reset, MFA.
 import logging
 import os
 import secrets
-import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,6 +17,7 @@ from app.models import User, PasswordResetToken
 from app.watchlist_seed import seed_default_watchlists
 from app.email_service import PasswordResetDeliveryError, send_password_reset_email
 from app.push_service import PushConfigurationError, PushService
+from app.rate_limit import SlidingWindowLimit
 from app.auth import (
     hash_password,
     verify_password,
@@ -39,29 +38,22 @@ from app.auth import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 _RATE_LIMITS = {
-    "login": (5, 300),
+    "login": SlidingWindowLimit(5, 300),
     # Per-account login limit: stricter than the per-IP one because an
     # attacker that rotates source IPs would otherwise bypass the per-IP
     # bucket entirely. 10 attempts per 15 minutes against a single email.
-    "login_per_account": (10, 900),
-    "password_reset_request": (3, 900),
-    "password_reset_confirm": (5, 900),
+    "login_per_account": SlidingWindowLimit(10, 900),
+    "password_reset_request": SlidingWindowLimit(3, 900),
+    "password_reset_confirm": SlidingWindowLimit(5, 900),
 }
-_rate_limit_buckets = defaultdict(deque)
 
 
 def _enforce_rate_limit(scope: str, key: str):
-    limit, window_seconds = _RATE_LIMITS[scope]
-    bucket = _rate_limit_buckets[(scope, key)]
-    now = time.time()
-    while bucket and bucket[0] <= now - window_seconds:
-        bucket.popleft()
-    if len(bucket) >= limit:
+    if not _RATE_LIMITS[scope].try_acquire(key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please try again later.",
         )
-    bucket.append(now)
 
 
 def _request_identity(request: Request, suffix: str = "") -> str:

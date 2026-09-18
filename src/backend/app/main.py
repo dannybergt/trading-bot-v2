@@ -2930,6 +2930,7 @@ def get_symbol_backtest(
         symbol=canonical,
         train_window=BACKTEST_TRAIN_WINDOW,
         step=BACKTEST_STEP,
+        owner=str(current_user.id),
     )
     return {
         "symbol": canonical,
