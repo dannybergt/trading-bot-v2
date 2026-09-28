@@ -462,6 +462,40 @@ Klassifizierung:
 
 Jede Idee mit Nutzen, Aufwand, Risiko und Priorität beschreiben.
 
+**Mitdenken ist Pflicht, nicht Kür** (Betreiber 2026-09-28: „bei jedem Vorhaben, Projekt, Slice,
+PR prüfen, ob es anders/besser geht und welche weiteren Funktionen üblich oder lohnenswert
+wären"). Jeder Plan (Phase 2), jede Slice-Beschreibung und jeder PR (§15) trägt deshalb einen
+Block **„Alternativen & Ergänzungen"** mit vier Fragen, jede mit Antwort oder „geprüft, nichts":
+
+1. **Anders/besser?** Mindestens ein ernsthaft geprüfter anderer Weg (Bibliothek, Plattform-
+   Bordmittel, einfacherer Schnitt, bestehendes Muster im Repo) und warum er gewählt oder
+   verworfen wurde.
+2. **Was fehlt, das vergleichbare Produkte haben?** Übliche, lohnende oder empfohlene
+   Funktionen (z. B. Export, Suche, Audit-Log, Benachrichtigung, Barrierefreiheit, Rollback),
+   je mit Klasse MUST/SHOULD/COULD/ROADMAP.
+3. **Selbstkritik: wo liege ich vermutlich falsch?** Die eine eigene Annahme oder
+   Entscheidung, die am ehesten nicht trägt, und wie sie geprüft wurde (Beleg, Messung,
+   Gegenprobe) — nicht „sollte passen". Eine eigene Aussage gilt erst als belegt, wenn ein
+   Befehl, ein Test oder eine Quelle sie trägt; sonst wird sie als Annahme markiert.
+4. **Schnellster Weg zum nutzbaren Stand?** Gründlich durchdacht, nicht nach Gefühl: Was ist
+   der kleinste Stand, den der Betreiber tatsächlich benutzen kann (Golden Path Ende-zu-Ende,
+   nicht eine fertige Schicht ohne Oberfläche)? Welche Slices tragen direkt dorthin, welche
+   können danach kommen, was blockiert (Freigabe, Betreiber-Handgriff, Abhängigkeit) und lässt
+   sich vorziehen oder parallelisieren? Die Plan-Karte ordnet Slices danach: **nutzbar zuerst**,
+   Ausbau danach. Abkürzungen sind erlaubt, wenn sie als Deckel markiert sind (§2.5) —
+   nie auf Kosten von Security, Datenverlust-Schutz oder Nachweis (§5).
+
+**Security first gilt auch hier (§2.1):** jede Alternative und jede Ergänzung wird zuerst auf
+ihre Sicherheitswirkung geprüft (Angriffsfläche, Secrets, Rechte, Datenabfluss). Ein Weg, der
+bequemer, schneller oder billiger ist, aber eine Schutzschicht schwächt, ist kein „besserer"
+Weg — er wird als verworfen mit Grund notiert, nie stillschweigend genommen.
+
+Warum: Ein Agent, der nur den Auftrag abarbeitet, liefert genau das Bestellte — auch wenn ein
+besserer Weg oder eine naheliegende Lücke sichtbar war. Die Pflicht zum Block macht das Prüfen
+nachweisbar. Umgesetzt wird davon nichts ungefragt: MUST/SHOULD werden `[auto]`-Punkte in
+`STATE.md` (MUST vor dem Merge des betroffenen Slices), COULD/ROADMAP stehen in `ROADMAP.md`.
+Der `critic` (Tor K) und der `reviewer` (Tor R) melden einen fehlenden oder leeren Block als Befund.
+
 ---
 
 ## 13. Umgang mit Unsicherheit und Eskalationsschwellen
@@ -559,6 +593,13 @@ Kurze Beschreibung der Änderung.
 ### Bewusste Nicht-Änderungen
 - Was war naheliegend, wurde aber bewusst nicht angefasst, und warum?
 
+### Alternativen & Ergänzungen (§12)
+- Welcher andere Weg wurde geprüft, und warum dieser?
+- Welche üblichen/lohnenden Funktionen fehlen noch (MUST/SHOULD/COULD/ROADMAP)?
+- Selbstkritik: welche eigene Annahme trägt am ehesten nicht, und wie wurde sie geprüft?
+- Sicherheitswirkung jeder Alternative/Ergänzung (§2.1)?
+- Kürzester Weg zum nutzbaren Stand: was fehlt noch bis zur Benutzbarkeit, was lässt sich vorziehen?
+
 ### Risks / Open Questions
 - Bekannte Risiken
 - Offene Punkte
@@ -633,3 +674,4 @@ Am Ende jeder abgeschlossenen Aufgabe liefere:
 10. Welche Annahmen wurden getroffen, die der Mensch widerrufen kann?
 11. Welche Risiken bleiben?
 12. Was ist der nächste sinnvolle Schritt?
+13. Alternativen & Ergänzungen (§12): welcher andere Weg geprüft, welche üblichen Funktionen fehlen noch, welche eigene Annahme trägt am ehesten nicht, was ist der kürzeste Weg zum nutzbaren Stand?
