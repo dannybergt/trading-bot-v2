@@ -4,11 +4,11 @@
 
 **Stand:** Branch `security/deps-2026-09` von `main` `afc6d52`, PR s. u. Schliesst den Betreiber-Punkt „Dependency-Advisories (PR `security/deps-2026-09`)" und security-reviewer #3 (HOCH, 2026-09-16) bis auf 7 begruendete Ausnahmen.
 
-**Gebaut:** fastapi 0.142.0 (starlette 1.7.0), python-multipart 0.0.32, requests 2.34.2, lightgbm 4.7.0, python-jose 3.5.0, pywebpush 2.5.0 gepinnt; pip 26.2.1/setuptools 84.0.0 im Image; Frontend-Lockfile per `npm audit fix` (vite 6.4.3, react-router 7.18.4, postcss 8.5.28, `package.json` unveraendert); `ops/automation/deps-audit.sh` als CI-Schritt; Dependabot pip + npm; SECURITY.md Abschnitt Abhaengigkeiten; ADR 2026-09-29.
+**Gebaut:** fastapi 0.142.0 (starlette 1.7.0), python-multipart 0.0.32, requests 2.34.2, lightgbm 4.7.0, python-jose 3.5.0, pywebpush 2.5.0 gepinnt; pip 26.2.1/setuptools 84.0.0 im Image; Frontend-Lockfile per `npm audit fix` (vite 6.4.3, react-router 7.18.4, postcss 8.5.28, `package.json` unveraendert); `ops/automation/deps-audit.sh` als CI-Schritt; Dependabot pip + npm; SECURITY.md Abschnitt Abhaengigkeiten; ADR 2026-09-29. Dazu (reviewer B1): Web-Push-Endpunkt nur zu Browser-Push-Diensten (Abonnieren 422, Senden ueberspringt Bestandszeilen) — schliesst ein SSRF aus dem Vorbestand und macht die urllib3-Ausnahme ehrlich.
 
 **Zahlen:** pip-audit 65 -> 0 offen (14 ignoriert = 7 IDs, Duplikate), npm 11 -> 0.
 
-**Tore:** K n/a (1 Slice, keine Architektur-/Auth-Aenderung). R/S/V: s. PR. C: s. PR.
+**Tore:** K n/a (1 Slice, keine Architektur-/Auth-Modell-Aenderung). **R** `reviewer`: B1 (urllib3-Ausnahme mit falscher Begruendung — Push-Endpunkt ist nutzergesteuert) behoben durch die Push-Allowlist; B2 (ops-reviewer fehlte) nachgeholt. `ops-reviewer`: BETREIBBAR, #1 Trivy `if: always()`, #2 Runbook-Absatz in OPERATIONS.md, #3 Dependabot `docker` — alle drei umgesetzt. `migration-reviewer` n/a. **S** `security-reviewer`: #1 HOCH (= B1, dazu Timeout 10 s und kein Antwort-Body im Log) behoben; #2 VAPID-Default in der Historie s. Betreiber; #3/#4/#5 als Threads. gitleaks Branch 0. **V** s. PR. **C** gruen auf `b752bf9` (validate inkl. neuem Audit-Schritt, CodeQL, analyze).
 
 **Nachweise:** Unit 477 OK (skipped=1) auf `tbv2-deps-backend:cand` (22 min unter Host-Last 30); api-regression 67 gruen (`BACKEND_IMAGE=tbv2-deps-backend:cand SKIP_BUILD=1`); Frontend-Build gruen; UI-Regression nur in CI (kein `node`/Chrome auf dem Host). Hinweis: `test_reliability_buckets_partition_predictions` braucht unter Fremdlast 150 s statt 9 s (`n_jobs=-1`, Thread 4 vom 09-18) — kein Haenger.
 
@@ -16,8 +16,12 @@
 10. **`alpaca-trade-api` -> `alpaca-py`** (MUST vor Zieldatum 2026-10-31): haelt urllib3 < 2 (5 Advisories, u. a. Dekompressionsketten, Authorization bei Cross-Origin-Redirect) und msgpack 1.0.3. Eigener Schnitt mit Tor K (Broker-Pfad `alpaca_service.py`, `alpaca_stream.py`). Danach die 6 Ausnahmen in `deps-audit.sh` loeschen.
 11. **`python-jose` -> `PyJWT`** (SHOULD): beendet die ecdsa-Ausnahme; Auth-Pfad, eigener Schnitt.
 12. `@app.on_event` -> `lifespan` (COULD, DeprecationWarning seit FastAPI 0.93) — erst nach dem Watchlist-Quota-Branch (dieselbe Datei `main.py`).
+13. **Push-Endpunkt wechselt still den Besitzer** (reviewer Q1, Vorbestand): `subscribe_push` haengt ein bestehendes Endpunkt-Abo dem aufrufenden Nutzer um; wer die URL kennt, zieht fremde Alarme auf sich. Entscheiden: Umhaengen nur mit passendem `auth`-Schluessel oder Loeschen + Neuanlage. SHOULD.
+14. **pip-audit im CI-Tor ohne Hash-Lock** (security-reviewer #3, NIEDRIG): `pip-audit.requirements.txt` mit `--require-hashes`, venv-pip heben.
+15. **Trivy-Action auf SHA pinnen, `exit-code: '1'`** (security-reviewer #4, Vorbestand, MITTEL) — ci.yml und publish.yml.
+16. **Admin-Upload-Deckel erst nach Empfang** (security-reviewer #5, Vorbestand, NIEDRIG): `client_max_body_size` in `frontend.nginx.conf` oder `Content-Length`-Pruefung vor `request.form()`.
 
-**Nicht hier loesbar (Betreiber):** PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
+**Nicht hier loesbar (Betreiber):** **VAPID-Schluessel aus der Historie** (security-reviewer #2): Commit `93cc39c` (2026-03-23, oeffentliches Repo) trug einen hartkodierten Default fuer `VAPID_PRIVATE_KEY`; bei HEAD steht kein Default mehr (leer => Push aus). Pruefen, ob die Instanz je ohne eigenes `VAPID_PRIVATE_KEY` lief; beim Einrichten von Push (STATE 09-16: VAPID leer) ein **neues** Paar erzeugen, nie diesen Wert. PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
 
 **Allokierte Ports/Ressourcen:** keine Ports. Images `tbv2-deps-backend:cand`/`:cand2` (eigene Tags, `trading-bot-v2-backend:local` bewusst nicht ueberschrieben). Scratchpad-Worktree `wt-trading-bot`.
 

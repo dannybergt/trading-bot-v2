@@ -31,6 +31,9 @@
   gebauten Images, `npm audit --audit-level=low` auf das Lockfile). Jede Ausnahme steht mit
   Grund im Skript; Stand 2026-09-29: 7 Advisories an Pins von `alpaca-trade-api` (urllib3 < 2,
   msgpack 1.0.3) und `python-jose` (ecdsa, kein Fix) — ADR 2026-09-29.
+- Ausgehende URLs: nur feste Anbieter-Hosts; einzige nutzergesteuerte URL ist der Web-Push-Endpunkt,
+  begrenzt auf die Push-Dienste der Browser (`push_service.is_allowed_push_endpoint`, beim Abonnieren
+  und beim Senden).
 - Images mit Tag + Digest, Non-Root: _…_
 
 ## KI-/LLM-Funktionen (falls vorhanden)
