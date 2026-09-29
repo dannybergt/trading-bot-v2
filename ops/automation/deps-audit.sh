@@ -22,9 +22,12 @@ IGNORED=(
   # feeds it (TLS to Alpaca).
   PYSEC-2026-3625
   # urllib3 <2: pinned by alpaca-trade-api 3.2.0. Decompression-chain,
-  # streaming-decompression and redirect-header advisories; every outbound
-  # call goes to fixed provider hosts, and requests handles redirects itself
-  # (strips Authorization across hosts). Ends with the move to alpaca-py.
+  # streaming-decompression and redirect-header advisories. Outbound calls go
+  # to fixed provider hosts, except Web-Push: those endpoints come from the
+  # user, and are held to the browser push services by
+  # push_service.is_allowed_push_endpoint (subscribe and send). requests
+  # handles redirects itself (strips Authorization across hosts). Ends with
+  # the move to alpaca-py.
   PYSEC-2026-1999
   PYSEC-2026-1998
   PYSEC-2026-1994
