@@ -200,16 +200,17 @@ class RequestBodyLimitTests(unittest.TestCase):
         self.assertEqual(sorted(raised), sorted(f"= {p}" for p in ADMIN_UPLOAD_PATHS))
 
     def test_restore_blocks_refuse_before_buffering(self):
-        """Only POST, only with a bearer token, at most 2 at once -- checked by
-        nginx before it buffers up to 51 MiB (security-reviewer #1/#2)."""
+        """Only POST and only with a bearer token -- checked by nginx before it
+        buffers up to 51 MiB (security-reviewer #1/#2). No connection limit:
+        with a format-only token check it lets two anonymous slow uploads
+        lock every restore out (reviewer B-2)."""
         conf = _conf_text()
-        self.assertRegex(conf, r"limit_conn_zone\s+\$binary_remote_addr\s+zone=tbv2_upload_conn:")
+        self.assertNotRegex(conf, r"(?m)^\s*limit_conn(_zone)?\s")
         for uri in ADMIN_UPLOAD_PATHS:
             matcher, body = _location_for(conf, uri)
             self.assertRegex(body, r"limit_except\s+POST\s*\{\s*deny\s+all;\s*\}")
             self.assertRegex(body, r'if\s+\(\$http_authorization\s+!~\*\s+"\^Bearer ')
             self.assertRegex(body, r"\{\s*return\s+401;\s*\}")
-            self.assertRegex(body, r"limit_conn\s+tbv2_upload_conn\s+\d+;")
 
     def test_restore_blocks_outlast_a_slow_restore(self):
         """At the 60 s default nginx answers 504 while a 50 MiB restore keeps

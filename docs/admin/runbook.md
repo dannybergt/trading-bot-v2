@@ -147,7 +147,7 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
    - nur `POST` mit `Authorization: Bearer <admin-token>`; ohne Token antwortet
      schon nginx 401, bevor es die Datei annimmt
    - Grenze: Datei 50 MiB (Backend, JSON-413 darueber), Body 51 MiB (nginx,
-     HTML-413 darueber); hoechstens 2 Restores gleichzeitig
+     HTML-413 darueber)
    - Restore nur im Wartungsfenster: der Import laeuft synchron im einzigen
      Backend-Worker, die API steht fuer alle Nutzer, bis er fertig ist
    - **504 heisst nicht fehlgeschlagen:** nginx wartet 300 s, der Restore laeuft

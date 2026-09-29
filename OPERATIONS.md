@@ -28,7 +28,7 @@ docker compose restart <dienst>
 - Backup: _was, wohin (anderes Laufwerk als die Volumes), wann (UTC)_
 - Restore: _Kommandos wörtlich, Reihenfolge (Dienst stoppen → einspielen → starten)_
 - Restore-Probe: _Intervall, letzter Nachweis_
-- Größengrenze App-Restore (`POST /api/admin/import`, `/api/admin/backups/import` über den Frontend-Port): Datei bis 50 MiB (`ADMIN_UPLOAD_MAX_BYTES`, Code-Default — `docker-compose.yml` reicht die Variable nicht durch; Backend antwortet darüber 413 mit JSON), nginx lässt diese zwei Pfade nur per POST mit Bearer-Token bis 51 MiB durch, wartet 300 s, höchstens 2 gleichzeitig (`frontend.nginx.conf`, Ablauf in `docs/admin/runbook.md` „Restore“), jeden anderen API-Aufruf bis 1 MB. Wer `ADMIN_UPLOAD_MAX_BYTES` hebt, hebt `client_max_body_size` im Upload-Block mit — sonst endet der Restore an nginx mit einer HTML-413-Seite.
+- Größengrenze App-Restore (`POST /api/admin/import`, `/api/admin/backups/import` über den Frontend-Port): Datei bis 50 MiB (`ADMIN_UPLOAD_MAX_BYTES`, Code-Default — `docker-compose.yml` reicht die Variable nicht durch; Backend antwortet darüber 413 mit JSON), nginx lässt diese zwei Pfade nur per POST mit Bearer-Token bis 51 MiB durch, wartet 300 s (`frontend.nginx.conf`, Ablauf in `docs/admin/runbook.md` „Restore“), jeden anderen API-Aufruf bis 1 MB. Wer `ADMIN_UPLOAD_MAX_BYTES` hebt, hebt `client_max_body_size` im Upload-Block mit — sonst endet der Restore an nginx mit einer HTML-413-Seite.
 
 ## Deploy
 
