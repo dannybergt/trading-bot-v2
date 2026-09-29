@@ -17,6 +17,29 @@ class PushConfigurationError(RuntimeError):
     pass
 
 
+# Web-Push endpoints are chosen by the browser, but the server POSTs to them
+# and reads the response — so a stored endpoint is a user-controlled outbound
+# URL (SSRF, and urllib3 <2 decompression advisories; ADR 2026-09-29). Only
+# the push services of the browsers we ship to are accepted. Extend this list
+# when a supported browser uses another host (visible as 422 on subscribe).
+PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com")
+PUSH_ENDPOINT_HOST_SUFFIXES = (".notify.windows.com", ".push.apple.com")
+
+
+def is_allowed_push_endpoint(endpoint: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(endpoint)
+        port = parts.port
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "https" or parts.username or parts.password or port not in (None, 443):
+        return False
+    return host in PUSH_ENDPOINT_HOSTS or host.endswith(PUSH_ENDPOINT_HOST_SUFFIXES)
+
+
 def _env_flag(name: str, default: bool = False) -> bool:
     raw_value = os.getenv(name)
     if raw_value is None:
@@ -135,6 +158,13 @@ class PushService:
         expired_subs = []
         for sub in subscriptions:
             subscription_fingerprint = fingerprint_value(sub.endpoint)
+            # Rows stored before the subscribe-time check are never contacted.
+            if not is_allowed_push_endpoint(sub.endpoint):
+                logger.warning(
+                    "web_push_skipped_endpoint_not_allowed",
+                    extra={"subscription_fingerprint": subscription_fingerprint},
+                )
+                continue
             subscription_info = {
                 "endpoint": sub.endpoint,
                 "keys": {
@@ -147,7 +177,10 @@ class PushService:
                     subscription_info=subscription_info,
                     data=payload_data,
                     vapid_private_key=config["private_key"],
-                    vapid_claims=config["claims"]
+                    vapid_claims=config["claims"],
+                    # requests has no default timeout; a slow endpoint would
+                    # hold the alert loop's thread indefinitely.
+                    timeout=10,
                 )
                 logger.info(
                     "web_push_sent",
@@ -160,7 +193,9 @@ class PushService:
                     extra={
                         "subscription_fingerprint": subscription_fingerprint,
                         "status_code": getattr(ex.response, "status_code", None),
-                        "error": str(ex),
+                        # str(ex) carries the full response body of the
+                        # push service; the type and status are enough.
+                        "error": type(ex).__name__,
                     },
                 )
                 # If the push service rejects it as expired/unsubscribed (404/410), we clean up
