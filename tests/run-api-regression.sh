@@ -1233,6 +1233,18 @@ print("forwarded-for scopes auth rate limit ok")
 # A snapshot the restore cannot use must be refused before anything is
 # deleted: until 2026-09-30 this exact body answered 200, emptied every table
 # and locked the admin out (verifier B-V1).
+def import_failures():
+    rows = requests.get(
+        f"{base}/api/admin/audit-events",
+        headers=headers,
+        params={"action": "backup.import", "limit": 200},
+        timeout=30,
+    )
+    rows.raise_for_status()
+    return sum(1 for row in rows.json()["items"] if row.get("outcome") == "failure")
+
+
+failures_before_refusal = import_failures()
 watchlists_before_refusal = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
 watchlists_before_refusal.raise_for_status()
 # The third file passes validation and fails at the database (an item
@@ -1258,16 +1270,7 @@ for bad_body, bad_reason in (
     still_there = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
     assert still_there.status_code == 200, "admin token stopped working after a refused import"
     assert still_there.json() == watchlists_before_refusal.json(), "a refused import changed the watchlists"
-refusal_audit = requests.get(
-    f"{base}/api/admin/audit-events",
-    headers=headers,
-    params={"action": "backup.import", "limit": 20},
-    timeout=30,
-)
-refusal_audit.raise_for_status()
-refusal_rows = refusal_audit.json()
-refusal_rows = refusal_rows.get("items", refusal_rows) if isinstance(refusal_rows, dict) else refusal_rows
-assert sum(1 for row in refusal_rows if row.get("outcome") == "failure") >= 3, "refused imports are not audited"
+assert import_failures() - failures_before_refusal == 3, "each refused import must leave one failure audit row"
 print("refused import changes nothing ok")
 
 platform_import = requests.post(

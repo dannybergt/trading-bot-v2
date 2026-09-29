@@ -228,14 +228,13 @@ def _advance_id_sequences(db: Session) -> None:
             continue
         db.execute(
             text(
-                # Two parameters on purpose: psycopg types a reused parameter
-                # once, as regclass, and `text = regclass` does not exist.
-                "SELECT setval(CAST(:seq_rel AS regclass), GREATEST("
+                # pg_sequence_last_value takes the regclass directly -- no name
+                # matching that could miss in another schema (reviewer N3).
+                "SELECT setval(CAST(:seq AS regclass), GREATEST("
                 f"(SELECT COALESCE(MAX(id), 0) FROM {quote(table)}), "
-                "COALESCE((SELECT last_value FROM pg_sequences "
-                "WHERE schemaname || '.' || sequencename = CAST(:seq_name AS text)), 0), 1), true)"
+                "COALESCE(pg_sequence_last_value(CAST(:seq AS regclass)), 0), 1), true)"
             ),
-            {"seq_rel": seq, "seq_name": seq},
+            {"seq": seq},
         )
 
 
