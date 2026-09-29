@@ -1235,9 +1235,17 @@ print("forwarded-for scopes auth rate limit ok")
 # and locked the admin out (verifier B-V1).
 watchlists_before_refusal = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
 watchlists_before_refusal.raise_for_status()
+# The third file passes validation and fails at the database (an item
+# pointing at a watchlist that does not exist): deletes already ran, so only
+# the transaction keeps the data -- on Postgres, which enforces the key.
+dangling = json.loads(json.dumps(export_payload))
+dangling["data"]["watchlist_items"] = [
+    {"watchlist_id": 987654321, "symbol": "AAPL", "name": "dangling"}
+]
 for bad_body, bad_reason in (
     ({"data": {"pad": "x" * 64}}, "no users"),
     ({"data": {"users": [dict(u, is_admin=False) for u in export_payload["data"]["users"]]}}, "no active admin"),
+    (dangling, "nothing was changed"),
 ):
     refused_import = requests.post(
         f"{base}/api/admin/import",
@@ -1250,6 +1258,16 @@ for bad_body, bad_reason in (
     still_there = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
     assert still_there.status_code == 200, "admin token stopped working after a refused import"
     assert still_there.json() == watchlists_before_refusal.json(), "a refused import changed the watchlists"
+refusal_audit = requests.get(
+    f"{base}/api/admin/audit-events",
+    headers=headers,
+    params={"action": "backup.import", "limit": 20},
+    timeout=30,
+)
+refusal_audit.raise_for_status()
+refusal_rows = refusal_audit.json()
+refusal_rows = refusal_rows.get("items", refusal_rows) if isinstance(refusal_rows, dict) else refusal_rows
+assert sum(1 for row in refusal_rows if row.get("outcome") == "failure") >= 3, "refused imports are not audited"
 print("refused import changes nothing ok")
 
 platform_import = requests.post(

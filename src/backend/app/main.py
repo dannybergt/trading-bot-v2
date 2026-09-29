@@ -13,6 +13,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -3649,7 +3650,11 @@ async def import_platform_state(
     db: Session = Depends(get_db),
 ):
     payload = await _read_admin_upload_json(file)
-    _import_snapshot_or_400(db, payload, admin, audit_service.ACTION_BACKUP_IMPORT, file.filename)
+    # Off the event loop: a 50 MiB restore runs 20-45 s in one transaction,
+    # and every other request (health check included) would wait for it.
+    await run_in_threadpool(
+        _import_snapshot_or_400, db, payload, admin, audit_service.ACTION_BACKUP_IMPORT, file.filename
+    )
     audit_service.log_event(
         db,
         user_id=admin.id,
@@ -3729,7 +3734,11 @@ async def import_backup(
     db: Session = Depends(get_db),
 ):
     payload = await _read_admin_upload_json(file)
-    _import_snapshot_or_400(db, payload, admin, audit_service.ACTION_BACKUP_RESTORE, file.filename)
+    # Off the event loop: a 50 MiB restore runs 20-45 s in one transaction,
+    # and every other request (health check included) would wait for it.
+    await run_in_threadpool(
+        _import_snapshot_or_400, db, payload, admin, audit_service.ACTION_BACKUP_RESTORE, file.filename
+    )
     audit_service.log_event(
         db,
         user_id=admin.id,

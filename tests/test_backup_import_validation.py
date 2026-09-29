@@ -145,6 +145,17 @@ class ImportValidationTests(unittest.TestCase):
                 record["is_admin"] = True
         self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
 
+    def test_the_systems_own_backup_with_an_empty_name_restores(self):
+        """The API stores a watchlist named "" -- its backup must restore (reviewer B1)."""
+        self.db.query(Watchlist).one().name = ""
+        self.db.commit()
+        snapshot = BackupService.export_snapshot(self.db)
+
+        BackupService.import_snapshot(self.db, snapshot, replace_existing=True, acting_user=self.admin)
+
+        self.db.expire_all()
+        self.assertEqual("", self.db.query(Watchlist).one().name)
+
     def test_good_snapshot_replaces_the_data(self):
         """Der Golden Path bleibt: geaenderte Daten, dann Restore -> Stand der Sicherung."""
         watchlist = self.db.query(Watchlist).one()

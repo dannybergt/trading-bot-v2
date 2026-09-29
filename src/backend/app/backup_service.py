@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -122,7 +123,10 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
         for index, record in enumerate(rows):
             if not isinstance(record, dict):
                 raise SnapshotRejected(f"`{collection}[{index}]` is not an object")
-            missing = [field for field in fields if record.get(field) in (None, "")]
+            # Present and not null -- exactly what the insert needs. An empty
+            # string is a value the API itself stores (a watchlist named ""),
+            # so refusing it would refuse the system's own backups (reviewer B1).
+            missing = [field for field in fields if record.get(field) is None]
             if missing:
                 raise SnapshotRejected(f"`{collection}[{index}]` lacks {', '.join(missing)}")
 
@@ -146,7 +150,7 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
                 raise SnapshotRejected(f"`{collection}[{index}].user_id` {owner!r:.40} is not a user in the snapshot")
 
     def _active_admin(record: dict[str, Any]) -> bool:
-        return record.get("is_admin") is True and record.get("is_active", True) is not False
+        return record.get("is_admin") is True and record.get("is_active", True) is True
 
     if not any(_active_admin(record) for record in users):
         raise SnapshotRejected("the snapshot holds no active admin; restoring it would lock the platform")
@@ -160,9 +164,47 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
         ):
             raise SnapshotRejected(
                 "your own admin account is not in the snapshot as an active admin with the same id "
-                "and e-mail; restoring it would lock you out"
+                "and e-mail; restoring it would lock you out (a backup from before your account, "
+                "or from another instance, goes back through the database dump -- docs/admin/runbook.md)"
             )
     return payload
+
+
+# Every table the restore writes with explicit ids.
+_RESTORED_TABLES = (
+    "users", "watchlists", "watchlist_items", "watchlist_item_tags",
+    "watchlist_alert_settings", "watchlist_alert_deliveries", "alert_rules",
+    "alert_events", "paper_orders", "audit_events", "paper_transactions",
+    "auto_execution_limits", "auto_execution_events", "push_subscriptions",
+    "password_reset_tokens",
+)
+
+
+def _advance_id_sequences(db: Session) -> None:
+    """Move each id sequence past the highest restored id (Postgres only).
+
+    The restore inserts rows with their original ids; a Postgres sequence
+    does not follow explicit ids. Restored into a fresh database, the next
+    new user, order or audit row then collided with a restored id and
+    failed with a unique violation (migration-reviewer #1, reproduced) --
+    the pg_dump path never had this because the dump carries `setval`.
+    GREATEST never lowers a sequence: `setval` is not transactional, and a
+    rollback after this point must not hand out ids that are already used.
+    """
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+    for table in _RESTORED_TABLES:
+        db.execute(
+            text(
+                # `table` comes from the constant tuple above, never from the snapshot.
+                "SELECT setval(seq, GREATEST((SELECT COALESCE(MAX(id), 0) FROM "
+                + table
+                + "), COALESCE((SELECT last_value FROM pg_sequences "
+                "WHERE schemaname || '.' || sequencename = seq), 0), 1), true) "
+                "FROM (SELECT pg_get_serial_sequence(:table, 'id') AS seq) AS s WHERE seq IS NOT NULL"
+            ),
+            {"table": table},
+        )
 
 
 class BackupService:
@@ -488,7 +530,7 @@ class BackupService:
             # that row holds e-mail addresses and password hashes.
             logger.warning("backup_import_rolled_back error=%s", type(exc).__name__)
             raise SnapshotRejected(
-                f"the database refused the snapshot ({type(exc).__name__}); nothing was changed"
+                f"the snapshot could not be applied ({type(exc).__name__}); nothing was changed"
             ) from exc
         except BaseException:
             db.rollback()
@@ -823,6 +865,7 @@ class BackupService:
             )
 
         db.flush()
+        _advance_id_sequences(db)
 
 
 def _scheduled_backup_cycle() -> None:
