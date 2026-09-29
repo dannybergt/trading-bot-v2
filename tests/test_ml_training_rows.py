@@ -77,6 +77,22 @@ class TrainingRowsTests(unittest.TestCase):
             pos = closes.index.get_loc(ts)
             self.assertEqual(int(closes.iloc[pos + 1] > closes.iloc[pos]), int(label))
 
+    def test_three_months_do_not_train(self):
+        """66 bars (3M over Alpaca) leave ~16 rows -- too few to persist a model
+        that then serves every timeframe for a day (reviewer B1)."""
+        predictor = PricePredictor()
+        predictor.train(_bars(66))
+        self.assertFalse(predictor.is_trained)
+
+    def test_a_gap_in_the_closes_invents_no_label(self):
+        """The row before a missing close has no next close either (reviewer W1)."""
+        df = _bars(150)
+        gap = df.index[100]
+        df.loc[gap, "Close"] = float("nan")
+        data, _ = PricePredictor().prepare_features(df)
+        self.assertNotIn(gap, data.index)
+        self.assertNotIn(df.index[99], data.index)
+
     def test_feature_list_is_the_models(self):
         """Premise of the fix: SMA_100/SMA_200 are not model features."""
         self.assertNotIn("SMA_200", MODEL_FEATURE_COLS)
