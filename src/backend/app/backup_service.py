@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -51,6 +52,117 @@ def _parse_iso(value):
     except ValueError:
         logger.warning("backup_import_unparsable_timestamp")
         return None
+
+
+class SnapshotRejected(ValueError):
+    """The snapshot cannot be restored; the database was not changed."""
+
+
+# Fields each insert in `_apply_snapshot` reads with `record[...]`. A record
+# without one of them used to fail half-way through a restore that had
+# already deleted everything. Kept next to the inserts they mirror;
+# tests/test_backup_import_validation.py checks the two stay in step.
+REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "users": ("id", "email", "hashed_password"),
+    "watchlists": ("id", "user_id", "name"),
+    "watchlist_items": ("watchlist_id", "symbol"),
+    "watchlist_item_tags": ("watchlist_item_id", "tag"),
+    "watchlist_alert_settings": ("user_id", "watchlist_id"),
+    "watchlist_alert_deliveries": ("user_id", "watchlist_id", "symbol", "channel", "alert_key"),
+    "alert_rules": ("user_id", "watchlist_id", "symbol", "rule_type"),
+    "alert_events": (
+        "user_id", "alert_rule_id", "watchlist_id", "symbol", "event_type", "title", "message",
+    ),
+    "paper_orders": ("user_id", "symbol", "side", "qty"),
+    "audit_events": ("action",),
+    "paper_transactions": ("user_id", "order_id", "symbol", "side", "qty", "price"),
+    "auto_execution_limits": ("user_id",),
+    "auto_execution_events": ("user_id",),
+    "push_subscriptions": ("user_id", "endpoint", "p256dh", "auth"),
+    "password_reset_tokens": ("user_id", "token"),
+}
+
+
+def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict[str, Any]:
+    """Check a whole snapshot before anything is deleted; return its payload.
+
+    Raises `SnapshotRejected` with a reason the admin can act on. The checks
+    are the ones whose failure used to surface only after the delete:
+    - the file is an object, `data` (if present) is an object, and the
+      schema version is one this code writes;
+    - `users` is present and not empty -- a full replace without users is a
+      lockout, never a restore;
+    - every known collection is a list of objects carrying the fields its
+      insert reads;
+    - user ids are unique integers and every `user_id` points at one of them;
+    - at least one active admin remains, and when the caller is known, the
+      caller is in the snapshot as that same active admin (same id and
+      e-mail) -- the access token names the user by id, so anything else
+      would lock them out or log them in as someone else.
+    """
+    if not isinstance(snapshot, dict):
+        raise SnapshotRejected("the file is not a JSON object")
+    version = snapshot.get("schema_version")
+    if version is not None and (
+        not isinstance(version, int) or isinstance(version, bool) or not 1 <= version <= BACKUP_SCHEMA_VERSION
+    ):
+        raise SnapshotRejected(f"unsupported schema_version {version!r:.40} (this version writes {BACKUP_SCHEMA_VERSION})")
+    payload = snapshot.get("data", snapshot)
+    if not isinstance(payload, dict):
+        raise SnapshotRejected("`data` is not an object")
+
+    users = payload.get("users")
+    if not isinstance(users, list) or not users:
+        raise SnapshotRejected("the snapshot holds no users; restoring it would lock everyone out")
+
+    for collection, fields in REQUIRED_FIELDS.items():
+        rows = payload.get(collection, [])
+        if not isinstance(rows, list):
+            raise SnapshotRejected(f"`{collection}` is not a list")
+        for index, record in enumerate(rows):
+            if not isinstance(record, dict):
+                raise SnapshotRejected(f"`{collection}[{index}]` is not an object")
+            missing = [field for field in fields if record.get(field) in (None, "")]
+            if missing:
+                raise SnapshotRejected(f"`{collection}[{index}]` lacks {', '.join(missing)}")
+
+    user_ids: set[int] = set()
+    for index, record in enumerate(users):
+        user_id = record["id"]
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            raise SnapshotRejected(f"`users[{index}].id` is not an integer")
+        if user_id in user_ids:
+            raise SnapshotRejected(f"user id {user_id} appears twice")
+        user_ids.add(user_id)
+        if not isinstance(record["email"], str) or not isinstance(record["hashed_password"], str):
+            raise SnapshotRejected(f"`users[{index}]` has a non-text email or password hash")
+
+    for collection in REQUIRED_FIELDS:
+        if collection == "users":
+            continue
+        for index, record in enumerate(payload.get(collection, [])):
+            owner = record.get("user_id")
+            if owner is not None and owner not in user_ids:
+                raise SnapshotRejected(f"`{collection}[{index}].user_id` {owner!r:.40} is not a user in the snapshot")
+
+    def _active_admin(record: dict[str, Any]) -> bool:
+        return record.get("is_admin") is True and record.get("is_active", True) is not False
+
+    if not any(_active_admin(record) for record in users):
+        raise SnapshotRejected("the snapshot holds no active admin; restoring it would lock the platform")
+
+    if acting_user is not None:
+        own = next((record for record in users if record["id"] == acting_user.id), None)
+        if (
+            own is None
+            or str(own["email"]).strip().lower() != str(acting_user.email).strip().lower()
+            or not _active_admin(own)
+        ):
+            raise SnapshotRejected(
+                "your own admin account is not in the snapshot as an active admin with the same id "
+                "and e-mail; restoring it would lock you out"
+            )
+    return payload
 
 
 class BackupService:
@@ -345,9 +457,46 @@ class BackupService:
         return path
 
     @staticmethod
-    def import_snapshot(db: Session, snapshot: dict[str, Any], replace_existing: bool = True):
-        payload = snapshot.get("data", snapshot)
+    def import_snapshot(
+        db: Session,
+        snapshot: Any,
+        replace_existing: bool = True,
+        *,
+        acting_user: User | None = None,
+    ) -> None:
+        """Replace (or extend) the database with a snapshot -- all or nothing.
 
+        Until 2026-09-30 this deleted every table and committed *before* it
+        looked at the snapshot: `{"data": {"pad": "x"}}` answered 200, left
+        every table empty and locked the admin out (verifier B-V1). Now:
+
+        1. `validate_snapshot` checks the whole file first -- shape, the
+           fields every insert below needs, references to users, and that an
+           active admin survives (the caller, when known). Nothing is touched
+           on a refusal.
+        2. Delete and insert run in one transaction. Anything the database or
+           a value conversion rejects rolls the whole restore back; the data
+           is exactly what it was before the request.
+        """
+        payload = validate_snapshot(snapshot, acting_user=acting_user if replace_existing else None)
+        try:
+            BackupService._apply_snapshot(db, payload, replace_existing)
+            db.commit()
+        except (SQLAlchemyError, ValueError, TypeError, KeyError) as exc:
+            db.rollback()
+            # Class name only: database errors quote the offending row, and
+            # that row holds e-mail addresses and password hashes.
+            logger.warning("backup_import_rolled_back error=%s", type(exc).__name__)
+            raise SnapshotRejected(
+                f"the database refused the snapshot ({type(exc).__name__}); nothing was changed"
+            ) from exc
+        except BaseException:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def _apply_snapshot(db: Session, payload: dict[str, Any], replace_existing: bool) -> None:
+        """Delete and insert inside the caller's transaction; never commits."""
         if replace_existing:
             db.query(AuditEvent).delete()
             db.query(AlertEvent).delete()
@@ -371,7 +520,9 @@ class BackupService:
             db.query(AutoExecutionEvent).delete()
             db.query(AutoExecutionLimits).delete()
             db.query(User).delete()
-            db.commit()
+            # No commit here: the deletes stay invisible and reversible until
+            # every insert below went through (import_snapshot commits).
+            db.flush()
 
         for record in payload.get("users", []):
             db.add(
@@ -671,7 +822,7 @@ class BackupService:
                 )
             )
 
-        db.commit()
+        db.flush()
 
 
 def _scheduled_backup_cycle() -> None:

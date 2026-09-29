@@ -1230,6 +1230,28 @@ assert other_caller.status_code != 429, (
 )
 print("forwarded-for scopes auth rate limit ok")
 
+# A snapshot the restore cannot use must be refused before anything is
+# deleted: until 2026-09-30 this exact body answered 200, emptied every table
+# and locked the admin out (verifier B-V1).
+watchlists_before_refusal = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_before_refusal.raise_for_status()
+for bad_body, bad_reason in (
+    ({"data": {"pad": "x" * 64}}, "no users"),
+    ({"data": {"users": [dict(u, is_admin=False) for u in export_payload["data"]["users"]]}}, "no active admin"),
+):
+    refused_import = requests.post(
+        f"{base}/api/admin/import",
+        headers=headers,
+        files={"file": ("broken.json", io.BytesIO(json.dumps(bad_body).encode("utf-8")), "application/json")},
+        timeout=30,
+    )
+    assert refused_import.status_code == 400, (refused_import.status_code, refused_import.text[:200])
+    assert bad_reason in refused_import.json()["detail"], refused_import.text[:200]
+    still_there = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+    assert still_there.status_code == 200, "admin token stopped working after a refused import"
+    assert still_there.json() == watchlists_before_refusal.json(), "a refused import changed the watchlists"
+print("refused import changes nothing ok")
+
 platform_import = requests.post(
     f"{base}/api/admin/import",
     headers=headers,

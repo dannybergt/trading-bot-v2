@@ -32,7 +32,7 @@ from app.auth import decrypt_secret, ensure_initial_admin, get_current_admin_use
 from app.auth_routes import router as auth_router
 from app.asset_metadata import build_asset_profile, canonicalize_symbol, is_plausible_symbol_query, to_yfinance_symbol, KNOWN_ASSET_CLASSES
 from app.background import run_cycle, shutdown as shutdown_background_executor
-from app.backup_service import BackupService, backup_scheduler_task
+from app.backup_service import BackupService, SnapshotRejected, backup_scheduler_task
 from app import audit_service, auto_execution, backtest_service, data_quality_service, docs_service
 from app.coingecko_service import get_coingecko_service
 from app.discovery_service import get_discovery_service
@@ -3611,6 +3611,26 @@ async def _read_admin_upload_json(file: UploadFile) -> dict:
         raise HTTPException(status_code=400, detail="Invalid JSON upload") from exc
 
 
+def _import_snapshot_or_400(db: Session, payload: object, admin: User, action: str, filename: str | None) -> None:
+    """Restore a snapshot for `admin`, or answer 400 with the reason.
+
+    A refused snapshot leaves the database untouched (validated before the
+    delete, one transaction); the refusal is audited so a failed restore is
+    visible next to the successful ones.
+    """
+    try:
+        BackupService.import_snapshot(db, payload, replace_existing=True, acting_user=admin)
+    except SnapshotRejected as exc:
+        audit_service.log_event(
+            db,
+            user_id=admin.id,
+            action=action,
+            outcome="failure",
+            details={"filename": filename, "reason": str(exc)},
+        )
+        raise HTTPException(status_code=400, detail=f"Snapshot rejected: {exc}") from exc
+
+
 @app.get("/api/admin/export")
 def export_platform_state(admin: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
     snapshot = BackupService.export_snapshot(db)
@@ -3629,7 +3649,7 @@ async def import_platform_state(
     db: Session = Depends(get_db),
 ):
     payload = await _read_admin_upload_json(file)
-    BackupService.import_snapshot(db, payload, replace_existing=True)
+    _import_snapshot_or_400(db, payload, admin, audit_service.ACTION_BACKUP_IMPORT, file.filename)
     audit_service.log_event(
         db,
         user_id=admin.id,
@@ -3709,7 +3729,7 @@ async def import_backup(
     db: Session = Depends(get_db),
 ):
     payload = await _read_admin_upload_json(file)
-    BackupService.import_snapshot(db, payload, replace_existing=True)
+    _import_snapshot_or_400(db, payload, admin, audit_service.ACTION_BACKUP_RESTORE, file.filename)
     audit_service.log_event(
         db,
         user_id=admin.id,
