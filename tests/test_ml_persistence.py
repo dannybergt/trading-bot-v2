@@ -64,6 +64,14 @@ class MLPersistenceTests(unittest.TestCase):
             "News_Sentiment", "PE_Ratio", "Forward_PE", "Price_To_Book",
         ):
             df[col] = 0.5
+        # Noisy indicators so the trees actually split -- with constant
+        # features every model predicts the base rate and "same prediction
+        # after loading" would hold even for a broken booster.
+        import numpy as np
+
+        rng = np.random.default_rng(seed=7)
+        for col in ("RSI", "MACD_12_26_9", "ATR", "STOCH_K"):
+            df[col] = rng.normal(0.0, 1.0, rows)
         # Make Volume a proper int
         df["Volume"] = 1_000_000
         predictor = PricePredictor()
@@ -96,7 +104,12 @@ class MLPersistenceTests(unittest.TestCase):
 
         # Same input → same prediction
         original_pred = predictor.predict_next_movement(df, user=None)
-        recovered_pred = loaded_predictor.predict_next_movement(df, user=None)
+        # predict_next_movement swallows member and explanation failures into
+        # ERROR logs; the loaded ensemble must need none of that.
+        with self.assertNoLogs("app.ml_models", level="ERROR"):
+            recovered_pred = loaded_predictor.predict_next_movement(df, user=None)
+        self.assertEqual(3, recovered_pred["ensembleSize"], "lgbm/rf pickles did not load")
+        self.assertIsNotNone(recovered_pred["explanation"], "pred_contribs failed on the loaded booster")
         self.assertEqual(original_pred["direction"], recovered_pred["direction"])
         self.assertAlmostEqual(
             original_pred["probabilityUp"], recovered_pred["probabilityUp"], places=6
