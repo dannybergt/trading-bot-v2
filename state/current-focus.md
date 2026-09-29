@@ -1,5 +1,67 @@
 # Current Focus
 
+## SESSION 2026-09-30 (Nacht, Fortsetzung): Restore ohne Datenverlust (PR #41), 6M trainiert wieder (PR #42 auf #40)
+
+**Stand:** zwei weitere PRs, CI grün, **kein Merge**. Merge-Reihenfolge: #38 → #40 → #42 (gestapelt, weil das gespeicherte Modell erst mit xgboost 2.1.4 lädt); #39 und #41 unabhängig von `main`. Dieser Eintrag lebt auf dem obersten Stapel-Branch `fix/training-ohne-sma200` (derselbe Datei-Strang wie der Eintrag von #40).
+
+**Thread 21 geschlossen (PR #41 `fix/import-validierung`, HEAD `be42b8e`):**
+- `validate_snapshot` läuft vor jeder Änderung und prüft:
+  - Pflichtfelder (per Test deckungsgleich mit den Inserts)
+  - Referenzen
+  - einen aktiven Admin
+  - den Aufrufer: gleiche ID, exakte E-Mail, prüfbarer Hash, kein MFA ohne Secret
+- Der Restore läuft in einer Transaktion, jeder Fehler führt zum Rollback.
+- Sequenzen werden nachgezogen (sonst UniqueViolation nach einem Restore in eine frische DB).
+- Der Restore läuft im Threadpool.
+- 400 mit Grund und Audit-Eintrag `failure`.
+- Tore:
+  - **R:** B1 (`""` aus eigener Sicherung abgewiesen), W1, N1–N4 behoben, Delta ohne Befund.
+  - **S:** drei Runden. #1/#3/#4 behoben; D1 (jeder Restore auf PG kaputt, zweimal: Text-ID-Tabelle, psycopg-Parametertyp) behoben; D2 durch Rücknahme erledigt; D3 behoben. Endurteil bestanden, NIEDRIG.
+  - **Migration:** DEPLOYBAR MIT AUFLAGEN (#1/#2 behoben).
+  - **V** auf `be42b8e`: 5/6 nachgewiesen.
+    - 18 Abweisungen mit identischem DB-Fingerprint und gültigem Token.
+    - Guter Restore stellt den Stand der Sicherung her.
+    - Restore in eine frische DB, danach neue Datensätze angelegt: 200.
+    - `/api/health` während eines 23,5-MiB-Restores: 36/36.
+    - api-regression grün.
+    - Negativkontrolle alter Code: pad-Datei leert alles.
+    - **V2b widerlegt:** `created_at` wird nicht übernommen (= Thread 19, Vorbestand).
+
+**Thread 23 geschlossen (PR #42 `fix/training-ohne-sma200`, HEAD `ac1c7eb`):**
+- `dropna` nur über die Modell-Features.
+- Label aus dem ungekürzten Shift: kein erfundenes DOWN an der letzten Zeile und vor Lücken.
+- `MIN_TRAINING_ROWS = 60`, ein Ort für Predictor und Backtest.
+- Wirkung: 126 Bars ergeben ~77 statt 0 Zeilen, 181 → 131 statt 0; 3M trainiert bewusst nicht; Backtest bei 260 Bars 79 statt 49 Samples.
+- Tore:
+  - **R:** B1 (3M trainierte auf 5–16 Zeilen), W1 (Lücken), W3 (zwei Schwellen) behoben.
+  - **V:** T23-a/b/c nachgewiesen. T23-d auf main-Basis widerlegt (Laden scheitert unter xgboost 2.1.3), deshalb auf #40 gestapelt. Kombiniert im venv nachgewiesen: 126 Bars trainieren, werden gespeichert und in einem neuen Prozess mit identischer Wahrscheinlichkeit geladen.
+
+**Offene Threads (neu oder bestätigt):**
+29. **Zielzeilen** (Katalog, Betreiber entscheidet):
+    - TBV2-Z15 „Restore ersetzt alles oder ändert nichts, Aufrufer bleibt drin, inklusive `created_at`“
+    - Zeile „Modell trainiert (6M) und überlebt Neustart“
+30. **Thread 19 jetzt MUST:** Restore übernimmt `created_at` nicht (verifier V2b, gemessen an users/watchlists/items/tags).
+31. **Tokens nach einem Restore** binden an die ID, nicht an die Person (security #2, MITTEL). Braucht einen Auth-ADR (Token-Generation oder E-Mail-Claim prüfen).
+32. **Restore ersetzt das Audit-Log** (security #5 / migration #3). ADR: behalten und anhängen, oder vorher sichern.
+33. **Harnisch-Schritt `alerts … createdEvents == 1` flaky** auf diesem Host (1 von 2). Er liegt vor den Import-Schritten → `test-runner`.
+34. **Modell-Cache je Symbol statt je Zeitraum/Intervall** (reviewer F1). Voraussetzung, um `MIN_TRAINING_ROWS` zu heben.
+35. `nSamples` zählt Bars statt Trainingszeilen (Regel K); der Retrain-Zyklus meldet Symbole ohne Modell als „refreshed“.
+36. SHOULD: automatische Sicherung vor jedem Restore, dazu ein Trockenlauf-Endpunkt.
+37. `json.loads` des Uploads läuft noch auf der Event-Loop (bei 50 MiB nicht gemessen).
+
+**Nicht hier lösbar (Betreiber):**
+- **Host dev-claude: btrfs-Platte / Docker-Daemon zeitweise ENOSPC** bei 8–9 GB frei (vermutlich Metadaten). Container-Starts und Image-Builds scheiterten (security-reviewer, beide verifier). Braucht Betreiber-Hand (prune/balance nach Freigabe). Kein Prune durch Agenten.
+- **VAPID-Key in der öffentlichen Historie** (`93cc39c`, security #H): klären, ob er produktiv lief; sonst in SECURITY.md als „nie produktiv“ vermerken.
+- `FREIGABE` je PR: #38, #39, #40, #41, #42 (Reihenfolge oben).
+
+**Allokierte Ressourcen:**
+- Keine Ports.
+- Eigene Images: `tbv2-v21-backend:cand4`, `tbv2-v23-backend:cand`, `tbv2-imp-backend:cand2/3/4`, `tbv2-ngx-*`, `tbv2-ml-backend:cand`.
+- venv `scratchpad/tbv2-venv`, Worktrees `wt-tbv2-2`, `-2b`, `-2c`, `-2d`.
+- Harnisch-Reste `/tmp/trading-bot-v2-api-regression-*` (je ~4 MB).
+
+**Nächster sinnvoller Schritt:** Thread 30 (`created_at` beim Restore), dann Thread 10 (alpaca-py) mit `critic`.
+
 ## SESSION 2026-09-29 (Nacht): Modelle laden wieder, Restore > 1 MB geht ueber nginx — PR #40 (auf #38) und PR #39
 
 **Stand:** zwei PRs, beide Entwurf -> ready, CI gruen, **kein Merge** (wartet auf `FREIGABE`, #40 erst nach #38).
