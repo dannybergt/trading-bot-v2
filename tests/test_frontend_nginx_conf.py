@@ -100,9 +100,12 @@ def _location_blocks(conf: str) -> list[tuple[str, str]]:
 
 
 def _location_for(conf: str, uri: str) -> tuple[str, str]:
-    """The block nginx picks for `uri` (regex before prefix, as neither
-    prefix here uses ^~ and there is no exact match)."""
+    """The block nginx picks for a normalised `uri`: exact match, then regex,
+    then the longest prefix (no prefix here uses ^~)."""
     blocks = _location_blocks(conf)
+    for matcher, body in blocks:
+        if matcher.startswith("=") and matcher[1:].strip() == uri:
+            return matcher, body
     for matcher, body in blocks:
         if matcher.startswith("~"):
             pattern = matcher.lstrip("~*").strip()
@@ -166,6 +169,59 @@ class RequestBodyLimitTests(unittest.TestCase):
             )
             self.assertIn("proxy_pass http://backend:8000", body)
             self.assertIn("X-Forwarded-For", body, f"{uri} must forward the client address")
+
+    def test_raised_limit_only_reaches_the_path_it_was_chosen_for(self):
+        """nginx chooses the block by the normalised path; a proxy_pass without
+        a URI forwards the client's raw path. A 51m regex block of that kind let
+        `/api/watchlists/1/items/../../../admin/import` pick the upload limit
+        and still reach the `{symbol:path}` route (reviewer B-1, reproduced).
+        Every block above the server default is therefore an exact match whose
+        proxy_pass names exactly that path."""
+        conf = _conf_text()
+        default = _server_level_body_limit(conf)
+        raised = []
+        for matcher, body in _location_blocks(conf):
+            match = re.search(r"client_max_body_size\s+([^;]+);", body)
+            if not match or _size_to_bytes(match.group(1)) <= default:
+                continue
+            raised.append(matcher)
+            self.assertTrue(
+                matcher.startswith("="),
+                f"`location {matcher}` raises the body limit but is not an exact match",
+            )
+            path = matcher[1:].strip()
+            target = re.search(r"proxy_pass\s+([^;]+);", body)
+            self.assertIsNotNone(target, f"`location {matcher}` has no proxy_pass")
+            self.assertEqual(
+                target.group(1).strip(),
+                f"http://backend:8000{path}",
+                f"`location {matcher}` must forward exactly {path}, not the raw client path",
+            )
+        self.assertEqual(sorted(raised), sorted(f"= {p}" for p in ADMIN_UPLOAD_PATHS))
+
+    def test_restore_blocks_refuse_before_buffering(self):
+        """Only POST, only with a bearer token, at most 2 at once -- checked by
+        nginx before it buffers up to 51 MiB (security-reviewer #1/#2)."""
+        conf = _conf_text()
+        self.assertRegex(conf, r"limit_conn_zone\s+\$binary_remote_addr\s+zone=tbv2_upload_conn:")
+        for uri in ADMIN_UPLOAD_PATHS:
+            matcher, body = _location_for(conf, uri)
+            self.assertRegex(body, r"limit_except\s+POST\s*\{\s*deny\s+all;\s*\}")
+            self.assertRegex(body, r'if\s+\(\$http_authorization\s+!~\*\s+"\^Bearer ')
+            self.assertRegex(body, r"\{\s*return\s+401;\s*\}")
+            self.assertRegex(body, r"limit_conn\s+tbv2_upload_conn\s+\d+;")
+
+    def test_restore_blocks_outlast_a_slow_restore(self):
+        """At the 60 s default nginx answers 504 while a 50 MiB restore keeps
+        running; an operator then retries a restore that already replaced the
+        data (ops-reviewer #1)."""
+        conf = _conf_text()
+        for uri in ADMIN_UPLOAD_PATHS:
+            matcher, body = _location_for(conf, uri)
+            for directive in ("proxy_read_timeout", "proxy_send_timeout"):
+                match = re.search(rf"{directive}\s+(\d+)s;", body)
+                self.assertIsNotNone(match, f"{uri}: {directive} missing in `location {matcher}`")
+                self.assertGreaterEqual(int(match.group(1)), 300)
 
     def test_other_api_calls_keep_the_small_limit(self):
         conf = _conf_text()

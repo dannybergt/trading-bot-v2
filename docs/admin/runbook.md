@@ -64,6 +64,11 @@ veroeffentlichten Frontend-Port weiterleitet, gilt zusaetzlich:
 - `ALLOWED_ORIGINS` auf die oeffentliche Origin setzen (`https://<host>`).
   Solange Frontend und API unter derselben Origin liegen, greift CORS nicht,
   ein veralteter Wert faellt also erst auf, wenn etwas cross-origin wird.
+- Fuer den Restore (`/api/admin/import`, `/api/admin/backups/import`) muss der
+  Proxy Bodies bis 51 MiB durchlassen (Apache: `LimitRequestBody`, ab 2.4.54
+  Default 1 GiB) und mindestens 300 s auf die Antwort warten (Apache:
+  `ProxyTimeout`/`Timeout`, Default 60 s — sonst 504 waehrend der Restore
+  weiterlaeuft).
 - `PASSWORD_RESET_BASE_URL` auf die oeffentliche Reset-URL setzen
   (`https://<host>/reset-password`), sonst enthalten Reset-Mails einen intern
   nicht erreichbaren Link.
@@ -139,6 +144,15 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
 1. Backup-Datei ueber Admin-Endpunkt hochladen:
    - `POST /api/admin/backups/import`
    - oder `POST /api/admin/import`
+   - nur `POST` mit `Authorization: Bearer <admin-token>`; ohne Token antwortet
+     schon nginx 401, bevor es die Datei annimmt
+   - Grenze: Datei 50 MiB (Backend, JSON-413 darueber), Body 51 MiB (nginx,
+     HTML-413 darueber); hoechstens 2 Restores gleichzeitig
+   - Restore nur im Wartungsfenster: der Import laeuft synchron im einzigen
+     Backend-Worker, die API steht fuer alle Nutzer, bis er fertig ist
+   - **504 heisst nicht fehlgeschlagen:** nginx wartet 300 s, der Restore laeuft
+     danach weiter. Vor einem zweiten Versuch das Audit-Event (`backup.import`/
+     `backup.restore`, Admin-Seite Audit) bzw. `docker compose logs backend` pruefen
 2. Backend-Health und Admin-Login pruefen
 3. Watchlists, Nutzer und Push-Subscriptions stichprobenartig verifizieren
 
