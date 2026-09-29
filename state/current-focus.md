@@ -1,5 +1,26 @@
 # Current Focus
 
+## SESSION 2026-09-29: Abhaengigkeiten auf Stand, Audit blockiert CI — PR `security/deps-2026-09`
+
+**Stand:** Branch `security/deps-2026-09` von `main` `afc6d52`, PR s. u. Schliesst den Betreiber-Punkt „Dependency-Advisories (PR `security/deps-2026-09`)" und security-reviewer #3 (HOCH, 2026-09-16) bis auf 7 begruendete Ausnahmen.
+
+**Gebaut:** fastapi 0.142.0 (starlette 1.7.0), python-multipart 0.0.32, requests 2.34.2, lightgbm 4.7.0, python-jose 3.5.0, pywebpush 2.5.0 gepinnt; pip 26.2.1/setuptools 84.0.0 im Image; Frontend-Lockfile per `npm audit fix` (vite 6.4.3, react-router 7.18.4, postcss 8.5.28, `package.json` unveraendert); `ops/automation/deps-audit.sh` als CI-Schritt; Dependabot pip + npm; SECURITY.md Abschnitt Abhaengigkeiten; ADR 2026-09-29.
+
+**Zahlen:** pip-audit 65 -> 0 offen (14 ignoriert = 7 IDs, Duplikate), npm 11 -> 0.
+
+**Tore:** K n/a (1 Slice, keine Architektur-/Auth-Aenderung). R/S/V: s. PR. C: s. PR.
+
+**Nachweise:** Unit 477 OK (skipped=1) auf `tbv2-deps-backend:cand` (22 min unter Host-Last 30); api-regression 67 gruen (`BACKEND_IMAGE=tbv2-deps-backend:cand SKIP_BUILD=1`); Frontend-Build gruen; UI-Regression nur in CI (kein `node`/Chrome auf dem Host). Hinweis: `test_reliability_buckets_partition_predictions` braucht unter Fremdlast 150 s statt 9 s (`n_jobs=-1`, Thread 4 vom 09-18) — kein Haenger.
+
+**Offene Threads (neu):**
+10. **`alpaca-trade-api` -> `alpaca-py`** (MUST vor Zieldatum 2026-10-31): haelt urllib3 < 2 (5 Advisories, u. a. Dekompressionsketten, Authorization bei Cross-Origin-Redirect) und msgpack 1.0.3. Eigener Schnitt mit Tor K (Broker-Pfad `alpaca_service.py`, `alpaca_stream.py`). Danach die 6 Ausnahmen in `deps-audit.sh` loeschen.
+11. **`python-jose` -> `PyJWT`** (SHOULD): beendet die ecdsa-Ausnahme; Auth-Pfad, eigener Schnitt.
+12. `@app.on_event` -> `lifespan` (COULD, DeprecationWarning seit FastAPI 0.93) — erst nach dem Watchlist-Quota-Branch (dieselbe Datei `main.py`).
+
+**Nicht hier loesbar (Betreiber):** PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
+
+**Allokierte Ports/Ressourcen:** keine Ports. Images `tbv2-deps-backend:cand`/`:cand2` (eigene Tags, `trading-bot-v2-backend:local` bewusst nicht ueberschrieben). Scratchpad-Worktree `wt-trading-bot`.
+
 ## SESSION 2026-09-18: Nutzer-Anteil an der Backtest-Warteschlange, Symbolform vor dem Anbieter — PR #35 wartet auf FREIGABE
 
 **Stand:** `main` auf `097b61e`. Branch `security/backtest-user-quota` auf `cfaa469` (5 Commits, gepusht), **PR #35** (ready, Text nach §15). Threads 1, 3 und 8 der Liste vom 2026-09-16 geschlossen; dazu vier Befunde des `security-reviewer` und einer des `verifier` aus dieser Session behoben.
