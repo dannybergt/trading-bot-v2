@@ -22,15 +22,15 @@ except ImportError:
 # ensemble is therefore purely technical. Training (`prepare_features`) and
 # inference (`predict_next_movement`) must both read this one list so they can
 # never drift apart.
-# Fewer prepared rows than this do not train (see PricePredictor.train).
-MIN_TRAINING_ROWS = 60
-
 MODEL_FEATURE_COLS: list[str] = [
     "RSI", "SMA_20", "SMA_50", "EMA_12", "EMA_26",
     "BBL_20_2.0", "BBM_20_2.0", "BBU_20_2.0",  # Bollinger Bands
     "MACD_12_26_9", "MACDh_12_26_9", "MACDs_12_26_9",  # MACD
     "Volume", "ATR", "STOCH_K", "STOCH_D",  # Momentum & Volatility
 ]
+
+# Fewer prepared rows than this do not train (see PricePredictor.train).
+MIN_TRAINING_ROWS = 60
 
 FEATURE_CATEGORIES: dict[str, str] = {
     # Trend (moving averages)

@@ -127,8 +127,13 @@ class BacktestServiceTests(unittest.TestCase):
         predictor = backtest_service.PricePredictor()
         self.assertFalse(backtest_service._window_is_trainable(predictor, df))
 
-        df = _synthetic_frame(60)  # gemischte Richtungen
+        df = _synthetic_frame(120)  # gemischte Richtungen, ueber der Mindestzahl
         self.assertTrue(backtest_service._window_is_trainable(predictor, df))
+
+        # Unter MIN_TRAINING_ROWS ist das Fenster untrainierbar -- dieselbe
+        # Schwelle wie PricePredictor.train (vorher 10 hier, 0 dort).
+        df = _synthetic_frame(60)
+        self.assertFalse(backtest_service._window_is_trainable(predictor, df))
 
     def test_walk_forward_scores_each_block_in_one_batch(self):
         # Der Walk-Forward rief fuer jeden Bar die volle Bildschirm-Vorhersage
