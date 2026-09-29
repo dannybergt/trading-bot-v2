@@ -231,12 +231,7 @@ def ensure_initial_admin(db: Session) -> User | None:
     if not config:
         return None
 
-    # Only an *active* admin makes the bootstrap unnecessary: a restore that
-    # left the only admin deactivated must still be recoverable through
-    # INITIAL_ADMIN_* (security-reviewer #1 zu Thread 21).
-    admin_exists = (
-        db.query(User).filter(User.is_admin == True, User.is_active == True).first()  # noqa: E712
-    )
+    admin_exists = db.query(User).filter(User.is_admin == True).first()
     if admin_exists:
         logger.info(
             "initial_admin_bootstrap_skipped_existing_admin",

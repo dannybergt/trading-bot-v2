@@ -156,8 +156,12 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
     def _verifiable_hash(value: str) -> bool:
         from app.auth import pwd_context  # local: auth imports settings at module load
 
+        # identify() only reads the prefix; a truncated bcrypt body passed it
+        # and failed at the next login (security-reviewer D3). One verify
+        # round tells a malformed hash (raises) from a well-formed one.
         try:
-            return pwd_context.identify(value) is not None
+            pwd_context.verify("restore-probe", value)
+            return True
         except (TypeError, ValueError):
             return False
 
@@ -213,17 +217,23 @@ def _advance_id_sequences(db: Session) -> None:
     """
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return
-    for table in _RESTORED_TABLES:
+    quote = db.bind.dialect.identifier_preparer.quote
+    for table in _RESTORED_TABLES:  # constant, never from the snapshot
+        # Look the sequence up first: watchlists use text ids and have none,
+        # and a single statement over them failed to plan (COALESCE text vs
+        # integer) -- which rolled back every restore on Postgres
+        # (security-reviewer D1, reproduced on PG 16).
+        seq = db.execute(text("SELECT pg_get_serial_sequence(:t, 'id')"), {"t": table}).scalar()
+        if seq is None:
+            continue
         db.execute(
             text(
-                # `table` comes from the constant tuple above, never from the snapshot.
-                "SELECT setval(seq, GREATEST((SELECT COALESCE(MAX(id), 0) FROM "
-                + table
-                + "), COALESCE((SELECT last_value FROM pg_sequences "
-                "WHERE schemaname || '.' || sequencename = seq), 0), 1), true) "
-                "FROM (SELECT pg_get_serial_sequence(:table, 'id') AS seq) AS s WHERE seq IS NOT NULL"
+                "SELECT setval(CAST(:seq AS regclass), GREATEST("
+                f"(SELECT COALESCE(MAX(id), 0) FROM {quote(table)}), "
+                "COALESCE((SELECT last_value FROM pg_sequences "
+                "WHERE schemaname || '.' || sequencename = :seq), 0), 1), true)"
             ),
-            {"table": table},
+            {"seq": seq},
         )
 
 
