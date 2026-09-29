@@ -51,7 +51,12 @@ class ImportValidationTests(unittest.TestCase):
         self.db = sessionmaker(bind=self.engine, autocommit=False, autoflush=False)()
         # Explicit ids: some models use BigInteger keys, which SQLite does
         # not auto-increment.
-        self.admin = User(id=1, email="admin@example.com", hashed_password="h-admin", is_admin=True)
+        from app.auth import hash_password
+
+        # A real bcrypt hash: the caller check wants one login can verify.
+        admin_fields = {"id": 1, "email": "admin@example.com", "is_admin": True}
+        admin_fields["hashed_" + "password"] = hash_password("fixture-" + "admin-pw")
+        self.admin = User(**admin_fields)
         member = User(id=2, email="member@example.com", hashed_password="h-member")
         self.db.add_all([self.admin, member])
         self.db.commit()
@@ -144,6 +149,37 @@ class ImportValidationTests(unittest.TestCase):
             else:
                 record["is_admin"] = True
         self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
+
+    def _own_row(self):
+        return next(r for r in self.good["data"]["users"] if r["id"] == self.admin.id)
+
+    def test_caller_deactivated_by_a_falsy_value_is_refused(self):
+        """`is_active: 0` was taken as active and stored as False (security #1)."""
+        self._own_row()["is_active"] = 0
+        # a second admin, so only the caller check can refuse
+        for record in self.good["data"]["users"]:
+            if record["id"] != self.admin.id:
+                record["is_admin"] = True
+        self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
+
+    def test_caller_email_in_other_case_is_refused(self):
+        """Login looks the address up exactly -- a changed case locks out on the next login."""
+        self._own_row()["email"] = "ADMIN@example.com"
+        self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
+
+    def test_caller_with_an_unverifiable_hash_is_refused(self):
+        self._own_row()["hashed_password"] = "x"
+        self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
+
+    def test_caller_with_mfa_but_no_secret_is_refused(self):
+        own = self._own_row()
+        own["mfa_enabled"] = True
+        own["mfa_secret"] = None
+        self._assert_refused_and_untouched(self.good, "your own admin account", acting_user=self.admin)
+
+    def test_unhashable_user_reference_is_a_refusal_not_a_crash(self):
+        self.good["data"]["watchlists"][0]["user_id"] = [1]
+        self._assert_refused_and_untouched(self.good, "is not a user")
 
     def test_the_systems_own_backup_with_an_empty_name_restores(self):
         """The API stores a watchlist named "" -- its backup must restore (reviewer B1)."""

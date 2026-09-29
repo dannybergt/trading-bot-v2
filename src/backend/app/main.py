@@ -3627,7 +3627,9 @@ def _import_snapshot_or_400(db: Session, payload: object, admin: User, action: s
             user_id=admin.id,
             action=action,
             outcome="failure",
-            details={"filename": filename, "reason": str(exc)},
+            # Both come from the uploader: capped so a crafted file cannot
+            # inflate the audit table (security-reviewer #4).
+            details={"filename": (filename or "")[:200], "reason": str(exc)[:500]},
         )
         raise HTTPException(status_code=400, detail=f"Snapshot rejected: {exc}") from exc
 

@@ -136,7 +136,7 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
         if not isinstance(user_id, int) or isinstance(user_id, bool):
             raise SnapshotRejected(f"`users[{index}].id` is not an integer")
         if user_id in user_ids:
-            raise SnapshotRejected(f"user id {user_id} appears twice")
+            raise SnapshotRejected(f"user id {user_id!r:.40} appears twice")
         user_ids.add(user_id)
         if not isinstance(record["email"], str) or not isinstance(record["hashed_password"], str):
             raise SnapshotRejected(f"`users[{index}]` has a non-text email or password hash")
@@ -146,8 +146,20 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
             continue
         for index, record in enumerate(payload.get(collection, [])):
             owner = record.get("user_id")
-            if owner is not None and owner not in user_ids:
+            # isinstance first: a list or object here is unhashable and used
+            # to escape as a 500 (security-reviewer #3).
+            if owner is not None and (
+                not isinstance(owner, int) or isinstance(owner, bool) or owner not in user_ids
+            ):
                 raise SnapshotRejected(f"`{collection}[{index}].user_id` {owner!r:.40} is not a user in the snapshot")
+
+    def _verifiable_hash(value: str) -> bool:
+        from app.auth import pwd_context  # local: auth imports settings at module load
+
+        try:
+            return pwd_context.identify(value) is not None
+        except (TypeError, ValueError):
+            return False
 
     def _active_admin(record: dict[str, Any]) -> bool:
         return record.get("is_admin") is True and record.get("is_active", True) is True
@@ -157,10 +169,18 @@ def validate_snapshot(snapshot: Any, *, acting_user: User | None = None) -> dict
 
     if acting_user is not None:
         own = next((record for record in users if record["id"] == acting_user.id), None)
+        # Everything the caller needs to keep working after the restore, as
+        # the insert will write it (security-reviewer #1): the same id (the
+        # token names it), the e-mail exactly as login looks it up, active
+        # admin, a password hash the login can verify, and no MFA switched on
+        # without its secret. A different -- older -- password hash is fine:
+        # the caller then logs in with the password of that backup.
         if (
             own is None
-            or str(own["email"]).strip().lower() != str(acting_user.email).strip().lower()
+            or own["email"] != acting_user.email
             or not _active_admin(own)
+            or not _verifiable_hash(own["hashed_password"])
+            or (own.get("mfa_enabled") is True and not own.get("mfa_secret"))
         ):
             raise SnapshotRejected(
                 "your own admin account is not in the snapshot as an active admin with the same id "
