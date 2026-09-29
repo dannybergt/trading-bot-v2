@@ -25,13 +25,11 @@ from typing import Any
 import pandas as pd
 
 from app.analysis import calculate_indicators
-from app.ml_models import MODEL_FEATURE_COLS, PricePredictor
+from app.ml_models import MIN_TRAINING_ROWS, MODEL_FEATURE_COLS, PricePredictor
 from app.rate_limit import SlidingWindowLimit
 
 logger = logging.getLogger(__name__)
 
-# Fewer prepared rows than this cannot carry an 80/20 split with two classes.
-MIN_TRAINABLE_ROWS = 10
 
 
 def run_backtest(
@@ -513,7 +511,8 @@ def _window_is_trainable(predictor: PricePredictor, slice_df: pd.DataFrame) -> b
         data, _ = predictor.prepare_features(slice_df)
     except Exception:
         return False
-    if len(data) < MIN_TRAINABLE_ROWS:
+    # Same floor as PricePredictor.train -- one meaning, one place.
+    if len(data) < MIN_TRAINING_ROWS:
         return False
     train_part = data["Target"].iloc[: max(1, int(len(data) * 0.8))]
     return train_part.nunique() == 2
