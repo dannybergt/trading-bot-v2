@@ -2,9 +2,12 @@ import base64
 import json
 import logging
 import os
+import re
+from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 from pywebpush import webpush, WebPushException
+from urllib3.util import parse_url
 from py_vapid import Vapid
 
 from app.logging_config import fingerprint_value
@@ -26,16 +29,30 @@ PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com"
 PUSH_ENDPOINT_HOST_SUFFIXES = (".notify.windows.com", ".push.apple.com")
 
 
-def is_allowed_push_endpoint(endpoint: str) -> bool:
-    from urllib.parse import urlsplit
+# The authority is spelled out character by character: only a plain DNS name
+# and an optional :443. The path may carry percent-encoding (WNS tokens do).
+_PUSH_ENDPOINT_FORM = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)+(:443)?(/[^\\\s]*)?", re.IGNORECASE)
+_PUSH_HOST_FORM = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 
+
+def is_allowed_push_endpoint(endpoint: str) -> bool:
+    # urlsplit and urllib3 (which sends) disagree on some inputs — e.g. a
+    # backslash ends the authority for urllib3 but not for urlsplit, so
+    # "https://127.0.0.1\.notify.windows.com/" would pass a urlsplit-only check
+    # and connect to 127.0.0.1. The whole string must have the plain form, and
+    # both parsers must name the same host.
+    if not endpoint.isascii() or not endpoint.isprintable() or not _PUSH_ENDPOINT_FORM.fullmatch(endpoint):
+        return False
     try:
         parts = urlsplit(endpoint)
         port = parts.port
+        sent_to = parse_url(endpoint)
     except ValueError:
         return False
     host = (parts.hostname or "").lower()
-    if parts.scheme != "https" or parts.username or parts.password or port not in (None, 443):
+    if parts.scheme != "https" or port not in (None, 443) or not _PUSH_HOST_FORM.fullmatch(host):
+        return False
+    if (sent_to.host or "").lower() != host or sent_to.port not in (None, 443):
         return False
     return host in PUSH_ENDPOINT_HOSTS or host.endswith(PUSH_ENDPOINT_HOST_SUFFIXES)
 

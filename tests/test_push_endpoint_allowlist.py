@@ -27,7 +27,8 @@ ALLOWED = (
     "https://fcm.googleapis.com/fcm/send/abc:def",
     "https://updates.push.services.mozilla.com/wpush/v2/gAAAA",
     "https://web.push.apple.com/QGx0",
-    "https://wns2-par02p.notify.windows.com/w/?token=x",
+    "https://wns2-par02p.notify.windows.com/w/?token=BQYAAAB%2bN%2fx%3d",  # WNS tokens are percent-encoded
+    "https://FCM.googleapis.com:443/fcm/send/a-b_c",
 )
 REFUSED = (
     "http://fcm.googleapis.com/fcm/send/abc",  # not https
@@ -38,6 +39,16 @@ REFUSED = (
     "https://user@fcm.googleapis.com/x",  # userinfo
     "https://fcm.googleapis.com:8443/x",  # other port
     "https://fcm.googleapis.com:99999/x",  # invalid port
+    "https://127.0.0.1\\.notify.windows.com/push",  # backslash: urllib3 connects to 127.0.0.1
+    "https://evil.example\\.notify.windows.com/x",
+    "https://evil.example%2F.notify.windows.com/",  # percent-encoding in the host
+    "https://fcm.goo\tgleapis.com/x",  # tab
+    "https://fcm.googleapis.com%00/x",
+    "https://fcm.googleapis.com /x",
+    "https://fcm.googleapis.com./x",  # trailing dot
+    "https://[::1]/x",
+    "https://evil.example?.notify.windows.com/",  # query before the dot
+    "https://evil.example#.notify.windows.com/",
     "file:///etc/passwd",
     "",
 )
