@@ -23,7 +23,14 @@
 
 ## Abhängigkeiten und Container
 
-- Lockfile committed, Versionen gepinnt, Renovate/Dependabot: _…_
+- Lockfile committed, Versionen gepinnt, Renovate/Dependabot: Backend `src/backend/requirements.txt`
+  (jede direkte Abhaengigkeit `==`; transitive sind nicht gelockt — Deckel, Abloesung durch
+  `pip-compile`/`uv lock`, sobald ein transitiver Sprung einen Build bricht), Frontend `src/frontend/package-lock.json`; `pip`/`setuptools`
+  im Image gepinnt (`ops/docker/backend.Dockerfile`). Dependabot woechentlich fuer Actions, pip, npm.
+- Audit blockiert CI: `ops/automation/deps-audit.sh` (pip-audit auf die site-packages des
+  gebauten Images, `npm audit --audit-level=low` auf das Lockfile). Jede Ausnahme steht mit
+  Grund im Skript; Stand 2026-09-29: 7 Advisories an Pins von `alpaca-trade-api` (urllib3 < 2,
+  msgpack 1.0.3) und `python-jose` (ecdsa, kein Fix) — ADR 2026-09-29.
 - Images mit Tag + Digest, Non-Root: _…_
 
 ## KI-/LLM-Funktionen (falls vorhanden)
