@@ -1276,7 +1276,7 @@ platform_import = requests.post(
     files={"file": ("snapshot.json", io.BytesIO(json.dumps(export_payload).encode("utf-8")), "application/json")},
     timeout=30,
 )
-platform_import.raise_for_status()
+assert platform_import.status_code == 200, (platform_import.status_code, platform_import.text[:300])
 assert platform_import.json()["status"] == "imported"
 print("platform import ok")
 
@@ -1286,7 +1286,7 @@ backup_import = requests.post(
     files={"file": ("backup.json", io.BytesIO(download.content), "application/json")},
     timeout=30,
 )
-backup_import.raise_for_status()
+assert backup_import.status_code == 200, (backup_import.status_code, backup_import.text[:300])
 assert backup_import.json()["status"] == "restored"
 print("backup import ok")
 
