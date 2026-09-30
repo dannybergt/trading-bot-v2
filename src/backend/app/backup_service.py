@@ -49,7 +49,7 @@ def _parse_iso(value):
     if not value:
         return None
     try:
-        return _restore_ts(value)  # same UTC normalisation; defined below, called at import time
+        return _restore_ts(value)  # same UTC normalisation; defined below, resolved when a restore runs
     except ValueError:
         logger.warning("backup_import_unparsable_timestamp")
         return None

@@ -96,6 +96,11 @@ class FieldFidelityTests(unittest.TestCase):
         self.admin = User(**admin_fields)
         db = self.db
         db.add(self.admin)
+        # A second, deactivated member: the only way the round trip can notice
+        # a restore that forgets `is_active` (the admin must stay active).
+        member_fields = {"id": 2, "email": "gone@example.com", "is_active": False, "created_at": OLD}
+        member_fields["hashed_" + "password"] = "x"
+        db.add(User(**member_fields))
         db.flush()
         db.add(Watchlist(id="wl-1", user_id=1, name="Tech", is_default=True, created_at=OLD))
         db.flush()
@@ -220,6 +225,11 @@ class FieldFidelityTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             _restore_ts("0001-01-01T00:00:00+14:00")
+        with self.assertRaises(ValueError):
+            _restore_ts("1969-12-31T23:59:59Z")
+        with self.assertRaises(ValueError):
+            _restore_ts("9000-01-01T00:00:01Z")
+        self.assertEqual(datetime(1970, 1, 1, tzinfo=timezone.utc), _restore_ts("1970-01-01T00:00:00Z"))
 
     def test_unparsable_timestamp_rolls_back(self):
         from app.backup_service import SnapshotRejected
