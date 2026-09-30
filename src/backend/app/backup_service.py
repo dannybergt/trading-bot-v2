@@ -49,29 +49,48 @@ def _parse_iso(value):
     if not value:
         return None
     try:
-        return datetime.fromisoformat(str(value))
+        return _restore_ts(value)  # same UTC normalisation; defined below, called at import time
     except ValueError:
         logger.warning("backup_import_unparsable_timestamp")
         return None
 
 
+_TS_MIN = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_TS_MAX = datetime(9000, 1, 1, tzinfo=timezone.utc)
+
+
+def _restore_ts(value: Any) -> datetime:
+    """A snapshot timestamp as an aware UTC datetime, or ValueError.
+
+    Naive values mean UTC: SQLite hands them back without tzinfo, and its
+    `now()` is UTC. Passed on naive, Postgres would read them in the session
+    time zone (measured: Europe/Berlin shifts them by an hour); SQLite would
+    drop a non-UTC offset without converting (migration-reviewer #1/#2).
+    The range keeps values the drivers cannot read back out of the database
+    (security-reviewer #1). A ValueError rolls the whole restore back.
+    """
+    parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    try:
+        parsed = parsed.astimezone(timezone.utc)
+    except OverflowError as exc:  # year 1 with a positive offset lands in year 0
+        raise ValueError("timestamp out of range") from exc
+    if not _TS_MIN <= parsed <= _TS_MAX:
+        raise ValueError("timestamp out of range")
+    return parsed
+
+
 def _restored_timestamps(record: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
     """The exported timestamps of a record, as insert keyword arguments.
 
-    The export has written `created_at` (and `updated_at` for alert settings)
-    for these tables all along; the import never read it, so every restore
-    stamped users, watchlists, items, tags, rules and subscriptions with the
-    time of the restore (verifier V2b, Thread 30). A field that is missing or
-    null stays out of the insert, so the column default applies -- passing
-    None would store NULL instead. An unparsable value raises ValueError and
-    rolls the whole restore back, like every other timestamp here.
+    The export has written `created_at` (and `updated_at` for alert settings
+    and rules) all along; the import never read it, so every restore stamped
+    users, watchlists, items, tags, rules and subscriptions with the time of
+    the restore (verifier V2b, Thread 30). Missing or empty values stay out of
+    the insert, so the column default fills them -- older snapshots.
     """
-    restored: dict[str, Any] = {}
-    for field in fields:
-        value = record.get(field)
-        if value:
-            restored[field] = datetime.fromisoformat(str(value))
-    return restored
+    return {field: _restore_ts(record[field]) for field in fields if record.get(field)}
 
 
 class SnapshotRejected(ValueError):
@@ -386,6 +405,7 @@ class BackupService:
                         "snoozed_until": rule.snoozed_until.isoformat() if rule.snoozed_until else None,
                         "last_triggered_at": rule.last_triggered_at.isoformat() if rule.last_triggered_at else None,
                         "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                        "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
                     }
                     for rule in alert_rules
                 ],
@@ -690,7 +710,7 @@ class BackupService:
         for record in payload.get("watchlist_alert_settings", []):
             db.add(
                 WatchlistAlertSetting(
-                    **_restored_timestamps(record, ("created_at", "updated_at",)),
+                    **_restored_timestamps(record, ("created_at", "updated_at")),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     watchlist_id=record["watchlist_id"],
@@ -716,7 +736,7 @@ class BackupService:
                     alert_type=record.get("alert_type", "watch"),
                     priority_label=record.get("priority_label", "low"),
                     priority_score=record.get("priority_score", 0),
-                    sent_at=datetime.fromisoformat(record["sent_at"]) if record.get("sent_at") else None,
+                    sent_at=_restore_ts(record["sent_at"]) if record.get("sent_at") else None,
                 )
             )
 
@@ -725,7 +745,7 @@ class BackupService:
         for record in payload.get("alert_rules", []):
             db.add(
                 AlertRule(
-                    **_restored_timestamps(record, ("created_at",)),
+                    **_restored_timestamps(record, ("created_at", "updated_at")),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     watchlist_id=record["watchlist_id"],
@@ -737,12 +757,12 @@ class BackupService:
                     tag=record.get("tag"),
                     enabled=record.get("enabled", True),
                     snoozed_until=(
-                        datetime.fromisoformat(record["snoozed_until"])
+                        _restore_ts(record["snoozed_until"])
                         if record.get("snoozed_until")
                         else None
                     ),
                     last_triggered_at=(
-                        datetime.fromisoformat(record["last_triggered_at"])
+                        _restore_ts(record["last_triggered_at"])
                         if record.get("last_triggered_at")
                         else None
                     ),
@@ -766,12 +786,12 @@ class BackupService:
                     message=record["message"],
                     payload_json=record.get("payload_json") or "{}",
                     triggered_at=(
-                        datetime.fromisoformat(record["triggered_at"])
+                        _restore_ts(record["triggered_at"])
                         if record.get("triggered_at")
                         else None
                     ),
                     acknowledged_at=(
-                        datetime.fromisoformat(record["acknowledged_at"])
+                        _restore_ts(record["acknowledged_at"])
                         if record.get("acknowledged_at")
                         else None
                     ),
@@ -791,12 +811,12 @@ class BackupService:
                     source=record.get("source", "manual"),
                     rejection_reason=record.get("rejection_reason"),
                     placed_at=(
-                        datetime.fromisoformat(record["placed_at"])
+                        _restore_ts(record["placed_at"])
                         if record.get("placed_at")
                         else None
                     ),
                     filled_at=(
-                        datetime.fromisoformat(record["filled_at"])
+                        _restore_ts(record["filled_at"])
                         if record.get("filled_at")
                         else None
                     ),
@@ -820,7 +840,7 @@ class BackupService:
                     user_agent_fingerprint=record.get("user_agent_fingerprint"),
                     request_id=record.get("request_id"),
                     created_at=(
-                        datetime.fromisoformat(record["created_at"])
+                        _restore_ts(record["created_at"])
                         if record.get("created_at")
                         else None
                     ),
@@ -842,7 +862,7 @@ class BackupService:
                     tax_amount=record.get("tax_amount", 0.0),
                     realized_pnl=record.get("realized_pnl", 0.0),
                     executed_at=(
-                        datetime.fromisoformat(record["executed_at"])
+                        _restore_ts(record["executed_at"])
                         if record.get("executed_at")
                         else None
                     ),
@@ -872,7 +892,7 @@ class BackupService:
                         record.get("min_composite_confidence", 0.15) or 0
                     ),
                     updated_at=(
-                        datetime.fromisoformat(record["updated_at"])
+                        _restore_ts(record["updated_at"])
                         if record.get("updated_at")
                         else None
                     ),
@@ -891,7 +911,7 @@ class BackupService:
                     reason=record.get("reason"),
                     payload_json=record.get("payload_json") or "{}",
                     created_at=(
-                        datetime.fromisoformat(record["created_at"])
+                        _restore_ts(record["created_at"])
                         if record.get("created_at")
                         else None
                     ),
@@ -917,7 +937,7 @@ class BackupService:
                     id=record.get("id"),
                     user_id=record["user_id"],
                     token=record["token"],
-                    expires_at=datetime.fromisoformat(record["expires_at"]) if record.get("expires_at") else None,
+                    expires_at=_restore_ts(record["expires_at"]) if record.get("expires_at") else None,
                     used=record.get("used", False),
                 )
             )
