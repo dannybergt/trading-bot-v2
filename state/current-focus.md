@@ -1,5 +1,24 @@
 # Current Focus
 
+## SESSION 2026-09-30: Nutzer-Deckel auf Watchlist-Zeilen und -Listen fertiggestellt (WIP-Sicherung nach Host-Absturz) — PR gegen main, draft
+
+**Stand:** Branch `security/watchlist-user-quota`, gestapelt auf `security/watchlist-symbol-form` (PR #36, noch offen; `main` = `afc6d52`). Der PR gegen `main` zeigt deshalb auch die Commits von #36, bis #36 gemergt ist. Die WIP-Sicherung (`3b307a5`, `5b2f033`) war vollstaendig: Deckel (`WATCHLIST_MAX_ITEMS_PER_USER = 200`, `WATCHLIST_MAX_LISTS_PER_USER = 50`, 409 mit Deckel im `detail`), Test, api-regression-Schritt, ADR 2026-09-20, ARCHITECTURE-Deckeltabelle, Ledger 79/94, Client-Abbildung der 422-Liste (reviewer N3 aus #36). Nichts nachzubauen.
+
+**Nachweis dieser Session:** Unit **489 OK** (1 skipped) im Backend-Image `trading-bot-v2-backend:local` auf Kopie des Worktrees. Negativkontrolle: mit ausgeschaltetem Schutz (`if current >= limit` -> `if False`) sind 4 von 9 Tests in `tests/test_watchlist_user_quota.py` rot (Zeilen-Deckel, Zaehlung ueber Listen, Log, Listen-Deckel); die uebrigen fuenf sind Gegenproben (zweiter Nutzer, Umbenennen, unter dem Deckel, Formreihenfolge, Listen je Konto). Nicht gefahren: api-regression-Schritt `watchlist caps rows per account` lokal (CI fuehrt ihn aus), Frontend-Test der 422-Abbildung (kein `node` auf dem Host).
+
+**Tore:** K n/a. **R, S, V: nicht gelaufen** (Diff beruehrt Endpunkte -> `security-reviewer` Pflicht; `verifier` am laufenden Stack). **C:** s. PR. PR daher draft.
+
+**Offene Threads (hier, jetzt, machbar):**
+1. Tore R/S/V fuer diesen Branch fahren; Ergebnis hier eintragen.
+2. Deckel-Test gegen Postgres im Harnisch (Zaehl-JOIN ist SQLite-getestet; PG-Lauf kommt mit api-regression).
+3. Restliche Threads aus der Liste der Session 2026-09-18 (2) bleiben, ausser Thread 1 (Deckel, hier) und Thread 3 (422-Anzeige, hier im Client umgesetzt, ungetestet).
+
+**Nicht hier loesbar:** #36 mergen (FREIGABE), danach Rebase dieses Branches auf `main`; Docker-Hub-Zugang BC-KI01 (s. Abschnitt darunter). Nachweisluecken aus Thread 30 (#43): pg_dump-Rehearsal (Z10) und Harnisch fuer Zeitstempeltreue am laufenden Artefakt — beides machbar, nicht gebaut.
+
+**Allokierte Ports/Ressourcen:** keine; Container `tbv2-unit`/`tbv2-neg` mit `--rm`, Kopie im Scratchpad.
+
+**Naechster Schritt:** `security-reviewer` + `verifier` auf den PR-Kopf, dann Draft-Status aufheben; #36 zuerst.
+
 ## SESSION 2026-09-18 (2): #35 gemergt, Watchlist-Schreibpfad und Schleifen — PR #36 wartet auf FREIGABE; BC-KI01 kann nicht mehr von Docker Hub ziehen
 
 **Stand:** `main` auf `afc6d52` (PR #35 gemergt auf `FREIGABE`, `publish` gruen, `sha-afc6d52` auf Docker Hub). Branch `security/watchlist-symbol-form` auf `6ed9498` (2 Commits, gepusht), **PR #36** (Text nach §15). Thread 1 der Liste vom 09-18 (1) geschlossen.
