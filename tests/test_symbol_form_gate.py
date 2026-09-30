@@ -105,10 +105,12 @@ class SymbolFormGateTests(unittest.TestCase):
                 self.assertIn(raw.upper(), caught.exception.detail)
                 db.add.assert_not_called()
                 db.commit.assert_not_called()
-        # Wohlgeformt wird geschrieben — kanonisch.
+        # Wohlgeformt wird geschrieben — kanonisch. Das Konto ist unter dem
+        # Deckel (der Deckel selbst: `test_watchlist_user_quota`).
         db = MagicMock()
         record = MagicMock(items=[])
         with patch.object(app_main, "get_watchlist_record_or_404", return_value=record), \
+             patch.object(app_main, "count_user_watchlist_items", return_value=0), \
              patch.object(app_main, "serialize_watchlist", return_value={}):
             app_main.add_item("w1", app_main.WatchlistItemRequest(symbol="btc-usd"), current_user=user, db=db)
         self.assertEqual("BTC/USD", db.add.call_args.args[0].symbol)

@@ -1083,6 +1083,21 @@ class WatchlistItem(BaseModel):
 #: that writes the column, or the cap is a cap on one door only.
 WATCHLIST_NAME_MAX = 200
 
+#: Rows per account, not per process: the alert dispatcher and the scanner
+#: ask the providers for every stored item, every cycle, so every row a
+#: member adds is a standing cost on the operator's provider quota — the
+#: same mechanic as the backtest share (`BACKTEST_MAX_JOBS_PER_USER`), with
+#: well-formed symbols (security-reviewer 2026-09-18 #2). 200 items is ten
+#: times the largest list on the instance; 50 lists keeps `GET
+#: /api/watchlists` a page, not a dump. Raise both when a member with a real
+#: portfolio hits them (`watchlist_user_quota_full` in the log), not before.
+#: Enforced on the two member doors (`create_watchlist`, `add_item`) only:
+#: the admin snapshot import restores whatever was exported, the registration
+#: seed is three lists — neither is a member's choice. An account restored
+#: above the cap can rename and delete, not add, until it is under.
+WATCHLIST_MAX_ITEMS_PER_USER = 200
+WATCHLIST_MAX_LISTS_PER_USER = 50
+
 
 class WatchlistItemRequest(BaseModel):
     # Wider than the 24 characters `is_plausible_symbol_query` admits on
@@ -1173,6 +1188,37 @@ def get_user_watchlist_records(db: Session, user: User) -> list[WatchlistRecord]
         .filter(WatchlistRecord.user_id == user.id)
         .all()
     )
+
+
+def count_user_watchlist_items(db: Session, user: User) -> int:
+    """Stored items across all of the user's lists — the number the loops pay for."""
+    return (
+        db.query(WatchlistItemRecord)
+        .join(WatchlistRecord, WatchlistItemRecord.watchlist_id == WatchlistRecord.id)
+        .filter(WatchlistRecord.user_id == user.id)
+        .count()
+    )
+
+
+def require_watchlist_quota(current: int, limit: int, *, unit: str, user_id: int) -> None:
+    """409 with the limit, before the row exists — the caller can free a slot.
+
+    Count and insert are not one transaction: a burst of parallel requests
+    from one account can overshoot the cap by its concurrency, once — the
+    next request is refused. Unlike the backtest share there is no lock; the
+    cap guards the provider quota, not an invariant. A `SELECT ... FOR
+    UPDATE` on the user's row is what would replace this if the overshoot
+    ever shows in the count.
+    """
+    if current >= limit:
+        logger.warning(
+            "watchlist_user_quota_full",
+            extra={"user": user_id, "unit": unit, "current": current, "limit": limit},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"Watchlist limit reached: {limit} {unit} per account. Remove one to add another.",
+        )
 
 
 def get_watchlist_record_or_404(db: Session, user: User, watchlist_id: str) -> WatchlistRecord:
@@ -1885,6 +1931,12 @@ def create_watchlist(req: CreateWatchlistRequest, current_user: User = Depends(g
     # Deliberately no seed_default_watchlists() here: seeding happens once at
     # registration. Re-seeding on create would resurrect the starter lists for
     # anyone who deleted all of theirs, which reads as "my deletion came back".
+    require_watchlist_quota(
+        db.query(WatchlistRecord).filter(WatchlistRecord.user_id == current_user.id).count(),
+        WATCHLIST_MAX_LISTS_PER_USER,
+        unit="lists",
+        user_id=current_user.id,
+    )
     new_record = WatchlistRecord(id=str(uuid.uuid4())[:8], user_id=current_user.id, name=req.name)
     db.add(new_record)
     db.commit()
@@ -1921,6 +1973,14 @@ def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(g
             existing.name = item.name
         apply_watchlist_item_tags(existing, item.tags)
     else:
+        # Only a new row costs the loops a provider call; renaming or
+        # retagging an existing one is free and stays possible at the cap.
+        require_watchlist_quota(
+            count_user_watchlist_items(db, current_user),
+            WATCHLIST_MAX_ITEMS_PER_USER,
+            unit="items",
+            user_id=current_user.id,
+        )
         new_item = WatchlistItemRecord(watchlist_id=record.id, symbol=canonical_symbol, name=item.name or "")
         apply_watchlist_item_tags(new_item, item.tags)
         db.add(new_item)
