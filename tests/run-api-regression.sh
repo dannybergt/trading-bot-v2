@@ -555,6 +555,74 @@ assert watchlist_etf_item["assetLabel"] == "ETF"
 assert watchlist_etf_item["tags"] == ["core", "etf"]
 print("watchlist add etf item ok")
 
+# A stored string no market lists is not inert: the alert dispatcher and the
+# scanner ask the providers for every stored item, every cycle. Since #35 the
+# read endpoints refuse such a string with 404; the write path refuses it
+# with 400 before a row exists, and names it.
+watchlist_bad_item = requests.post(
+    f"{base}/api/watchlists/{watchlist_id}/items",
+    headers=headers,
+    json={"symbol": "AMAZON INC", "name": "not a ticker", "tags": []},
+    timeout=30,
+)
+assert watchlist_bad_item.status_code == 400, f"malformed watchlist symbol answered {watchlist_bad_item.status_code}: {watchlist_bad_item.text}"
+bad_item_detail = watchlist_bad_item.json().get("detail")
+assert isinstance(bad_item_detail, str) and "AMAZON INC" in bad_item_detail and "form" in bad_item_detail, bad_item_detail
+watchlist_after_bad = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlist_after_bad.raise_for_status()
+watchlist_after_bad_items = next(w for w in watchlist_after_bad.json() if w["id"] == watchlist_id)["items"]
+assert all(item["symbol"] != "AMAZON INC" for item in watchlist_after_bad_items), "a refused symbol must not be stored"
+print("watchlist refuses a symbol no market lists ok")
+
+# Every stored row is a standing provider cost for the loops, so rows are
+# capped per account (across all lists), not per process. Fill a throwaway
+# list up to the cap, expect 409 naming the cap, then free the list and show
+# the slot is usable again — the cap counts rows, not history.
+quota_list = requests.post(
+    f"{base}/api/watchlists", headers=headers, json={"name": "quota probe"}, timeout=30
+)
+quota_list.raise_for_status()
+quota_list_id = quota_list.json()["id"]
+stored_rows = sum(len(w["items"]) for w in requests.get(f"{base}/api/watchlists", headers=headers, timeout=30).json())
+WATCHLIST_ITEM_CAP = 200
+for n in range(WATCHLIST_ITEM_CAP - stored_rows):
+    filler = requests.post(
+        f"{base}/api/watchlists/{quota_list_id}/items",
+        headers=headers,
+        json={"symbol": "QA" + str(n), "name": "", "tags": []},
+        timeout=30,
+    )
+    assert filler.status_code == 200, f"filler row {n} answered {filler.status_code}: {filler.text}"
+over_cap = requests.post(
+    f"{base}/api/watchlists/{quota_list_id}/items",
+    headers=headers,
+    json={"symbol": "NVDA", "name": "one too many", "tags": []},
+    timeout=30,
+)
+assert over_cap.status_code == 409, f"row over the cap answered {over_cap.status_code}: {over_cap.text}"
+over_cap_detail = over_cap.json().get("detail")
+assert isinstance(over_cap_detail, str) and str(WATCHLIST_ITEM_CAP) in over_cap_detail, over_cap_detail
+rows_at_cap = sum(len(w["items"]) for w in requests.get(f"{base}/api/watchlists", headers=headers, timeout=30).json())
+assert rows_at_cap == WATCHLIST_ITEM_CAP, f"a refused row must not be stored, have {rows_at_cap}"
+# Renaming a row that exists stays possible at the cap.
+rename_at_cap = requests.post(
+    f"{base}/api/watchlists/{watchlist_id}/items",
+    headers=headers,
+    json={"symbol": "VOO", "name": "Vanguard S&P 500 ETF", "tags": ["ETF", "Core"]},
+    timeout=30,
+)
+assert rename_at_cap.status_code == 200, f"rename at the cap answered {rename_at_cap.status_code}: {rename_at_cap.text}"
+requests.delete(f"{base}/api/watchlists/{quota_list_id}", headers=headers, timeout=30).raise_for_status()
+freed = requests.post(
+    f"{base}/api/watchlists/{watchlist_id}/items",
+    headers=headers,
+    json={"symbol": "NVDA", "name": "Nvidia", "tags": []},
+    timeout=30,
+)
+assert freed.status_code == 200, f"row after freeing the list answered {freed.status_code}: {freed.text}"
+requests.delete(f"{base}/api/watchlists/{watchlist_id}/items/NVDA", headers=headers, timeout=30).raise_for_status()
+print("watchlist caps rows per account ok")
+
 watchlist_update_item = requests.put(
     f"{base}/api/watchlists/{watchlist_id}/items/BTC/USD",
     headers=headers,

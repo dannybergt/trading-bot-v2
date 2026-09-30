@@ -43,6 +43,7 @@ def _build(*, budget, sleep_seconds=PROVIDER_SECONDS):
     for index, _symbol in enumerate(SYMBOLS):
         item = MagicMock()
         item.id = index
+        item.symbol = _symbol  # die Schleife fragt nur Eintraege mit Tickerform (2026-09-18)
         items.append(item)
     record.items = items
 
