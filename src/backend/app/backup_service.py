@@ -55,6 +55,25 @@ def _parse_iso(value):
         return None
 
 
+def _restored_timestamps(record: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
+    """The exported timestamps of a record, as insert keyword arguments.
+
+    The export has written `created_at` (and `updated_at` for alert settings)
+    for these tables all along; the import never read it, so every restore
+    stamped users, watchlists, items, tags, rules and subscriptions with the
+    time of the restore (verifier V2b, Thread 30). A field that is missing or
+    null stays out of the insert, so the column default applies -- passing
+    None would store NULL instead. An unparsable value raises ValueError and
+    rolls the whole restore back, like every other timestamp here.
+    """
+    restored: dict[str, Any] = {}
+    for field in fields:
+        value = record.get(field)
+        if value:
+            restored[field] = datetime.fromisoformat(str(value))
+    return restored
+
+
 class SnapshotRejected(ValueError):
     """The snapshot cannot be restored; the database was not changed."""
 
@@ -600,6 +619,7 @@ class BackupService:
         for record in payload.get("users", []):
             db.add(
                 User(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record["id"],
                     email=record["email"],
                     hashed_password=record["hashed_password"],
@@ -630,6 +650,7 @@ class BackupService:
         for record in payload.get("watchlists", []):
             db.add(
                 Watchlist(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record["id"],
                     user_id=record["user_id"],
                     name=record["name"],
@@ -642,6 +663,7 @@ class BackupService:
         for record in payload.get("watchlist_items", []):
             db.add(
                 WatchlistItem(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record.get("id"),
                     watchlist_id=record["watchlist_id"],
                     symbol=record["symbol"],
@@ -658,6 +680,7 @@ class BackupService:
         for record in payload.get("watchlist_item_tags", []):
             db.add(
                 WatchlistItemTag(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record.get("id"),
                     watchlist_item_id=record["watchlist_item_id"],
                     tag=record["tag"],
@@ -667,6 +690,7 @@ class BackupService:
         for record in payload.get("watchlist_alert_settings", []):
             db.add(
                 WatchlistAlertSetting(
+                    **_restored_timestamps(record, ("created_at", "updated_at",)),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     watchlist_id=record["watchlist_id"],
@@ -701,6 +725,7 @@ class BackupService:
         for record in payload.get("alert_rules", []):
             db.add(
                 AlertRule(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     watchlist_id=record["watchlist_id"],
@@ -876,6 +901,7 @@ class BackupService:
         for record in payload.get("push_subscriptions", []):
             db.add(
                 PushSubscription(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     endpoint=record["endpoint"],
@@ -887,6 +913,7 @@ class BackupService:
         for record in payload.get("password_reset_tokens", []):
             db.add(
                 PasswordResetToken(
+                    **_restored_timestamps(record, ("created_at",)),
                     id=record.get("id"),
                     user_id=record["user_id"],
                     token=record["token"],
