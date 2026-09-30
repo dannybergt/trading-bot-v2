@@ -241,6 +241,23 @@ class FieldFidelityTests(unittest.TestCase):
         self.db.expire_all()
         self.assertEqual(1, self.db.query(Watchlist).count())
 
+    def test_out_of_range_trading_defaults_set_at_rolls_back_without_echoing_the_value(self):
+        """Verifier finding: this field used to swallow the ValueError, answer
+        200 and store NULL. It must reject like every other timestamp, naming
+        table and field but not the value."""
+        from app.backup_service import SnapshotRejected
+
+        marker = "1969-12-31T23:59:59+00:00"
+        snapshot = BackupService.export_snapshot(self.db)
+        snapshot["data"]["users"][0]["trading_defaults_set_at"] = marker
+        with self.assertRaises(SnapshotRejected) as ctx:
+            BackupService.import_snapshot(self.db, snapshot, replace_existing=True, acting_user=self.admin)
+        self.assertIn("users.trading_defaults_set_at", str(ctx.exception))
+        self.assertNotIn("1969", str(ctx.exception))
+        self.db.expire_all()
+        self.assertEqual(OLD, self.db.get(User, 1).trading_defaults_set_at.replace(tzinfo=timezone.utc))
+        self.assertEqual(1, self.db.query(Watchlist).count())
+
 
 if __name__ == "__main__":
     unittest.main()
