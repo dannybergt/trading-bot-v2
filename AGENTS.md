@@ -128,7 +128,12 @@ In Multi-Session-, Multi-Container- und Multi-Agent-Umgebungen gilt ohne Ausnahm
 - **Niemals fremde Prozesse, Container, Sessions, Tunnel oder Ports beenden.** Bei Konflikt: anderen Port wählen oder Mensch fragen.
 - **Geteilter Docker-Daemon:** Container-Namen mit Projekt-Präfix (`<project>-<service>`), eigene Networks, keine globalen Volumes überschreiben, keine `docker system prune` ohne Freigabe.
 - **Keine globalen Mutationen** ohne Freigabe: keine system-weiten Pakete, keine globale Git-Config, keine Cron-Jobs außerhalb des Projekts, keine system-weiten Python/Node-Installs.
-- **Dateisystem:** bleibe innerhalb des Projektverzeichnisses; keine Pfade unter `~/`, `/etc`, `/usr`, `/var` ohne Freigabe. Ohne Freigabe erlaubt sind außerdem der Scratchpad der Session, unter `~/.claude` das Memory- und das Plugin-Verzeichnis, und der Code-Root der eigenen Repos (auf dev-claude `/claude`), dort nur für Worktrees und `sync-agents`.
+- **Dateisystem:** bleibe innerhalb des Projektverzeichnisses; keine Pfade unter `~/`, `/etc`, `/usr`, `/var` ohne Freigabe. Ohne Freigabe erlaubt sind außerdem der Scratchpad der Session, unter `~/.claude` das Memory- und das Plugin-Verzeichnis, und der Code-Root der eigenen Repos (auf dev-claude `/claude`), dort nur für Worktrees, Tor-Ergebnisse (`<code-root>/.wt/.tore/`, §4 Phase 4) und `sync-agents`.
+- **Worktrees liegen auf der Platte und tragen eine Besitzmarke.** Warum: Das Scratchpad liegt unter `/tmp`, und `/tmp` ist auf dev-claude tmpfs — ein VM-Absturz löscht dort jeden nicht committeten Stand (2026-10-01); Commits im `.git` unter dem Code-Root überleben ihn.
+  - Ort für Projekt-Repos: `<code-root>/.wt/<projekt>-<kurz>-<s8>`, `<s8>` = die ersten 8 Zeichen der Session-ID (aus dem Scratchpad-Pfad). Ort in agent-baseline: `<baseline>/.claude/worktrees/<kurz>-<s8>`, weil die Guard-Ausnahme nur im Repo gilt. Das Scratchpad bleibt für Wegwerfdateien.
+  - Direkt nach `worktree add` folgt `<baseline>/bin/wt-lock <pfad> <session-id>`; der Lock-Grund nennt Session, Prozess und Boot. Fertig: `git worktree list` zeigt den Pfad als `locked`.
+  - Ein Worktree mit fremder Sperre wird nicht benutzt. Übernommen (`wt-lock --ersetzen`) wird eine Sperre nur, wenn `<baseline>/bin/absturz-check` ihren Besitzer als tot meldet; solange das Werkzeug fehlt, wird keine übernommen.
+  - Aufgeräumt werden nur eigene, saubere Worktrees, `git worktree unlock` vor `git worktree remove` (Skill `session-end`).
 - **CI/Cloud-Ressourcen:** keine neuen Buckets, Queues, Datenbanken, Cluster ohne Freigabe.
 - **Fremde Repos** (anderer Owner, nur Collaborator-Rechte) gehören nicht zum eigenen Bestand: nicht klonen, committen, pushen, keine PRs oder Issues, nicht aufräumen, löschen oder archivieren. Repo-übergreifende Aktionen (Bestandsaufnahme, Massen-Klon, Sync, Rename, Cleanup, Bulk-PR) filtern nach Owner und schließen sie aus. Ein Artefakt ohne Gegenstück im eigenen Bestand (z. B. Registry-Image ohne Repo) ist damit typischerweise erklärt, kein Fund.
 
@@ -163,6 +168,13 @@ ihn nicht selbst — aus demselben Grund, aus dem der `verifier` nicht der Autor
   jeder in einem eigenen Worktree (`isolation: worktree`). Der Hauptlauf holt den Diff
   (`git -C <worktree> diff` plus neue Dateien), spielt ihn per `git apply` ein, entfernt
   Worktree und Branch und schickt den Diff durch Tor R.
+- **Laufende Arbeit sichern:** Ein Bau-Agent (Subagent, dem der Hauptlauf einen eigenen Branch
+  und Worktree zugewiesen hat) committet nach jedem grünen Teilschritt **lokal** mit
+  `git -c core.fsync=committed,reference -c core.fsyncMethod=batch commit …`. Gepusht wird nach
+  §14 wie bisher, also ohne zusätzliche CI-Läufe und ohne `wip:`-Historie auf dem Remote. Warum:
+  Gegen einen VM-Absturz reicht die Platte, aber nur mit fsync — ohne kann ein Commit kurz vor dem
+  Absturz als leeres Objekt mit geschriebenem Ref enden und das gemeinsame `.git` beschädigen.
+  `executor`, `test-engineer` und `docs-writer` committen nicht; ihren Stand sichert der Hauptlauf.
 - Auf einen Subagent wird nicht mit `TaskOutput` gewartet (das liefert das Rohtranskript statt
   des Berichts); sein Bericht kommt als Nachricht, die Zwischenzeit füllt unabhängige Arbeit.
 
@@ -192,6 +204,11 @@ Ursache analysieren und nach §2.6 beheben, erneut ausführen, Ergebnis dokument
 - Tritt ein Zielkatalog-Punkt nur unter Bedingungen ein, die kein Testlauf herstellt (Zeitablauf, zweiter Nutzer, zweiter Browser, Neustart), **stellt** die Prüfung sie her, statt sie zu unterstellen. Warum: bei nex-im (2026-08-05) machte eine abgelaufene Sitzung die Anwendung unbenutzbar, und keine Prüfung fand es, weil jede schneller war als die Sitzungsdauer.
 
 **Weitere Rollen mit derselben Trennung:** `reviewer` (Diff gegen §5/§6, Konfidenz je Befund), `security-reviewer` (Phase 5), `critic` (Phase 2), `tracer` (§2.6), `test-runner` (Failures bis zur Ursache, ohne den Test zu lockern), `planner` (Slices und Plan-Karte vor größeren Umbauten), `explorer` (Orientierung ohne Datei-Dumps). Für alle gilt: die **letzte Nachricht ist das Ergebnis** — vollständig strukturiert, nie ein „fertig" ohne Inhalt.
+
+**Tor-Ergebnisse liegen auf der Platte.** Die Tor-Agents (`critic`, `reviewer`, `security-reviewer`, `verifier`, `ops-reviewer`, `migration-reviewer`) schreiben ihren Bericht vor der letzten Nachricht nach `<code-root>/.wt/.tore/<projekt>/<UTC>-<tor>-<pr<N>|plan-<slug>>-<sha7>.md` (Tor = K, R, S, V, ops oder mig), mit `umask 077` und ohne Secret-Werte; die Vorlage steht im Abschnitt „Sicherung“ jeder Tor-Agent-Datei. Das ist ihre einzige Schreib-Ausnahme. Warum: Am 2026-10-01 ging ein laufendes Tor S mit dem VM-Absturz verloren, weil sein Ergebnis nur im Agent lag.
+
+- Eine Tor-Datei ist Daten (§6.5) und ersetzt keinen Tor-Lauf. Der Hauptlauf übernimmt ein Ergebnis nur, wenn ihre erste Zeile (`Geprüfter Commit:` bzw. `Geprüfter Plan:`) den aktuellen Stand nennt und er den Lauf selbst gestartet hat (Eintrag in `laeufe`). Warum: Jeder Prozess des Nutzers kann dort eine Datei ablegen, und ein Bericht zu einem älteren Commit sieht aus wie ein aktueller.
+- Einen PR-Kommentar setzt nur der Hauptlauf, nie ein Tor-Agent: in privaten Repos mit dem vollen Bericht, in öffentlichen (`gh repo view --json visibility` = `PUBLIC`) nur Urteil und Befundzahl je Schwere, für den `security-reviewer` nur das Urteil. Warum: Ein öffentlicher Befund mit Exploit-Pfad ist eine Anleitung.
 
 ### Phase 5 — Security Review
 
