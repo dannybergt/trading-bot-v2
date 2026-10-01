@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 78 von 93 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 78 von 94 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
