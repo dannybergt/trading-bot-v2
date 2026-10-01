@@ -1230,13 +1230,56 @@ assert other_caller.status_code != 429, (
 )
 print("forwarded-for scopes auth rate limit ok")
 
+# A snapshot the restore cannot use must be refused before anything is
+# deleted: until 2026-09-30 this exact body answered 200, emptied every table
+# and locked the admin out (verifier B-V1).
+def import_failures():
+    rows = requests.get(
+        f"{base}/api/admin/audit-events",
+        headers=headers,
+        params={"action": "backup.import", "limit": 200},
+        timeout=30,
+    )
+    rows.raise_for_status()
+    return sum(1 for row in rows.json()["items"] if row.get("outcome") == "failure")
+
+
+failures_before_refusal = import_failures()
+watchlists_before_refusal = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_before_refusal.raise_for_status()
+# The third file passes validation and fails at the database (an item
+# pointing at a watchlist that does not exist): deletes already ran, so only
+# the transaction keeps the data -- on Postgres, which enforces the key.
+dangling = json.loads(json.dumps(export_payload))
+dangling["data"]["watchlist_items"] = [
+    {"watchlist_id": 987654321, "symbol": "AAPL", "name": "dangling"}
+]
+for bad_body, bad_reason in (
+    ({"data": {"pad": "x" * 64}}, "no users"),
+    ({"data": {"users": [dict(u, is_admin=False) for u in export_payload["data"]["users"]]}}, "no active admin"),
+    (dangling, "nothing was changed"),
+):
+    refused_import = requests.post(
+        f"{base}/api/admin/import",
+        headers=headers,
+        files={"file": ("broken.json", io.BytesIO(json.dumps(bad_body).encode("utf-8")), "application/json")},
+        timeout=30,
+    )
+    assert refused_import.status_code == 400, (refused_import.status_code, refused_import.text[:200])
+    assert bad_reason in refused_import.json()["detail"], refused_import.text[:200]
+    still_there = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+    assert still_there.status_code == 200, "admin token stopped working after a refused import"
+    assert still_there.json() == watchlists_before_refusal.json(), "a refused import changed the watchlists"
+assert import_failures() - failures_before_refusal == 3, "each refused import must leave one failure audit row"
+print("refused import changes nothing ok")
+
 platform_import = requests.post(
     f"{base}/api/admin/import",
     headers=headers,
     files={"file": ("snapshot.json", io.BytesIO(json.dumps(export_payload).encode("utf-8")), "application/json")},
     timeout=30,
 )
-platform_import.raise_for_status()
+assert platform_import.status_code == 200, (platform_import.status_code, platform_import.text[:300])
 assert platform_import.json()["status"] == "imported"
 print("platform import ok")
 
@@ -1246,7 +1289,7 @@ backup_import = requests.post(
     files={"file": ("backup.json", io.BytesIO(download.content), "application/json")},
     timeout=30,
 )
-backup_import.raise_for_status()
+assert backup_import.status_code == 200, (backup_import.status_code, backup_import.text[:300])
 assert backup_import.json()["status"] == "restored"
 print("backup import ok")
 
