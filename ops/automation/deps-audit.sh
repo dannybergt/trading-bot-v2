@@ -12,28 +12,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BACKEND_IMAGE="${BACKEND_IMAGE:-trading-bot-v2-backend:local}"
 PIP_AUDIT_VERSION="2.10.1"
 
-IGNORED=(
-  # ecdsa: pulled by python-jose; no fixed release exists. The Minerva timing
-  # attack needs ECDSA signing — JWTs here are HS256 only (auth.py) and jose
-  # uses the cryptography backend.
-  PYSEC-2026-1325
-  # msgpack 1.0.3: pinned by alpaca-trade-api 3.2.0 (latest). Unpacker crash
-  # after an error on untrusted input; only the Alpaca market-data stream
-  # feeds it (TLS to Alpaca).
-  PYSEC-2026-3625
-  # urllib3 <2: pinned by alpaca-trade-api 3.2.0. Decompression-chain,
-  # streaming-decompression and redirect-header advisories. Outbound calls go
-  # to fixed provider hosts, except Web-Push: those endpoints come from the
-  # user, and are held to the browser push services by
-  # push_service.is_allowed_push_endpoint (subscribe and send). requests
-  # handles redirects itself (strips Authorization across hosts). Ends with
-  # the move to alpaca-py.
-  PYSEC-2026-1999
-  PYSEC-2026-1998
-  PYSEC-2026-1994
-  PYSEC-2026-1996
-  PYSEC-2026-141
-)
+# Empty since 2026-10-06: python-jose (and its ecdsa) replaced by PyJWT,
+# alpaca-trade-api installed --no-deps so urllib3/msgpack are no longer held
+# back (ADR 2026-10-06). A new entry needs the pinning package, why the code
+# path is not reachable, and the condition that removes it.
+IGNORED=()
 
 ignore_args=()
 for id in "${IGNORED[@]}"; do
