@@ -1,5 +1,14 @@
 # Sitzungslog
 
+- Datum: 2026-09-18 (zweiter Eintrag)
+  Kontext: `FREIGABE` fuer #35 erhalten; Merge, publish beobachtet, Instanz geprueft; danach Thread 1 (Form-Grenze am Schreibpfad) als `security/watchlist-symbol-form`.
+  Erledigt: #35 gemergt (`afc6d52`), publish gruen, `sha-afc6d52` auf Docker Hub. PR #36: `add_item` 400 fuer Nicht-Tickerformen, Schleifen ueberspringen Bestandszeilen (`stored_symbol_is_askable`, Log `watchlist_item_malformed_skipped`), `WATCHLIST_NAME_MAX` an vier Modellen, api-regression-Schritt, ADR.
+  Verifikation: Unit 480 OK, api-regression 2x gruen (68), reviewer/security-reviewer ohne Blocker (W1/N1/N2/F1, #1/#3 uebernommen), verifier A–D nachgewiesen auf `63708b6` mit Negativkontrolle; Folgepruefung der Schleifen auf `6ed9498` 5/5 nachgewiesen mit Negativkontrolle; CI gruen auf `6ed9498`.
+  Befund Instanz: **BC-KI01 kann seit 15:46 lokal nicht mehr von Docker Hub ziehen** (401 auf das gespeicherte Credential, dann Lockout durch den 60-s-Poll); Frontend auf `afc6d52`, Backend auf `097b61e` — Betreiber-Handgriff (Token erneuern / `docker login`).
+  Fehler in der eigenen Arbeit: Mock-Eintraege zweier Tests ohne `symbol` galten der neuen Schleifenpruefung als Nicht-Ticker — Tests bekamen echte Symbole (kein Test gelockert).
+  Offen: STATE Threads 1–11; Betreiber: Docker-Hub-Zugang BC-KI01, `FREIGABE` #36, Dependency-PR vor dem naechsten Release.
+  Ports: keine; eigene Container entfernt.
+
 - Datum: 2026-09-18
   Kontext: `resume trading-bot-v2`. Session-Ritual; naechster Schritt aus STATE war Thread 1 (Nutzer-Kontingent am Backtest-Endpunkt, security-reviewer #1 vom 09-16), dazu Thread 3 (Symbolform vor `peek`) und Thread 8 (api-regression-Schritt zu V7) auf demselben Branch.
   Erledigt: Branch `security/backtest-user-quota` (5 Commits, PR #35 ready): Anteil je Nutzer an der Backtest-Warteschlange (3 offene Jobs, 12 Enqueues/10 min; Haltezeit je `(owner, symbol)`, fertiger Job raeumt sie), `SlidingWindowLimit` aus `auth_routes` gehoben (Digest-Schluessel, Sweep, `MAX_KEYS`), Auth-Body-Grenzen, Register-Limit, `require_symbol_form` an 7 Endpunkten, strengere Formregel (ein Segment oder ein Paar, nie `..`), FMP-Pfadsegment gequotet, zwei api-regression-Schritte, ADR.

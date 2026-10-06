@@ -184,8 +184,8 @@ def build_search_result(
     }
 
 
-def require_symbol_form(symbol: str) -> str:
-    """The canonical symbol, or 404 before any provider is asked.
+def require_symbol_form(symbol: str, *, status_code: int = 404) -> str:
+    """The canonical symbol, or 404 (400 on a write) before any provider is asked.
 
     Every per-symbol read endpoint walks up to three providers and then the
     placeholder for whatever the path carries — `AMAZON INC`, `<b>AAPL</b>`, a
@@ -194,12 +194,14 @@ def require_symbol_form(symbol: str) -> str:
     same shape check guards `place_order` since #33). Not a validity check:
     a well-formed unknown ticker still goes to the providers, whose answer
     is the only one that can tell "unknown" from "down". 404 with the
-    string, so the page names the gap instead of drawing a placeholder.
+    string, so the page names the gap instead of drawing a placeholder; a
+    write (watchlist item) answers 400 for the same reason — the string is
+    the caller's, not a missing resource.
     """
     canonical = canonicalize_symbol(symbol)
     if not is_plausible_symbol_query(canonical):
         raise HTTPException(
-            status_code=404,
+            status_code=status_code,
             detail=f"No market lists a symbol of this form: {canonical[:40]!r}",
         )
     return canonical
@@ -352,6 +354,24 @@ def serialize_watchlist_item(
     )
 
 
+def stored_symbol_is_askable(record: WatchlistItemRecord) -> bool:
+    """Whether a stored item may be sent to a provider at all.
+
+    Rows written before the form check (#35, this branch) or restored from
+    a backup can carry a string no market lists; every background cycle
+    spent up to three provider calls on each of them. The read endpoints
+    answer 404 for such a row, the loops skip it — and say so, once per
+    cycle and row, so the operator can find and remove it (rename and
+    delete keep working on it)."""
+    if is_plausible_symbol_query(canonicalize_symbol(record.symbol)):
+        return True
+    logger.warning(
+        "watchlist_item_malformed_skipped",
+        extra={"item_id": record.id, "watchlist_id": record.watchlist_id},
+    )
+    return False
+
+
 def serialize_tracked_watchlist_item(
     record: WatchlistItemRecord, *, asset_class: str | None = None
 ) -> dict:
@@ -464,6 +484,7 @@ def build_watchlist_alert_payload(
             item, asset_class=stored_watchlist_item_asset_class(item)
         )
         for item in sorted(record.items, key=lambda current: current.id or 0)
+        if stored_symbol_is_askable(item)
     ]
 
     deadline = None if budget_seconds is None else monotonic() + budget_seconds
@@ -1059,14 +1080,22 @@ class WatchlistItem(BaseModel):
     isCrypto: bool = False
 
 
+#: Display names of watchlists and their items; one limit for every path
+#: that writes the column, or the cap is a cap on one door only.
+WATCHLIST_NAME_MAX = 200
+
+
 class WatchlistItemRequest(BaseModel):
-    symbol: str
-    name: str = ""
+    # Wider than the 24 characters `is_plausible_symbol_query` admits on
+    # purpose: a string a little too long gets the named 400 from
+    # `require_symbol_form`, not a bare 422; 64 only stops the absurd.
+    symbol: str = Field(min_length=1, max_length=64)
+    name: str = Field(default="", max_length=WATCHLIST_NAME_MAX)
     tags: List[str] = Field(default_factory=list)
 
 
 class UpdateWatchlistItemRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=WATCHLIST_NAME_MAX)
     tags: List[str] | None = None
 
 class Watchlist(BaseModel):
@@ -1097,10 +1126,10 @@ class UpdateAlertRuleRequest(BaseModel):
 
 
 class CreateWatchlistRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=WATCHLIST_NAME_MAX)
 
 class RenameWatchlistRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=WATCHLIST_NAME_MAX)
 
 
 class WatchlistAlertSettingsRequest(BaseModel):
@@ -1171,7 +1200,8 @@ def _auto_scanner_cycle():
             for user in users:
                 for watchlist in get_user_watchlist_records(db, user):
                     for item in watchlist.items:
-                        unique_symbols.add(item.symbol)
+                        if stored_symbol_is_askable(item):
+                            unique_symbols.add(item.symbol)
 
             for sym in unique_symbols:
                 try:
@@ -1281,7 +1311,7 @@ def _ml_retrain_cycle():
         watchlist_symbols = {
             str(item.symbol).upper()
             for item in db.query(WatchlistItemRecord).all()
-            if item.symbol
+            if item.symbol and stored_symbol_is_askable(item)
         }
         persisted_symbols = {row["symbol"] for row in ml_persistence.list_models()}
         candidates = sorted(watchlist_symbols | persisted_symbols)
@@ -1454,7 +1484,7 @@ def _run_auto_execution_paper_for_user(
             for item in db.query(WatchlistItemRecord)
             .filter(WatchlistItemRecord.watchlist_id.in_(watchlist_ids))
             .all()
-            if item.symbol
+            if item.symbol and stored_symbol_is_askable(item)
         }
     )
     if not symbols:
@@ -1880,7 +1910,12 @@ def delete_watchlist(id: str, current_user: User = Depends(get_current_user), db
 @app.post("/api/watchlists/{id}/items")
 def add_item(id: str, item: WatchlistItemRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     record = get_watchlist_record_or_404(db, current_user, id)
-    canonical_symbol = canonicalize_symbol(item.symbol)
+    # A stored string no market lists is not inert: the alert dispatcher and
+    # the scanner run `get_stock_data`/`get_market_news` for every stored
+    # item, every cycle, against up to three providers — and the analysis
+    # page answers 404 for it since #35. Refuse it at the boundary with the
+    # same rule the read endpoints apply.
+    canonical_symbol = require_symbol_form(item.symbol, status_code=400)
     existing = next((current for current in record.items if canonicalize_symbol(current.symbol) == canonical_symbol), None)
     if existing:
         if item.name:
@@ -2232,6 +2267,8 @@ def get_scanner_data(
     results = []
 
     for item in target_wl.items:
+        if not stored_symbol_is_askable(item):
+            continue
         sym = item.symbol
         market_symbol = canonicalize_symbol(sym)
         asset_profile = service.get_asset_profile(sym, fallback_name=item.name)
