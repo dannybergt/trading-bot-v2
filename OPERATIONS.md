@@ -34,6 +34,13 @@ docker compose restart <dienst>
 
 - Mechanismus: _Watchtower-Label / CI / Hand_; Image-Tag + Digest in Compose
 - Migration beim Start: _ja/nein; Rollback-Reihenfolge: erst `downgrade`, dann altes Image_
+- **CI rot im Schritt „Dependency audit"** (auch ohne eigene Dependency-Aenderung): eine neue
+  Advisory ist erschienen. Fertig, wenn der Schritt gruen ist, durch eines von beiden:
+  Version in `src/backend/requirements.txt` bzw. per `npm audit fix` im Lockfile heben, oder —
+  nur wenn kein Fix existiert oder ein Pin ihn blockiert — die ID mit Grund in
+  `ops/automation/deps-audit.sh` eintragen und die Entscheidung in `state/decisions.md` festhalten.
+  Ein Ausfall von PyPI/OSV/npm zeigt sich als Installations- oder Netzfehler, nicht als Fund —
+  dann den Lauf wiederholen.
 
 ## Not-Aus
 

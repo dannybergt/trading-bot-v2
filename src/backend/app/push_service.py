@@ -2,9 +2,12 @@ import base64
 import json
 import logging
 import os
+import re
+from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 from pywebpush import webpush, WebPushException
+from urllib3.util import parse_url
 from py_vapid import Vapid
 
 from app.logging_config import fingerprint_value
@@ -15,6 +18,43 @@ logger = logging.getLogger(__name__)
 
 class PushConfigurationError(RuntimeError):
     pass
+
+
+# Web-Push endpoints are chosen by the browser, but the server POSTs to them
+# and reads the response — so a stored endpoint is a user-controlled outbound
+# URL (SSRF, and urllib3 <2 decompression advisories; ADR 2026-09-29). Only
+# the push services of the browsers we ship to are accepted. Extend this list
+# when a supported browser uses another host (visible as 422 on subscribe).
+PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com")
+PUSH_ENDPOINT_HOST_SUFFIXES = (".notify.windows.com", ".push.apple.com")
+
+
+# The authority is spelled out character by character: only a plain DNS name
+# and an optional :443. The path may carry percent-encoding (WNS tokens do).
+_PUSH_ENDPOINT_FORM = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)+(:443)?(/[^\\\s]*)?", re.IGNORECASE)
+_PUSH_HOST_FORM = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
+
+
+def is_allowed_push_endpoint(endpoint: str) -> bool:
+    # urlsplit and urllib3 (which sends) disagree on some inputs — e.g. a
+    # backslash ends the authority for urllib3 but not for urlsplit, so
+    # "https://127.0.0.1\.notify.windows.com/" would pass a urlsplit-only check
+    # and connect to 127.0.0.1. The whole string must have the plain form, and
+    # both parsers must name the same host.
+    if not endpoint.isascii() or not endpoint.isprintable() or not _PUSH_ENDPOINT_FORM.fullmatch(endpoint):
+        return False
+    try:
+        parts = urlsplit(endpoint)
+        port = parts.port
+        sent_to = parse_url(endpoint)
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "https" or port not in (None, 443) or not _PUSH_HOST_FORM.fullmatch(host):
+        return False
+    if (sent_to.host or "").lower() != host or sent_to.port not in (None, 443):
+        return False
+    return host in PUSH_ENDPOINT_HOSTS or host.endswith(PUSH_ENDPOINT_HOST_SUFFIXES)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -135,6 +175,13 @@ class PushService:
         expired_subs = []
         for sub in subscriptions:
             subscription_fingerprint = fingerprint_value(sub.endpoint)
+            # Rows stored before the subscribe-time check are never contacted.
+            if not is_allowed_push_endpoint(sub.endpoint):
+                logger.warning(
+                    "web_push_skipped_endpoint_not_allowed",
+                    extra={"subscription_fingerprint": subscription_fingerprint},
+                )
+                continue
             subscription_info = {
                 "endpoint": sub.endpoint,
                 "keys": {
@@ -147,7 +194,10 @@ class PushService:
                     subscription_info=subscription_info,
                     data=payload_data,
                     vapid_private_key=config["private_key"],
-                    vapid_claims=config["claims"]
+                    vapid_claims=config["claims"],
+                    # requests has no default timeout; a slow endpoint would
+                    # hold the alert loop's thread indefinitely.
+                    timeout=10,
                 )
                 logger.info(
                     "web_push_sent",
@@ -160,7 +210,9 @@ class PushService:
                     extra={
                         "subscription_fingerprint": subscription_fingerprint,
                         "status_code": getattr(ex.response, "status_code", None),
-                        "error": str(ex),
+                        # str(ex) carries the full response body of the
+                        # push service; the type and status are enough.
+                        "error": type(ex).__name__,
                     },
                 )
                 # If the push service rejects it as expired/unsubscribed (404/410), we clean up

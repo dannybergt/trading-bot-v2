@@ -16,7 +16,7 @@ from app.logging_config import fingerprint_value
 from app.models import User, PasswordResetToken
 from app.watchlist_seed import seed_default_watchlists
 from app.email_service import PasswordResetDeliveryError, send_password_reset_email
-from app.push_service import PushConfigurationError, PushService
+from app.push_service import PushConfigurationError, PushService, is_allowed_push_endpoint
 from app.rate_limit import SlidingWindowLimit
 from app.auth import (
     hash_password,
@@ -179,9 +179,16 @@ class PortfolioSettingsRequest(BaseModel):
     display_currency: str = "USD"
 
 class PushSubscriptionRequest(BaseModel):
-    endpoint: str
-    p256dh: str
-    auth: str
+    endpoint: str = Field(max_length=2048)
+    p256dh: str = Field(max_length=256)
+    auth: str = Field(max_length=256)
+
+    @field_validator("endpoint")
+    @classmethod
+    def endpoint_is_a_known_push_service(cls, value: str) -> str:
+        if not is_allowed_push_endpoint(value):
+            raise ValueError("endpoint must be an https URL of a browser push service")
+        return value
 
 
 # --- Routes ---

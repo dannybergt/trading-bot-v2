@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# The base image ships pip 24.0 and setuptools 79 — both carry advisories
+# (pip-audit, 2026-09). They stay in the runtime image, so pin fixed versions
+# before the dependency install rather than trusting whatever the tag brings.
+RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.0.0 \
+ && pip install --no-cache-dir -r requirements.txt
 
 COPY src/backend/ /app/
 # In-app help/doc markdown sources — read by docs_service at request time.

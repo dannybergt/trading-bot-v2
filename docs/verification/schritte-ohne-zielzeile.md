@@ -16,7 +16,7 @@ der beiden Regressionen muss entweder im Zielkatalog als Beweisschritt genannt
 sein **oder** hier stehen. Ein neuer Schritt, der weder das eine noch das
 andere ist, macht den Guard rot.
 
-**Stand: 77 von 92 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
+**Stand: 78 von 94 Schritten stehen hier.** Diese Zeile ist keine Notiz — der
 Guard liest beide Zahlen und faellt, sobald sie nicht mehr stimmen. Die
 Abschnitte darunter tragen bewusst **keine** Einzelzahlen: sie wuerden genauso
 verrotten wie die Zahl, die diese Datei ersetzt.
@@ -77,13 +77,16 @@ konkreten Fehlerfall der Eingabepruefung.
 ### Sicherung und Import
 
 `manual backup` · `backup list` · `backup download` · `backup import` ·
-`platform import` · `export`
+`platform import` · `export` · `refused import changes nothing`
 
 TBV2-Z10 deckt Upgrade und Restore ueber den **pg_dump**-Pfad ab. Diese Schritte
 bewachen den **App-Import** daneben — dort sass die Fremdschluesselverletzung vom
 2026-08-05. `export` prueft, dass der Schnappschuss die Tabellen mit ihren
 Werten wirklich enthaelt; er ist der Grund, warum eine neue Spalte nicht still
 aus der Sicherung fallen kann.
+`refused import changes nothing` schickt eine Datei ohne Nutzer und eine ohne
+aktiven Admin: beide 400, danach dieselben Watchlists und ein gueltiger
+Admin-Token (2026-09-30, vorher leerte genau das alle Tabellen).
 
 ### Konten und Zugang
 
