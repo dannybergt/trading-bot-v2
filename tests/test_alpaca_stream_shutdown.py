@@ -62,5 +62,45 @@ class AlpacaStreamShutdownTest(unittest.TestCase):
         self.assertIn("child-main-done", result.stdout)
 
 
+class AlpacaStreamRunFailureTest(unittest.TestCase):
+    def test_exception_from_run_is_logged_with_the_start_failed_event(self):
+        # Without the wrapper the exception ends the daemon thread and reaches
+        # threading.excepthook (plain stderr), not the structured log.
+        import asyncio
+        import os
+        from unittest.mock import patch
+
+        os.environ.setdefault("JWT_SECRET", "12345678901234567890123456789012")
+        os.environ.setdefault("APP_ENCRYPTION_KEY", "abcdefghijklmnopqrstuvwx12345678")
+        sys.path.insert(0, str(BACKEND_ROOT))
+        from app import alpaca_stream
+
+        class Boom:
+            def __init__(self, *a, **kw):
+                pass
+
+            def subscribe_trades(self, *a):
+                pass
+
+            def subscribe_bars(self, *a):
+                pass
+
+            def run(self):
+                raise RuntimeError("stream ended with an error")
+
+        async def start():
+            service = alpaca_stream.AlpacaStreamService()
+            service.api_key, service.secret_key = "k", "s"
+            await service.start()
+            service._thread.join(timeout=5)
+            self.assertFalse(service._thread.is_alive())
+
+        with patch.object(alpaca_stream, "Stream", Boom), \
+             self.assertLogs("app.alpaca_stream", level="ERROR") as logs:
+            asyncio.run(start())
+        self.assertTrue(any("alpaca_stream_start_failed" in line for line in logs.output))
+        self.assertTrue(any("stream ended with an error" in line for line in logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()

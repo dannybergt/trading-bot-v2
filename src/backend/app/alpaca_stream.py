@@ -72,10 +72,19 @@ class AlpacaStreamService:
             # SIGTERM until `docker stop` sent SIGKILL (exit 137, ~10 s).
             self.loop = asyncio.get_running_loop()
             self._thread = threading.Thread(
-                target=self.stream.run, name="alpaca-stream", daemon=True
+                target=self._run_stream, name="alpaca-stream", daemon=True
             )
             self._thread.start()
             
+        except Exception:
+            logger.exception("alpaca_stream_start_failed")
+
+    def _run_stream(self):
+        """Thread target: an exception that ends `stream.run` is logged in
+        the same structured form as a failed start. Without the wrapper it
+        would reach `threading.excepthook` and stderr as plain text."""
+        try:
+            self.stream.run()
         except Exception:
             logger.exception("alpaca_stream_start_failed")
 
