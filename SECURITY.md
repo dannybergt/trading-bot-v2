@@ -31,7 +31,8 @@
   gebauten Images, `npm audit --audit-level=low` auf das Lockfile). Jede Ausnahme steht mit
   Grund im Skript; Stand 2026-10-06: keine Ausnahme. `alpaca-trade-api` wird mit `--no-deps`
   aus `src/backend/requirements-alpaca.txt` installiert, damit urllib3/msgpack nicht an seinen
-  veralteten Pins haengen; JWT ueber PyJWT statt python-jose — ADR 2026-10-06.
+  veralteten Pins haengen; JWT ueber PyJWT statt python-jose. npm: eine Ausnahme (braces, kein Fix,
+  nur Build-Zeit ueber tailwindcss 3), postcss-selector-parser per `overrides` — ADR 2026-10-06.
 - Ausgehende URLs: nur feste Anbieter-Hosts; einzige nutzergesteuerte URL ist der Web-Push-Endpunkt,
   begrenzt auf die Push-Dienste der Browser (`push_service.is_allowed_push_endpoint`, beim Abonnieren
   und beim Senden).

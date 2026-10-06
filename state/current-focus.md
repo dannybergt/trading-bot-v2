@@ -4,11 +4,11 @@
 
 **Stand:** Branch `security/jose-urllib3-1006` von `main` `1e55a89`. Behebt den roten Audit-Schritt (python-jose CVE-2026-85394, urllib3 PYSEC-2026-4175/-4177) und leert die Ausnahmeliste (ADR 2026-10-06).
 
-**Gebaut:** python-jose -> PyJWT 2.15.1 (`app/auth.py`, Verhalten gleich); `alpaca-trade-api` aus `requirements-alpaca.txt` mit `--no-deps` (beide Dockerfiles), Laufzeit-Pins in `requirements.txt` mit urllib3 2.8.0 und msgpack 1.2.3; `deps-audit.sh` ohne Ausnahme. Tests: `tests/test_auth_tokens.py` (16), `tests/test_alpaca_dependency_override.py` (7).
+**Gebaut:** python-jose -> PyJWT 2.15.1 (`app/auth.py`, Verhalten gleich); `alpaca-trade-api` aus `requirements-alpaca.txt` mit `--no-deps` (beide Dockerfiles), Laufzeit-Pins in `requirements.txt` mit urllib3 2.8.0 und msgpack 1.2.3; `deps-audit.sh` pip ohne Ausnahme. Nachgezogen nach erstem CI-Lauf (npm-Funde vom selben Tag): source-map-js im Lockfile, postcss-selector-parser-Override 7.1.6 (dist byteidentisch), braces als einzige begruendete npm-Ausnahme (kein Fix), npm-Pruefung ueber JSON. Tests: `tests/test_auth_tokens.py` (16), `tests/test_alpaca_dependency_override.py` (7).
 
 **Nachweise:** pip-audit 3 offen + 14 ignoriert -> 0; Unit 530 OK (skipped=1); api-regression gruen; Negativkontrollen s. ADR. Images `tbv2-sec-backend:base`/`:new`.
 
-**Threads:** 11 (`python-jose` -> `PyJWT`) **geschlossen**. 10 (`alpaca-py`) umgewidmet: keine Advisory mehr daran, SHOULD, Zieldatum 2026-10-31 bleibt; Abbau des Deckels s. ADR.
+**Threads:** 11 (`python-jose` -> `PyJWT`) **geschlossen**. Neu: tailwindcss 4 (SHOULD, ROADMAP, beendet braces-Ausnahme). 10 (`alpaca-py`) umgewidmet: keine Advisory mehr daran, SHOULD, Zieldatum 2026-10-31 bleibt; Abbau des Deckels s. ADR.
 
 **Tore offen:** S (Pflicht: Abhaengigkeiten + Auth), R, V (Login/Refresh/abgelaufenes Token am laufenden Stack, Alpaca-Pfade soweit ohne Konto pruefbar). Merge auf main = Produktiv-Deploy (publish.yml + Watchtower) — nur nach `FREIGABE`.
 
