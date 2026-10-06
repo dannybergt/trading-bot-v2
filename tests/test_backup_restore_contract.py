@@ -109,7 +109,9 @@ class RestoreRoundTripTests(unittest.TestCase):
         self.db.close()
 
     def _seed_user_with_auto_execution(self) -> int:
-        user = User(email="alice@example.com", hashed_password="x")
+        # Admin: a snapshot without an active admin is refused since
+        # 2026-09-30 (restoring it would lock the platform).
+        user = User(email="alice@example.com", hashed_password="x", is_admin=True)
         self.db.add(user)
         self.db.commit()
         self.db.add(
