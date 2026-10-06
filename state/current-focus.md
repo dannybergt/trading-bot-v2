@@ -1,5 +1,33 @@
 # Current Focus
 
+## SESSION 2026-10-06: Tor-Stand der offenen PRs erfasst, #36/#44 entkonfliktet, SIGTERM-Fix und Harnisch-Schritte als PR
+
+**Stand:** `main` auf `f1f0719` (#41 und #43 gemergt und ausgerollt). Offene PRs siehe Tabelle; keiner gemergt.
+
+| PR | Inhalt | Stand | CI | Tore fehlen vor FREIGABE |
+| --- | --- | --- | --- | --- |
+| #38 | Abhaengigkeiten (schliesst Altlast HOCH) | CLEAN, Tore R/S/ops/V auf `f6be182` (= Kopf) gelaufen, V 8 von 11 (Luecken im PR-Text) | gruen | keine neuen; FREIGABE-Rueckfrage |
+| #40 | ML-Modelle laden (xgboost), gestapelt auf #38 | CLEAN | gruen | R, S, V |
+| #42 | Training ohne sma200, gestapelt auf #40 | CLEAN | gruen | R, V |
+| #39 | nginx Restore-Pfade | CLEAN | gruen | R, ops-reviewer, V |
+| #36 | Nicht-Ticker beim Anlegen abweisen | Konflikt (nur Zaehler in `schritte-ohne-zielzeile.md`) behoben, gepusht | laeuft neu | R, S, V |
+| #44 | Watchlist-Deckel, gestapelt auf #36 | Konflikt wie #36 behoben, gepusht; S auf `654bfc5` kein Blocker | laeuft neu | R, V |
+| #45 | SIGTERM beendet das Backend (Alpaca-Stream auf Daemon-Thread) | neu | s. PR | R, V |
+| #46 | Harnisch: ungueltiger Zeitstempel -> 400, Stempelvergleich je id | neu | s. PR | R |
+| #37 | AGENTS.md/§0-Skelett aus agent-baseline | CLEAN | gruen | keine |
+
+**Nachweise dieser Session (Host stark ausgelastet, Load ca. 35):** Stapel #38+#40+#42 mit `main` zusammengefuehrt: Unit **514 OK**; #39 + `main`: `test_frontend_nginx_conf` 8 OK; #36/#44: Unit-Teilmenge OK (125/129, 6 skipped) und api-regression gruen (#44 enthaelt #36).
+
+**SIGTERM (#45):** reproduziert (Platzhalter-Alpaca-Key, `docker stop` 11,6 s, Exit 137; ohne Key 2,3 s). Ursache: `stream.run` im Default-Executor, dessen Thread der Interpreter beim Beenden joint; der SDK-Loop endet auf `stop()` nicht. Fix: Daemon-Thread; danach Exit 0, ca. 4,6 s. Test rot ohne Fix. Nicht gezeigt: Verhalten mit gueltigem Key beim echten Anbieter.
+
+**Harnisch (#46):** neuer Schritt `restore refuses an invalid timestamp` (1969, Jahr 9000, unlesbar), Negativkontrolle rot ohne Bereichspruefung; Vergleich je `id`. Luecke: keine Negativkontrolle fuer den id-Vergleich.
+
+**Nicht hier loesbar:** FREIGABE fuer Merge (Reihenfolge #38, #40, #42 wegen Stapel; #36 vor #44); #38-Betreiberpunkt VAPID-Default in der Historie; Dependabot #16-#18 (Actions-Bumps, Workflows beruehrt, Tor S).
+
+**Allokierte Ports/Ressourcen:** keine; eigene Container `tbv2-weiter-*` entfernt. Worktrees `/claude/.wt/trading-bot-v2-*-eb5af76b` (gesperrt) bleiben bis zur Uebernahme.
+
+**Naechster Schritt:** Tore R/S/V fuer #38 bestaetigen und FREIGABE erfragen; danach #40, #42 (Retarget auf main nach Squash von #38 pruefen), #39, #36, #44, #45, #46.
+
 ## SESSION 2026-09-18: Nutzer-Anteil an der Backtest-Warteschlange, Symbolform vor dem Anbieter — PR #35 wartet auf FREIGABE
 
 **Stand:** `main` auf `097b61e`. Branch `security/backtest-user-quota` auf `cfaa469` (5 Commits, gepusht), **PR #35** (ready, Text nach §15). Threads 1, 3 und 8 der Liste vom 2026-09-16 geschlossen; dazu vier Befunde des `security-reviewer` und einer des `verifier` aus dieser Session behoben.
