@@ -1,9 +1,15 @@
 """Per-symbol PricePredictor persistence tests.
 
-Trains a tiny XGBoost model on a synthetic linearly-separable frame,
-persists it, reloads it, and verifies the on-disk model produces the
-same predictions and that staleness math respects the TTL.
+Trains a tiny ensemble on a synthetic frame whose next-bar direction
+alternates, persists it, reloads it, and verifies the on-disk model produces
+the same predictions and that staleness math respects the TTL.
+
+The roundtrip must never skip: until 2026-09 its frame was a strictly rising
+series, so every target was 1, XGBoost refused to fit a single class and the
+test skipped silently -- while xgboost 2.1.3 + scikit-learn 1.6 made every
+real `load_model` fail (`__sklearn_tags__`). A skip here hides exactly that.
 """
+import importlib
 import os
 import sys
 import unittest
@@ -31,9 +37,10 @@ class MLPersistenceTests(unittest.TestCase):
         for module_name in list(sys.modules):
             if module_name.startswith("app.ml_persistence"):
                 del sys.modules[module_name]
-        from app import ml_persistence  # noqa: WPS433
-
-        self.ml_persistence = ml_persistence
+        # import_module, not `from app import ml_persistence`: the latter
+        # returns the attribute still cached on the `app` package, i.e. the
+        # first test's module whose MODEL_DIR is an already deleted tempdir.
+        self.ml_persistence = importlib.import_module("app.ml_persistence")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -43,9 +50,11 @@ class MLPersistenceTests(unittest.TestCase):
         from app.ml_models import PricePredictor
         import pandas as pd
 
-        # 200 bars with a clear linear trend so the model can fit.
+        # 200 bars on a rising trend with a dip every third bar, so the
+        # next-bar target holds both classes (a strictly rising series gives
+        # only 1s and XGBoost refuses to fit it).
         rows = 200
-        closes = [100 + i * 0.5 for i in range(rows)]
+        closes = [100 + i * 0.5 - (2.0 if i % 3 == 0 else 0.0) for i in range(rows)]
         df = pd.DataFrame({"Close": closes})
         for col in (
             "RSI", "SMA_20", "SMA_50", "EMA_12", "EMA_26",
@@ -55,6 +64,14 @@ class MLPersistenceTests(unittest.TestCase):
             "News_Sentiment", "PE_Ratio", "Forward_PE", "Price_To_Book",
         ):
             df[col] = 0.5
+        # Noisy indicators so the trees actually split -- with constant
+        # features every model predicts the base rate and "same prediction
+        # after loading" would hold even for a broken booster.
+        import numpy as np
+
+        rng = np.random.default_rng(seed=7)
+        for col in ("RSI", "MACD_12_26_9", "ATR", "STOCH_K"):
+            df[col] = rng.normal(0.0, 1.0, rows)
         # Make Volume a proper int
         df["Volume"] = 1_000_000
         predictor = PricePredictor()
@@ -65,8 +82,7 @@ class MLPersistenceTests(unittest.TestCase):
         from app.ml_models import PricePredictor
 
         predictor, metrics, df = self._build_synthetic_predictor()
-        if not predictor.is_trained:
-            self.skipTest("XGBoost training did not converge on the synthetic frame")
+        self.assertTrue(predictor.is_trained, "fixture must train; a skip hid a broken load")
 
         metadata = self.ml_persistence.save_predictor(
             "AAPL",
@@ -79,15 +95,21 @@ class MLPersistenceTests(unittest.TestCase):
         self.assertEqual("AAPL", metadata["symbol"])
         self.assertEqual(len(df.index), metadata["nSamples"])
 
-        loaded = self.ml_persistence.load_predictor("AAPL", PricePredictor)
-        self.assertIsNotNone(loaded)
+        with self.assertNoLogs("app.ml_persistence", level="ERROR"):
+            loaded = self.ml_persistence.load_predictor("AAPL", PricePredictor)
+        self.assertIsNotNone(loaded, "persisted model did not load; see ml_persistence_load_model_failed")
         loaded_predictor, loaded_meta = loaded
         self.assertTrue(loaded_predictor.is_trained)
         self.assertEqual(metadata["accuracy"], loaded_meta["accuracy"])
 
         # Same input → same prediction
         original_pred = predictor.predict_next_movement(df, user=None)
-        recovered_pred = loaded_predictor.predict_next_movement(df, user=None)
+        # predict_next_movement swallows member and explanation failures into
+        # ERROR logs; the loaded ensemble must need none of that.
+        with self.assertNoLogs("app.ml_models", level="ERROR"):
+            recovered_pred = loaded_predictor.predict_next_movement(df, user=None)
+        self.assertEqual(3, recovered_pred["ensembleSize"], "lgbm/rf pickles did not load")
+        self.assertIsNotNone(recovered_pred["explanation"], "pred_contribs failed on the loaded booster")
         self.assertEqual(original_pred["direction"], recovered_pred["direction"])
         self.assertAlmostEqual(
             original_pred["probabilityUp"], recovered_pred["probabilityUp"], places=6
