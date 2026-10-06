@@ -117,9 +117,31 @@ export async function apiFetch<T = unknown>(
     // rendered the generic sentence (verifier, 2026-09-16).
     throw new ApiError(
       response.status,
-      typeof detail === "string" ? detail : `Request failed: ${response.status}`,
+      typeof detail === "string"
+        ? detail
+        : (validationMessage(detail) ?? `Request failed: ${response.status}`),
       detail,
     );
   }
   return payload as T;
+}
+
+// A 422 from FastAPI carries a list of {loc, msg} — one per field. Rendered
+// as "Request failed: 422" the user learned nothing about which field or why
+// (reviewer N3, 2026-09-18: a 65-character watchlist symbol). Name the field
+// and pass the validator's sentence through; anything else keeps the generic
+// line.
+function validationMessage(detail: unknown): string | undefined {
+  if (!Array.isArray(detail) || detail.length === 0) return undefined;
+  const lines = detail.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || typeof (entry as { msg?: unknown }).msg !== "string") {
+      return [];
+    }
+    const { loc, msg } = entry as { loc?: unknown; msg: string };
+    const field = Array.isArray(loc)
+      ? loc.filter((part) => part !== "body" && part !== "query").join(".")
+      : "";
+    return [field ? `${field}: ${msg}` : msg];
+  });
+  return lines.length > 0 ? lines.join("; ") : undefined;
 }

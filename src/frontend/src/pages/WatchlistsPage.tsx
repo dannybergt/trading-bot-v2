@@ -220,11 +220,11 @@ function WatchlistCard({
       </p>
 
       <form onSubmit={handleAdd} className="mt-3 grid gap-2 sm:grid-cols-3">
-        {/* Frueher ein reines Freitextfeld: das Backend prueft das Symbol beim
-            Anlegen nicht, ein Tippfehler erzeugte also einen dauerhaft toten
-            Eintrag. Die Suche schlaegt jetzt echte Symbole vor (inklusive
-            ISIN-/WKN-Aufloesung); die Freitexteingabe bleibt moeglich, damit
-            niemand blockiert ist, wenn der Asset-Cache nichts liefert. */}
+        {/* Die Suche schlaegt echte Symbole vor (inklusive ISIN-/WKN-
+            Aufloesung); die Freitexteingabe bleibt moeglich, damit niemand
+            blockiert ist, wenn der Asset-Cache nichts liefert. Eine Eingabe
+            ohne Tickerform weist das Backend seit 2026-09-18 mit 400 ab und
+            nennt sie — der Satz erscheint unter dem Formular. */}
         <div className="sm:col-span-1">
           <SymbolSearch
             onSelect={(result) => {
