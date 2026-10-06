@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 import pyotp
@@ -83,10 +83,14 @@ def create_refresh_token(user_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(token: str) -> dict:
+def decode_token(token: str) -> Optional[dict]:
+    # PyJWT checks the signature against the one allowed algorithm (so
+    # alg=none and RS/HS confusion are rejected), exp/nbf/iat when present,
+    # and that `sub` is a string. InvalidTokenError is the base of every
+    # validation and decode failure.
     try:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
+    except jwt.InvalidTokenError:
         return None
 
 
