@@ -12,7 +12,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BACKEND_IMAGE="${BACKEND_IMAGE:-trading-bot-v2-backend:local}"
 PIP_AUDIT_VERSION="2.10.1"
 
-# Empty since 2026-10-06: python-jose (and its ecdsa) replaced by PyJWT,
+# pip: empty since 2026-10-06:python-jose (and its ecdsa) replaced by PyJWT,
 # alpaca-trade-api installed --no-deps so urllib3/msgpack are no longer held
 # back (ADR 2026-10-06). A new entry needs the pinning package, why the code
 # path is not reachable, and the condition that removes it.
@@ -35,5 +35,42 @@ docker run --rm -e PIP_AUDIT_VERSION="${PIP_AUDIT_VERSION}" "${BACKEND_IMAGE}" s
   /tmp/pip-audit/bin/pip-audit --progress-spinner off --path "${site}" "$@"
 ' sh "${ignore_args[@]}"
 
+NPM_IGNORED=(
+  # braces: every release is affected, no fix exists (2026-10-06). Pulled
+  # only by tailwindcss 3 (devDependency, via chokidar/micromatch/fast-glob)
+  # at build time; the patterns it expands are the `content` globs in our own
+  # tailwind.config — no outside input, nothing of it ships in the nginx
+  # image. Ends with tailwindcss 4 (ROADMAP, ADR 2026-10-06).
+  GHSA-vfj7-8cjw-p6xm
+)
+
 echo "npm audit against src/frontend/package-lock.json"
-(cd "${PROJECT_ROOT}/src/frontend" && npm audit --audit-level=low)
+npm_json="$(mktemp)"
+trap 'rm -f "${npm_json}"' EXIT
+# Exit code is non-zero whenever anything is found; the decision is made on
+# the JSON below. The readable report is printed for the log.
+(cd "${PROJECT_ROOT}/src/frontend" && npm audit --json > "${npm_json}") || true
+(cd "${PROJECT_ROOT}/src/frontend" && npm audit --audit-level=low) || true
+python3 - "${npm_json}" "${NPM_IGNORED[@]}" <<'PY'
+import json
+import sys
+
+report = json.load(open(sys.argv[1]))
+ignored = set(sys.argv[2:])
+if "vulnerabilities" not in report:
+    # Registry/network failure: never read as "nothing found".
+    print("npm audit returned no report:", report.get("error", report))
+    sys.exit(2)
+found = {}
+for name, vuln in report["vulnerabilities"].items():
+    for via in vuln["via"]:
+        if isinstance(via, dict):
+            found.setdefault(via["url"].rsplit("/", 1)[-1], set()).add(name)
+for advisory in sorted(ignored - set(found)):
+    print(f"note: {advisory} is no longer reported, remove it from NPM_IGNORED")
+open_ids = sorted(set(found) - ignored)
+for advisory in open_ids:
+    print(f"OPEN {advisory} in {', '.join(sorted(found[advisory]))}")
+print(f"npm audit: {len(found)} advisories, {len(open_ids)} open, {len(set(found) & ignored)} ignored")
+sys.exit(1 if open_ids else 0)
+PY
