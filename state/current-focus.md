@@ -1,5 +1,11 @@
 # Current Focus
 
+## SESSION 2026-10-06 (#36 nachgezogen)
+
+**Stand:** `main` (`1e55a89`, #38) eingemergt, state-Konflikte geloest. Tor R W1 und Tor S #2 behoben: `stored_symbol_is_askable` jetzt auch in `_ml_retrain_cycle`, `_run_auto_execution_paper_for_user` und `/api/scanner`; Test `test_remaining_data_paths_skip_a_stored_symbol_without_ticker_form` (rot ohne Filter, belegt). Zaehler `schritte-ohne-zielzeile.md` 79 von 95 (Guard gruen).
+
+**Offen:** Admin-Import meldet unplausible Symbole nicht (S #2 optional); Delta-R auf dem neuen Kopf, `verifier` vor Merge. **Naechster Schritt:** #44 auf diesen Stand ziehen.
+
 ## SESSION 2026-09-29: Abhaengigkeiten auf Stand, Audit blockiert CI — PR `security/deps-2026-09`
 
 **Stand:** Branch `security/deps-2026-09` von `main` `afc6d52`, PR s. u. Schliesst den Betreiber-Punkt „Dependency-Advisories (PR `security/deps-2026-09`)" und security-reviewer #3 (HOCH, 2026-09-16) bis auf 7 begruendete Ausnahmen.

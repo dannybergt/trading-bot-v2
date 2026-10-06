@@ -167,6 +167,67 @@ class SymbolFormGateTests(unittest.TestCase):
             app_main._auto_scanner_cycle()
         self.assertEqual(["AAPL"], asked)
 
+    def test_remaining_data_paths_skip_a_stored_symbol_without_ticker_form(self):
+        # security-reviewer #2 / reviewer W1 zu #36: der ML-Retrain-Zyklus, der
+        # Paper-Auto-Execution-Worker und der Scanner-Endpunkt lasen Bestandszeilen
+        # ohne Filter und fragten fuer jede den Anbieter. Rot ohne den Filter.
+        asked: list = []
+
+        def remember(symbol, *_args, **_kwargs):
+            asked.append(symbol)
+            return {}
+
+        # ML-Retrain: Zeilen aus der Datenbank, keine gespeicherten Modelle.
+        db = MagicMock()
+        db.query.return_value.all.return_value = [self._item(1, "AMAZON INC"), self._item(2, "AAPL")]
+        with patch.object(app_main, "SessionLocal", return_value=db), \
+             patch("app.ml_persistence.list_models", return_value=[]), \
+             patch("app.ml_persistence.load_predictor", return_value=None), \
+             patch.object(app_main.service, "get_stock_data", side_effect=remember), \
+             self.assertLogs("app.main", level="WARNING") as logs:
+            app_main._ml_retrain_cycle()
+        self.assertEqual(["AAPL"], asked)
+        self.assertTrue(any("watchlist_item_malformed_skipped" in line for line in logs.output))
+
+        # Paper-Auto-Execution je Nutzer.
+        asked.clear()
+        db = MagicMock()
+        wl_query, item_query, order_query = MagicMock(), MagicMock(), MagicMock()
+        wl_query.filter.return_value.all.return_value = [MagicMock(id="w1")]
+        item_query.filter.return_value.all.return_value = [self._item(1, "AMAZON INC"), self._item(2, "AAPL")]
+        order_query.filter.return_value.count.return_value = 0
+
+        def pick(model, *_args):
+            if model is app_main.WatchlistRecord:
+                return wl_query
+            if model is app_main.PaperOrderRecord:
+                return order_query
+            return item_query
+
+        db.query.side_effect = pick
+        with patch.object(app_main.service, "get_stock_data", side_effect=remember), \
+             self.assertLogs("app.main", level="WARNING"):
+            app_main._run_auto_execution_paper_for_user(db, MagicMock(id=1), None)
+        self.assertEqual(["AAPL"], asked)
+
+        # Scanner-Endpunkt: kein Profil-, Snapshot- oder Bars-Aufruf fuer den toten Eintrag.
+        asked.clear()
+
+        class Asked(Exception):
+            pass
+
+        def profile(symbol, **_kwargs):
+            asked.append(symbol)
+            raise Asked()
+
+        watchlist = MagicMock(items=[self._item(1, "AMAZON INC"), self._item(2, "VOO")])
+        with patch.object(app_main, "get_user_watchlist_records", return_value=[watchlist]), \
+             patch.object(app_main.service, "get_asset_profile", side_effect=profile), \
+             self.assertLogs("app.main", level="WARNING"):
+            with self.assertRaises(Asked):
+                app_main.get_scanner_data(watchlist_id=None, current_user=MagicMock(), db=MagicMock())
+        self.assertEqual(["VOO"], asked)
+
     def test_watchlist_names_are_bounded_on_every_write_path(self):
         from pydantic import ValidationError
         too_long = "n" * (app_main.WATCHLIST_NAME_MAX + 1)

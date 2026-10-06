@@ -1311,7 +1311,7 @@ def _ml_retrain_cycle():
         watchlist_symbols = {
             str(item.symbol).upper()
             for item in db.query(WatchlistItemRecord).all()
-            if item.symbol
+            if item.symbol and stored_symbol_is_askable(item)
         }
         persisted_symbols = {row["symbol"] for row in ml_persistence.list_models()}
         candidates = sorted(watchlist_symbols | persisted_symbols)
@@ -1484,7 +1484,7 @@ def _run_auto_execution_paper_for_user(
             for item in db.query(WatchlistItemRecord)
             .filter(WatchlistItemRecord.watchlist_id.in_(watchlist_ids))
             .all()
-            if item.symbol
+            if item.symbol and stored_symbol_is_askable(item)
         }
     )
     if not symbols:
@@ -2267,6 +2267,8 @@ def get_scanner_data(
     results = []
 
     for item in target_wl.items:
+        if not stored_symbol_is_askable(item):
+            continue
         sym = item.symbol
         market_symbol = canonicalize_symbol(sym)
         asset_profile = service.get_asset_profile(sym, fallback_name=item.name)
