@@ -177,6 +177,7 @@ seed_or_verify_data() {
   MEMBER_PASSWORD="${MEMBER_PASSWORD}" \
   CUSTOM_WATCHLIST_NAME="${CUSTOM_WATCHLIST_NAME}" \
   CUSTOM_SYMBOL="${CUSTOM_SYMBOL}" \
+  STAMP_FILE="${TEST_ROOT}/stamps.json" \
   python3 - <<'PY'
 import json
 import os
@@ -191,6 +192,24 @@ member_email = os.environ["MEMBER_EMAIL"]
 member_password = os.environ["MEMBER_PASSWORD"]
 custom_watchlist_name = os.environ["CUSTOM_WATCHLIST_NAME"]
 custom_symbol = os.environ["CUSTOM_SYMBOL"]
+stamp_file = os.environ["STAMP_FILE"]
+STAMPED_TABLES = ("users", "watchlists", "watchlist_items", "alert_rules")
+
+
+def stamps_of(export_payload):
+    """Zeitstempel je Zeile als (Tabelle, id, Feld) -> Zeitpunkt in UTC."""
+    from datetime import datetime, timezone
+
+    found = {}
+    for table in STAMPED_TABLES:
+        for row in export_payload["data"][table]:
+            for field in ("created_at", "updated_at"):
+                if row.get(field):
+                    moment = datetime.fromisoformat(row[field])
+                    if moment.tzinfo is None:
+                        moment = moment.replace(tzinfo=timezone.utc)
+                    found[f"{table}/{row['id']}/{field}"] = moment.astimezone(timezone.utc).isoformat()
+    return found
 
 
 def request(method, path, payload=None, headers=None):
@@ -297,6 +316,12 @@ if mode == "seed":
     export_payload = request("GET", "/api/admin/export", headers=headers)
     exported_emails = {user["email"] for user in export_payload["data"]["users"]}
     assert exported_emails == {admin_email, member_email}
+    # Zielzeile TBV2-Z15: die Zeitstempel, die ein Upgrade und ein pg_dump-Restore
+    # unveraendert lassen muessen. Das Seed haelt sie fest, `verify` vergleicht.
+    seeded_stamps = stamps_of(export_payload)
+    assert len(seeded_stamps) >= 8, seeded_stamps
+    with open(stamp_file, "w", encoding="utf-8") as handle:
+        json.dump(seeded_stamps, handle)
     print("seed ok [+ alert rule, paper order, auto-execution limits]")
 elif mode == "verify":
     headers = login(admin_email, admin_password)
@@ -335,6 +360,12 @@ elif mode == "verify":
         {"email": member_email, "password": member_password},
     )
     assert member_login["mfa_required"] is False
+    with open(stamp_file, encoding="utf-8") as handle:
+        seeded_stamps = json.load(handle)
+    current_stamps = stamps_of(export_payload)
+    drifted = {key: (want, current_stamps.get(key)) for key, want in seeded_stamps.items() if current_stamps.get(key) != want}
+    assert not drifted, f"timestamps changed since the seed: {drifted}"
+    print(f"verify ok [{len(seeded_stamps)} created_at/updated_at stamps unchanged]")
     print("verify ok [+ alert rule, paper order, auto-execution limits]")
 else:
     raise SystemExit(f"Unsupported mode: {mode}")

@@ -14,6 +14,9 @@ POSTGRES_DB="${POSTGRES_DB:-trading_bot_v2_regression}"
 POSTGRES_USER="${POSTGRES_USER:-trading}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-trading-change-me}"
 BACKUP_INTERVAL_SECONDS="${BACKUP_INTERVAL_SECONDS:-5}"
+# Anders als UTC, damit eine Zonenverschiebung im Restore sichtbar wird (Schritt
+# "restore keeps created_at and updated_at").
+POSTGRES_TIMEZONE="${POSTGRES_TIMEZONE:-Europe/Berlin}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-adminpass123}"
 JWT_SECRET="${JWT_SECRET:-12345678901234567890123456789012}"
@@ -112,7 +115,7 @@ docker run -d \
   -e POSTGRES_USER="${POSTGRES_USER}" \
   -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
   -v "${POSTGRES_DATA_DIR}:/var/lib/postgresql/data:z" \
-  "${POSTGRES_IMAGE}" >/dev/null
+  "${POSTGRES_IMAGE}" -c "timezone=${POSTGRES_TIMEZONE}" >/dev/null
 
 wait_for_postgres
 
@@ -1298,13 +1301,56 @@ assert other_caller.status_code != 429, (
 )
 print("forwarded-for scopes auth rate limit ok")
 
+# A snapshot the restore cannot use must be refused before anything is
+# deleted: until 2026-09-30 this exact body answered 200, emptied every table
+# and locked the admin out (verifier B-V1).
+def import_failures():
+    rows = requests.get(
+        f"{base}/api/admin/audit-events",
+        headers=headers,
+        params={"action": "backup.import", "limit": 200},
+        timeout=30,
+    )
+    rows.raise_for_status()
+    return sum(1 for row in rows.json()["items"] if row.get("outcome") == "failure")
+
+
+failures_before_refusal = import_failures()
+watchlists_before_refusal = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+watchlists_before_refusal.raise_for_status()
+# The third file passes validation and fails at the database (an item
+# pointing at a watchlist that does not exist): deletes already ran, so only
+# the transaction keeps the data -- on Postgres, which enforces the key.
+dangling = json.loads(json.dumps(export_payload))
+dangling["data"]["watchlist_items"] = [
+    {"watchlist_id": 987654321, "symbol": "AAPL", "name": "dangling"}
+]
+for bad_body, bad_reason in (
+    ({"data": {"pad": "x" * 64}}, "no users"),
+    ({"data": {"users": [dict(u, is_admin=False) for u in export_payload["data"]["users"]]}}, "no active admin"),
+    (dangling, "nothing was changed"),
+):
+    refused_import = requests.post(
+        f"{base}/api/admin/import",
+        headers=headers,
+        files={"file": ("broken.json", io.BytesIO(json.dumps(bad_body).encode("utf-8")), "application/json")},
+        timeout=30,
+    )
+    assert refused_import.status_code == 400, (refused_import.status_code, refused_import.text[:200])
+    assert bad_reason in refused_import.json()["detail"], refused_import.text[:200]
+    still_there = requests.get(f"{base}/api/watchlists", headers=headers, timeout=30)
+    assert still_there.status_code == 200, "admin token stopped working after a refused import"
+    assert still_there.json() == watchlists_before_refusal.json(), "a refused import changed the watchlists"
+assert import_failures() - failures_before_refusal == 3, "each refused import must leave one failure audit row"
+print("refused import changes nothing ok")
+
 platform_import = requests.post(
     f"{base}/api/admin/import",
     headers=headers,
     files={"file": ("snapshot.json", io.BytesIO(json.dumps(export_payload).encode("utf-8")), "application/json")},
     timeout=30,
 )
-platform_import.raise_for_status()
+assert platform_import.status_code == 200, (platform_import.status_code, platform_import.text[:300])
 assert platform_import.json()["status"] == "imported"
 print("platform import ok")
 
@@ -1314,9 +1360,80 @@ backup_import = requests.post(
     files={"file": ("backup.json", io.BytesIO(download.content), "application/json")},
     timeout=30,
 )
-backup_import.raise_for_status()
+assert backup_import.status_code == 200, (backup_import.status_code, backup_import.text[:300])
 assert backup_import.json()["status"] == "restored"
 print("backup import ok")
+
+# Zeitstempeltreue am laufenden Artefakt (Zielzeile TBV2-Z15). Bis PR #43
+# stempelte der Restore jede Zeile mit dem Zeitpunkt des Restores; kein Schritt
+# sah es, weil die Zeilen im Harnisch alle "von heute" sind. Hier bekommt jede
+# Zeile einen eigenen Zeitpunkt aus der Vergangenheit -- abwechselnd ohne Offset
+# (gilt als UTC) und mit +02:00 -- der Restore laeuft, und der Export UND die
+# Datenbank selbst muessen dieselben Zeitpunkte zeigen. Der Postgres-Dienst
+# laeuft in einer anderen Zeitzone als UTC (POSTGRES_TIMEZONE), sonst fiele eine
+# Verschiebung um die Zonendifferenz nicht auf; die Zone wird hier abgefragt.
+# Audit-Zeilen bleiben aussen vor: der Restore haengt selbst eine an.
+import psycopg
+from datetime import datetime, timedelta, timezone
+
+
+def instant(text):
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+STAMP_FIELDS = ("created_at", "updated_at")
+stamped = json.loads(json.dumps(export_payload))
+expected = {}
+counter = 0
+for table, rows in stamped["data"].items():
+    if table == "audit_events":
+        continue
+    for row in rows:
+        for field in STAMP_FIELDS:
+            if not row.get(field):
+                continue
+            counter += 1
+            moment = datetime(2019, 3, 4, 5, 6, 7, tzinfo=timezone.utc) + timedelta(days=37 * counter, minutes=counter)
+            if counter % 2:
+                row[field] = moment.replace(tzinfo=None).isoformat()
+            else:
+                row[field] = moment.astimezone(timezone(timedelta(hours=2))).isoformat()
+            expected.setdefault((table, field), []).append(moment)
+assert counter >= 10, f"too few stamped rows to prove anything: {counter}"
+assert {t for t, _ in expected} >= {"users", "watchlists", "watchlist_items"}, sorted(expected)
+
+stamped_import = requests.post(
+    f"{base}/api/admin/import",
+    headers=headers,
+    files={"file": ("stamped.json", io.BytesIO(json.dumps(stamped).encode("utf-8")), "application/json")},
+    timeout=60,
+)
+assert stamped_import.status_code == 200, (stamped_import.status_code, stamped_import.text[:300])
+
+after = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
+after.raise_for_status()
+after_data = after.json()["data"]
+
+connection = psycopg.connect("postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_CONTAINER}:5432/${POSTGRES_DB}")
+db_zone = connection.execute("show timezone").fetchone()[0]
+assert db_zone == "${POSTGRES_TIMEZONE}", f"database zone {db_zone!r}: the shift check is toothless"
+assert db_zone != "UTC", "database zone must differ from UTC"
+
+wrong = []
+for (table, field), moments in sorted(expected.items()):
+    want = sorted(moments)
+    via_api = sorted(instant(row[field]) for row in after_data[table] if row.get(field))
+    via_db = sorted(value for (value,) in connection.execute(f"select {field} from {table} where {field} is not null").fetchall())
+    if via_api != want:
+        wrong.append((table, field, "export", len(want), len(via_api)))
+    if via_db != want:
+        wrong.append((table, field, "database", len(want), len(via_db)))
+connection.close()
+assert not wrong, f"restore changed timestamps (table, field, where, expected rows, found rows): {wrong}"
+print(f"restore keeps created_at and updated_at ok [{counter} stamps in {len(expected)} columns, database zone {db_zone}]")
 
 # Watchlist deletion runs last: it removes every list of this user, including the
 # seeded starter lists, and must not be undone by a re-seed on the next create.
