@@ -1333,7 +1333,8 @@ for table, rows in stamped["data"].items():
                 row[field] = moment.replace(tzinfo=None).isoformat()
             else:
                 row[field] = moment.astimezone(timezone(timedelta(hours=2))).isoformat()
-            expected.setdefault((table, field), []).append(moment)
+            assert "id" in row, f"{table} exports no id: stamps cannot be compared row by row"
+            expected.setdefault((table, field), {})[row["id"]] = moment
 assert counter >= 10, f"too few stamped rows to prove anything: {counter}"
 assert {t for t, _ in expected} >= {"users", "watchlists", "watchlist_items"}, sorted(expected)
 
@@ -1354,18 +1355,54 @@ db_zone = connection.execute("show timezone").fetchone()[0]
 assert db_zone == "${POSTGRES_TIMEZONE}", f"database zone {db_zone!r}: the shift check is toothless"
 assert db_zone != "UTC", "database zone must differ from UTC"
 
+# Row by row, not as a sorted list of instants: two rows that swap their
+# stamps would leave the sorted lists equal and still be wrong.
 wrong = []
-for (table, field), moments in sorted(expected.items()):
-    want = sorted(moments)
-    via_api = sorted(instant(row[field]) for row in after_data[table] if row.get(field))
-    via_db = sorted(value for (value,) in connection.execute(f"select {field} from {table} where {field} is not null").fetchall())
-    if via_api != want:
-        wrong.append((table, field, "export", len(want), len(via_api)))
-    if via_db != want:
-        wrong.append((table, field, "database", len(want), len(via_db)))
-connection.close()
+for (table, field), by_id in sorted(expected.items()):
+    via_api = {row["id"]: instant(row[field]) for row in after_data[table] if row.get(field)}
+    via_db = {
+        row_id: value
+        for row_id, value in connection.execute(f"select id, {field} from {table} where {field} is not null").fetchall()
+    }
+    if via_api != by_id:
+        wrong.append((table, field, "export", len(by_id), len(via_api)))
+    if via_db != by_id:
+        wrong.append((table, field, "database", len(by_id), len(via_db)))
 assert not wrong, f"restore changed timestamps (table, field, where, expected rows, found rows): {wrong}"
+connection.close()
 print(f"restore keeps created_at and updated_at ok [{counter} stamps in {len(expected)} columns, database zone {db_zone}]")
+
+# Ein ungueltiger Zeitstempel weist den ganzen Restore ab (Zielzeile TBV2-Z15):
+# 400, der Datenbestand bleibt wie er war, und der Wert steht weder in der
+# Antwort noch im Audit-Log -- er kann beliebiger Dateiinhalt sein. Die drei
+# Werte treffen die drei Wege der Pruefung: vor 1970, nach Jahr 9000, unlesbar.
+def state_without_audit(payload):
+    return json.dumps({t: rows for t, rows in payload.items() if t != "audit_events"}, sort_keys=True)
+
+
+kept_state = state_without_audit(after_data)
+bad_stamps = {
+    "before 1970": "1969-12-31T23:59:59",
+    "after year 9000": "9000-01-02T00:00:00",
+    "unreadable": "STAMPLEAK-4711-not-a-date",
+}
+for label, bad_value in bad_stamps.items():
+    broken = json.loads(json.dumps(stamped))
+    broken["data"]["users"][0]["created_at"] = bad_value
+    refused = requests.post(
+        f"{base}/api/admin/import",
+        headers=headers,
+        files={"file": ("broken.json", io.BytesIO(json.dumps(broken).encode("utf-8")), "application/json")},
+        timeout=60,
+    )
+    assert refused.status_code == 400, (label, refused.status_code, refused.text[:300])
+    assert bad_value not in refused.text, (label, "the refused value is echoed in the response")
+    unchanged = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
+    unchanged.raise_for_status()
+    assert state_without_audit(unchanged.json()["data"]) == kept_state, (label, "a refused restore changed the data")
+audit_text = requests.get(f"{base}/api/admin/audit-events", headers=headers, timeout=30).text
+assert "STAMPLEAK" not in audit_text, "the refused value is written to the audit log"
+print(f"restore refuses an invalid timestamp ok [{len(bad_stamps)} values, 400 each, data unchanged, value in neither response nor audit]")
 
 # Watchlist deletion runs last: it removes every list of this user, including the
 # seeded starter lists, and must not be undone by a re-seed on the next create.
