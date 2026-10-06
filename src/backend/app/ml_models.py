@@ -29,6 +29,9 @@ MODEL_FEATURE_COLS: list[str] = [
     "Volume", "ATR", "STOCH_K", "STOCH_D",  # Momentum & Volatility
 ]
 
+# Fewer prepared rows than this do not train (see PricePredictor.train).
+MIN_TRAINING_ROWS = 60
+
 FEATURE_CATEGORIES: dict[str, str] = {
     # Trend (moving averages)
     "SMA_20": "trend",
@@ -112,17 +115,28 @@ class PricePredictor:
         
     def prepare_features(self, df: pd.DataFrame):
         df = df.copy()
-        
-        # Create Target: 1 if Close next day > Close today, else 0
-        df['Target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
-        
-        # Drop NaN values created by indicators and shift
-        df = df.dropna()
-        
+
         # Purely technical feature vector (see MODEL_FEATURE_COLS). Filter to
         # the columns actually present so short histories can still train.
         feature_cols = [c for c in MODEL_FEATURE_COLS if c in df.columns]
-        
+
+        # Target: 1 if the next close is higher, else 0. A row without a next
+        # close -- the last one, or one before a gap -- has no label: `NaN > x`
+        # is False, so it used to enter training as a made-up DOWN.
+        # The shift runs before any row is dropped, so a gap stays a gap
+        # instead of pairing a bar with the close two bars later.
+        next_close = df['Close'].shift(-1)
+        df['Target'] = (next_close > df['Close']).astype(int)
+        df = df[df['Close'].notna() & next_close.notna()]
+
+        # Drop rows only for what training reads. A plain `dropna()` also
+        # dropped every row where a column the model never sees was still
+        # warming up -- SMA_200 needs 200 bars, so any history under 200 bars
+        # (the default 6-month view: ~126 trading days; the 181-bar
+        # placeholder) left zero rows and never trained, and 260 bars trained
+        # on 61 of them (verifier N1, 2026-09-29).
+        df = df.dropna(subset=feature_cols)
+
         return df, feature_cols
 
     def train(self, df: pd.DataFrame):
@@ -132,7 +146,14 @@ class PricePredictor:
         try:
             data, feature_cols = self.prepare_features(df)
 
-            if data.empty:
+            # Floor, deliberately: the SMA_200 warm-up used to hide that there
+            # was none. A 3-month view leaves 5-16 rows; a model on those gets
+            # its accuracy from 1-4 test rows, is persisted per symbol and
+            # then serves every timeframe -- and auto-execution -- for 24 h
+            # (reviewer B1). 60 rows (about 110 bars) keeps the 6-month view
+            # (~77 rows) trainable. Raise it once the model cache is keyed by
+            # timeframe too.
+            if len(data) < MIN_TRAINING_ROWS:
                 return {'accuracy': 0, 'features': []}
 
             X = data[feature_cols]
