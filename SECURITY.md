@@ -29,8 +29,9 @@
   im Image gepinnt (`ops/docker/backend.Dockerfile`). Dependabot woechentlich fuer Actions, pip, npm.
 - Audit blockiert CI: `ops/automation/deps-audit.sh` (pip-audit auf die site-packages des
   gebauten Images, `npm audit --audit-level=low` auf das Lockfile). Jede Ausnahme steht mit
-  Grund im Skript; Stand 2026-09-29: 7 Advisories an Pins von `alpaca-trade-api` (urllib3 < 2,
-  msgpack 1.0.3) und `python-jose` (ecdsa, kein Fix) — ADR 2026-09-29.
+  Grund im Skript; Stand 2026-10-06: keine Ausnahme. `alpaca-trade-api` wird mit `--no-deps`
+  aus `src/backend/requirements-alpaca.txt` installiert, damit urllib3/msgpack nicht an seinen
+  veralteten Pins haengen; JWT ueber PyJWT statt python-jose — ADR 2026-10-06.
 - Ausgehende URLs: nur feste Anbieter-Hosts; einzige nutzergesteuerte URL ist der Web-Push-Endpunkt,
   begrenzt auf die Push-Dienste der Browser (`push_service.is_allowed_push_endpoint`, beim Abonnieren
   und beim Senden).

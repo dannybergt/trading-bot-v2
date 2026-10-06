@@ -1,5 +1,17 @@
 # Current Focus
 
+## SESSION 2026-10-06: main-CI Audit rot — PR `security/jose-urllib3-1006`
+
+**Stand:** Branch `security/jose-urllib3-1006` von `main` `1e55a89`. Behebt den roten Audit-Schritt (python-jose CVE-2026-85394, urllib3 PYSEC-2026-4175/-4177) und leert die Ausnahmeliste (ADR 2026-10-06).
+
+**Gebaut:** python-jose -> PyJWT 2.15.1 (`app/auth.py`, Verhalten gleich); `alpaca-trade-api` aus `requirements-alpaca.txt` mit `--no-deps` (beide Dockerfiles), Laufzeit-Pins in `requirements.txt` mit urllib3 2.8.0 und msgpack 1.2.3; `deps-audit.sh` ohne Ausnahme. Tests: `tests/test_auth_tokens.py` (16), `tests/test_alpaca_dependency_override.py` (7).
+
+**Nachweise:** pip-audit 3 offen + 14 ignoriert -> 0; Unit 530 OK (skipped=1); api-regression gruen; Negativkontrollen s. ADR. Images `tbv2-sec-backend:base`/`:new`.
+
+**Threads:** 11 (`python-jose` -> `PyJWT`) **geschlossen**. 10 (`alpaca-py`) umgewidmet: keine Advisory mehr daran, SHOULD, Zieldatum 2026-10-31 bleibt; Abbau des Deckels s. ADR.
+
+**Tore offen:** S (Pflicht: Abhaengigkeiten + Auth), R, V (Login/Refresh/abgelaufenes Token am laufenden Stack, Alpaca-Pfade soweit ohne Konto pruefbar). Merge auf main = Produktiv-Deploy (publish.yml + Watchtower) — nur nach `FREIGABE`.
+
 ## SESSION 2026-09-29: Abhaengigkeiten auf Stand, Audit blockiert CI — PR `security/deps-2026-09`
 
 **Stand:** Branch `security/deps-2026-09` von `main` `afc6d52`, PR s. u. Schliesst den Betreiber-Punkt „Dependency-Advisories (PR `security/deps-2026-09`)" und security-reviewer #3 (HOCH, 2026-09-16) bis auf 7 begruendete Ausnahmen.
