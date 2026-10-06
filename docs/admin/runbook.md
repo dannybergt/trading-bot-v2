@@ -64,6 +64,11 @@ veroeffentlichten Frontend-Port weiterleitet, gilt zusaetzlich:
 - `ALLOWED_ORIGINS` auf die oeffentliche Origin setzen (`https://<host>`).
   Solange Frontend und API unter derselben Origin liegen, greift CORS nicht,
   ein veralteter Wert faellt also erst auf, wenn etwas cross-origin wird.
+- Fuer den Restore (`/api/admin/import`, `/api/admin/backups/import`) muss der
+  Proxy Bodies bis 51 MiB durchlassen (Apache: `LimitRequestBody`, ab 2.4.54
+  Default 1 GiB) und mindestens 300 s auf die Antwort warten (Apache:
+  `ProxyTimeout`/`Timeout`, Default 60 s — sonst 504 waehrend der Restore
+  weiterlaeuft).
 - `PASSWORD_RESET_BASE_URL` auf die oeffentliche Reset-URL setzen
   (`https://<host>/reset-password`), sonst enthalten Reset-Mails einen intern
   nicht erreichbaren Link.
@@ -139,6 +144,24 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
 1. Backup-Datei ueber Admin-Endpunkt hochladen:
    - `POST /api/admin/backups/import`
    - oder `POST /api/admin/import`
+   - nur `POST` mit `Authorization: Bearer <admin-token>`; ohne Token antwortet
+     schon nginx 401, bevor es die Datei annimmt
+   - Grenze: Datei 50 MiB (Backend, JSON-413 darueber), Body 51 MiB (nginx,
+     HTML-413 darueber)
+   - Der Import laeuft ausserhalb des Event-Loops (`run_in_threadpool`) in einer
+     Transaktion: die API bleibt fuer alle Nutzer erreichbar, aber Latenz und
+     Datenbank-Last steigen fuer die Dauer (bei 50 MiB 20-45 s). Restore
+     trotzdem im Wartungsfenster, weil Schreibzugriffe anderer Nutzer waehrenddessen
+     auf dem Bestand laufen, der gleich ersetzt wird
+   - nginx legt den Upload vor der Weitergabe zwischen (`proxy_request_buffering`
+     an): bis 51 MiB je laufendem Restore unter `/var/cache/nginx` im
+     Frontend-Container, danach wieder frei; Platz vorher pruefen
+   - **504 heisst nicht fehlgeschlagen:** nginx wartet 300 s, der Restore laeuft
+     danach weiter. Vor einem zweiten Versuch pruefen, ob er fertig ist:
+     `docker compose logs --since 10m backend | grep -E 'backup\.(import|restore)'`
+     und die Audit-Liste (`GET /api/admin/audit-events?action=backup.restore&limit=3`,
+     bei `/api/admin/import` `action=backup.import`). Erst wenn nach rund 10 Minuten
+     weder ein Erfolgs- noch ein `failure`-Event dasitzt, ist der Versuch verloren
 2. Backend-Health und Admin-Login pruefen
 3. Watchlists, Nutzer und Push-Subscriptions stichprobenartig verifizieren
 

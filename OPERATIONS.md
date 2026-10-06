@@ -26,8 +26,18 @@ docker compose restart <dienst>
 ## Backup / Restore
 
 - Backup: _was, wohin (anderes Laufwerk als die Volumes), wann (UTC)_
-- Restore: _Kommandos wörtlich, Reihenfolge (Dienst stoppen → einspielen → starten)_
+- Restore der App-Daten (Datei aus `/api/admin/export` oder `/api/admin/backups/<name>`; Dienste bleiben an, der Import läuft in einer Transaktion — bei einem Fehler bleibt der Bestand unverändert, Datei korrigieren und wiederholen):
+
+  ```bash
+  # TOKEN = access_token aus POST /api/auth/login (Admin-Konto), in der Shell gesetzt, nicht ins Log
+  curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
+    -F "file=@backup.json;type=application/json" \
+    "http://localhost:${FRONTEND_PORT:-18094}/api/admin/backups/import"   # Antwort {"status":"restored",...}
+  ```
+
+  Fertig, wenn alles davon stimmt: (1) Antwort 200 (400 = abgewiesen, nichts geändert; 413 = Datei über 50 MiB; 504 = Ablauf im Runbook „Restore“); (2) `GET /api/admin/audit-events?action=backup.restore&limit=1` zeigt ein Event ohne `outcome: failure` (bei `/api/admin/import`: `action=backup.import`); (3) `curl -fsS http://localhost:${FRONTEND_PORT:-18094}/api/health` antwortet 200; (4) `jq '.data.users | length' backup.json` ist gleich `GET /api/admin/export | jq '.data.users | length'` (gleiche Zählung für `watchlists`).
 - Restore-Probe: _Intervall, letzter Nachweis_
+- Größengrenze App-Restore (`POST /api/admin/import`, `/api/admin/backups/import` über den Frontend-Port): Datei bis 50 MiB (`ADMIN_UPLOAD_MAX_BYTES`, Code-Default — `docker-compose.yml` reicht die Variable nicht durch; Backend antwortet darüber 413 mit JSON), nginx lässt diese zwei Pfade nur per POST mit Bearer-Token bis 51 MiB durch, wartet 300 s (`frontend.nginx.conf`, Ablauf in `docs/admin/runbook.md` „Restore“), jeden anderen API-Aufruf bis 1 MB. Wer `ADMIN_UPLOAD_MAX_BYTES` hebt, hebt `client_max_body_size` im Upload-Block mit — sonst endet der Restore an nginx mit einer HTML-413-Seite.
 
 ## Deploy
 
