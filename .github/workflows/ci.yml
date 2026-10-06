@@ -66,7 +66,12 @@ jobs:
       - name: Run security scan hook
         run: ./ops/automation/scan.sh
 
+      - name: Dependency audit (pip-audit on the image, npm audit on the lockfile)
+        run: ./ops/automation/deps-audit.sh
+
       - name: Trivy backend image scan
+        # Also after a red dependency audit, so the image findings are visible.
+        if: always()
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: trading-bot-v2-backend:local
@@ -77,6 +82,8 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Trivy frontend image scan
+        # Also after a red dependency audit, so the image findings are visible.
+        if: always()
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: trading-bot-v2-frontend:local
