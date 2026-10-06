@@ -1381,6 +1381,7 @@ def state_without_audit(payload):
 
 
 kept_state = state_without_audit(after_data)
+failures_before_stamps = import_failures()
 bad_stamps = {
     "before 1970": "1969-12-31T23:59:59",
     "after year 9000": "9000-01-02T00:00:00",
@@ -1400,7 +1401,18 @@ for label, bad_value in bad_stamps.items():
     unchanged = requests.get(f"{base}/api/admin/export", headers=headers, timeout=30)
     unchanged.raise_for_status()
     assert state_without_audit(unchanged.json()["data"]) == kept_state, (label, "a refused restore changed the data")
-audit_text = requests.get(f"{base}/api/admin/audit-events", headers=headers, timeout=30).text
+# The leak check is only worth something if the answer is the audit log: a
+# 401 or 5xx body would not contain the value either. So the status is
+# checked, and the three refusals must be in it as failure rows.
+audit_answer = requests.get(
+    f"{base}/api/admin/audit-events", headers=headers, params={"limit": 200}, timeout=30
+)
+audit_answer.raise_for_status()
+audit_text = audit_answer.text
+assert import_failures() - failures_before_stamps == len(bad_stamps), (
+    "each refused restore must leave one failure audit row"
+)
+assert "backup.import" in audit_text, "the audit answer does not carry the import events"
 assert "STAMPLEAK" not in audit_text, "the refused value is written to the audit log"
 print(f"restore refuses an invalid timestamp ok [{len(bad_stamps)} values, 400 each, data unchanged, value in neither response nor audit]")
 
