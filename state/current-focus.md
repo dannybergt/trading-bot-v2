@@ -1,5 +1,14 @@
 # Current Focus
 
+## SESSION 2026-10-06 (#39 ops-Auflagen)
+
+**Stand:** ops-reviewer-Auflagen zu #39 umgesetzt: Runbook „Restore“ auf den Stand von #41 (`run_in_threadpool`: API erreichbar, Latenz und DB-Last steigen, Wartungsfenster weiter empfohlen), Spool-Platz bis 51 MiB, 504-Befehl mit `grep`; `OPERATIONS.md` mit wörtlichem Restore-Kommando und prüfbarem Fertig-Kriterium (Audit-Event, `/api/health` 200, Zählung). `nginx -t` im Frontend-Image (nginx 1.29.8, `--add-host backend:127.0.0.1`): syntax ok, test successful. `main` eingemergt.
+
+**Offene Threads (hier machbar, Auslöser):**
+- `OPERATIONS.md`: Backup (was/wohin/wann) und Restore-Probe (Intervall, letzter Nachweis) bleiben Platzhalter — Auslöser: Entscheidung des Betreibers über das Backup-Ziel (anderes Laufwerk); danach eintragen.
+- Upload-Pfade ohne `limit_conn`/`auth_request`: nginx prüft nur das Bearer-Format, nicht den Token; parallele 51-MiB-Uploads mit beliebigem Token-Format belegen Spool und Verbindungen (ADR/Konfig-Kommentar). Auslöser: erster Betrieb hinter öffentlichem Zugang, spätestens vor dem nächsten Release.
+- Frontend-Container ohne Healthcheck, ohne Log-Limits, nginx ohne Digest-Pin (vorbestehend, ops-reviewer #5): als eigener Compose-Slice.
+
 ## SESSION 2026-09-29: Abhaengigkeiten auf Stand, Audit blockiert CI — PR `security/deps-2026-09`
 
 **Stand:** Branch `security/deps-2026-09` von `main` `afc6d52`, PR s. u. Schliesst den Betreiber-Punkt „Dependency-Advisories (PR `security/deps-2026-09`)" und security-reviewer #3 (HOCH, 2026-09-16) bis auf 7 begruendete Ausnahmen.

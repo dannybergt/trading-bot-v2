@@ -148,11 +148,20 @@ Das stoppt und entfernt nur Container/Netzwerk des Compose-Stacks. Persistente D
      schon nginx 401, bevor es die Datei annimmt
    - Grenze: Datei 50 MiB (Backend, JSON-413 darueber), Body 51 MiB (nginx,
      HTML-413 darueber)
-   - Restore nur im Wartungsfenster: der Import laeuft synchron im einzigen
-     Backend-Worker, die API steht fuer alle Nutzer, bis er fertig ist
+   - Der Import laeuft ausserhalb des Event-Loops (`run_in_threadpool`) in einer
+     Transaktion: die API bleibt fuer alle Nutzer erreichbar, aber Latenz und
+     Datenbank-Last steigen fuer die Dauer (bei 50 MiB 20-45 s). Restore
+     trotzdem im Wartungsfenster, weil Schreibzugriffe anderer Nutzer waehrenddessen
+     auf dem Bestand laufen, der gleich ersetzt wird
+   - nginx legt den Upload vor der Weitergabe zwischen (`proxy_request_buffering`
+     an): bis 51 MiB je laufendem Restore unter `/var/cache/nginx` im
+     Frontend-Container, danach wieder frei; Platz vorher pruefen
    - **504 heisst nicht fehlgeschlagen:** nginx wartet 300 s, der Restore laeuft
-     danach weiter. Vor einem zweiten Versuch das Audit-Event (`backup.import`/
-     `backup.restore`, Admin-Seite Audit) bzw. `docker compose logs backend` pruefen
+     danach weiter. Vor einem zweiten Versuch pruefen, ob er fertig ist:
+     `docker compose logs --since 10m backend | grep -E 'backup\.(import|restore)'`
+     und die Audit-Liste (`GET /api/admin/audit-events?action=backup.restore&limit=3`,
+     bei `/api/admin/import` `action=backup.import`). Erst wenn nach rund 10 Minuten
+     weder ein Erfolgs- noch ein `failure`-Event dasitzt, ist der Versuch verloren
 2. Backend-Health und Admin-Login pruefen
 3. Watchlists, Nutzer und Push-Subscriptions stichprobenartig verifizieren
 
