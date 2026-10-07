@@ -83,15 +83,21 @@ def create_refresh_token(user_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+# users.id is INTEGER (int4 on Postgres): models.User.id, alembic
+# 0001_initial_schema. Raise together with a BIGINT migration.
+_MAX_USER_ID = 2**31 - 1
+
+
 def decode_token(token: str) -> Optional[dict]:
     # PyJWT checks the signature against the one allowed algorithm (so
     # alg=none and RS/HS confusion are rejected), exp/nbf/iat, and that `sub`
     # is a string. exp, sub and type are required: a token without exp would
-    # never expire. `sub` must be a user id, because callers do int(sub) and
-    # a non-numeric one would end as 500 instead of 401. At most 18 digits:
-    # fits a BIGINT, and int() of a string over 4300 digits raises
-    # ValueError (500 again). InvalidTokenError is the base of every
-    # validation and decode failure.
+    # never expire. `sub` must be a user id in canonical form (what
+    # create_*_token writes), because callers do int(sub) and query users.id:
+    # non-numeric -> ValueError, over 4300 digits -> ValueError, above
+    # _MAX_USER_ID -> Postgres "integer out of range"; each would be a 500
+    # instead of 401. The length check runs before int(). InvalidTokenError
+    # is the base of every validation and decode failure.
     try:
         payload = jwt.decode(
             token,
@@ -102,7 +108,13 @@ def decode_token(token: str) -> Optional[dict]:
     except jwt.InvalidTokenError:
         return None
     subject = payload["sub"]
-    if not (subject.isascii() and subject.isdigit() and len(subject) <= 18):
+    if not (
+        subject.isascii()
+        and subject.isdigit()
+        and len(subject) <= 10
+        and int(subject) <= _MAX_USER_ID
+        and subject == str(int(subject))
+    ):
         return None
     return payload
 

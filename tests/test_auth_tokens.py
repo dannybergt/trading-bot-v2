@@ -104,9 +104,16 @@ class DecodeTokenTests(unittest.TestCase):
                 self.assertIsNone(auth.decode_token(_forge(claims)))
 
     def test_non_numeric_subject_is_rejected(self):
-        for sub in ("abc", "", "1.5", "-1", " 1", "1" * 19, "1" * 4301):
+        # Above int4 (users.id) Postgres raises "integer out of range" -> 500;
+        # SQLite in these tests would not, so the bound is checked here.
+        for sub in ("abc", "", "1.5", "-1", " 1", "2147483648", "9" * 18, "1" * 19, "1" * 4301, "007", "00"):
             with self.subTest(sub=sub):
                 self.assertIsNone(auth.decode_token(_forge(_claims(sub=sub))))
+
+    def test_subject_up_to_int4_max_is_accepted(self):
+        for sub in ("0", "1", "2147483647"):
+            with self.subTest(sub=sub):
+                self.assertEqual(auth.decode_token(_forge(_claims(sub=sub)))["sub"], sub)
 
     def test_garbage_is_rejected(self):
         for token in ("", "abc", "a.b.c", "....", _forge(_claims())[:-4]):
