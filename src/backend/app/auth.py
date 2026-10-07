@@ -88,8 +88,10 @@ def decode_token(token: str) -> Optional[dict]:
     # alg=none and RS/HS confusion are rejected), exp/nbf/iat, and that `sub`
     # is a string. exp, sub and type are required: a token without exp would
     # never expire. `sub` must be a user id, because callers do int(sub) and
-    # a non-numeric one would end as 500 instead of 401. InvalidTokenError is
-    # the base of every validation and decode failure.
+    # a non-numeric one would end as 500 instead of 401. At most 18 digits:
+    # fits a BIGINT, and int() of a string over 4300 digits raises
+    # ValueError (500 again). InvalidTokenError is the base of every
+    # validation and decode failure.
     try:
         payload = jwt.decode(
             token,
@@ -100,7 +102,7 @@ def decode_token(token: str) -> Optional[dict]:
     except jwt.InvalidTokenError:
         return None
     subject = payload["sub"]
-    if not (subject.isascii() and subject.isdigit()):
+    if not (subject.isascii() and subject.isdigit() and len(subject) <= 18):
         return None
     return payload
 

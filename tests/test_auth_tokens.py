@@ -104,7 +104,7 @@ class DecodeTokenTests(unittest.TestCase):
                 self.assertIsNone(auth.decode_token(_forge(claims)))
 
     def test_non_numeric_subject_is_rejected(self):
-        for sub in ("abc", "", "1.5", "-1", " 1"):
+        for sub in ("abc", "", "1.5", "-1", " 1", "1" * 19, "1" * 4301):
             with self.subTest(sub=sub):
                 self.assertIsNone(auth.decode_token(_forge(_claims(sub=sub))))
 
@@ -158,6 +158,10 @@ class GetCurrentUserTests(unittest.TestCase):
 
     def test_non_numeric_subject_is_401_not_500(self):
         self._assert_401(_forge(_claims(sub="abc")))
+
+    def test_overlong_subject_is_401_not_500(self):
+        # int() refuses strings over 4300 digits with ValueError.
+        self._assert_401(_forge(_claims(sub="1" * 4301)))
 
 
 if __name__ == "__main__":
