@@ -64,6 +64,10 @@ except json.JSONDecodeError:
     # npm crashed without (valid) output: same as no report.
     print("npm audit returned no readable JSON")
     sys.exit(2)
+if not isinstance(report, dict):
+    # Valid JSON but not a report object ([] / null / a string): no report.
+    print(f"npm audit returned JSON that is not a report object ({type(report).__name__})")
+    sys.exit(2)
 ignored = set()
 expired = []
 for entry in sys.argv[2:]:
