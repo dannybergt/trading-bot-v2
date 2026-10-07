@@ -55,11 +55,30 @@ class NpmFilterTests(unittest.TestCase):
     def test_open_advisory_fails(self):
         self.assertEqual(self._run(json.dumps(FOUND)), 1)
 
+    def test_string_via_with_own_entry_is_followed(self):
+        report = {"vulnerabilities": {**FOUND["vulnerabilities"], "micromatch": {"via": ["braces"]}}}
+        self.assertEqual(self._run(json.dumps(report), f"{ADVISORY}:{_date(1)}"), 0)
+        self.assertEqual(self._run(json.dumps(report)), 1)
+
     def test_clean_report_passes(self):
         self.assertEqual(self._run(json.dumps({"vulnerabilities": {}})), 0)
 
     def test_no_usable_report_is_exit_2(self):
-        for raw in ("", "not json", "[]", "null", '"text"', "42", '{"error": {"code": "E"}}'):
+        for raw in (
+            "",
+            "not json",
+            "[]",
+            "null",
+            '"text"',
+            "42",
+            '{"error": {"code": "E"}}',
+            '{"vulnerabilities": {}, "error": {"code": "E"}}',
+            '{"vulnerabilities": []}',
+            '{"vulnerabilities": null}',
+            '{"vulnerabilities": {"braces": {"via": "GHSA-x"}}}',
+            '{"vulnerabilities": {"braces": {}}}',
+            '{"vulnerabilities": {"braces": {"via": ["micromatch"]}}}',
+        ):
             with self.subTest(raw=raw):
                 self.assertEqual(self._run(raw, f"{ADVISORY}:{_date(1)}"), 2)
 

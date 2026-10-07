@@ -83,15 +83,26 @@ if expired:
     for entry in expired:
         print(f"EXPIRED or undated npm ignore: {entry} (decide again: fix, or a new date with reason)")
     sys.exit(1)
-if "vulnerabilities" not in report:
-    # Registry/network failure: never read as "nothing found".
-    print("npm audit returned no report:", report.get("error", report))
+if "error" in report or not isinstance(report.get("vulnerabilities"), dict):
+    # Registry/network failure or a shape npm 10 does not write: never read
+    # as "nothing found".
+    print("npm audit returned no report:", report.get("error", "no vulnerabilities object"))
     sys.exit(2)
+vulnerabilities = report["vulnerabilities"]
 found = {}
-for name, vuln in report["vulnerabilities"].items():
-    for via in vuln["via"]:
+for name, vuln in vulnerabilities.items():
+    via_list = vuln.get("via") if isinstance(vuln, dict) else None
+    if not isinstance(via_list, list):
+        print(f"npm audit: unexpected via for {name}")
+        sys.exit(2)
+    for via in via_list:
         if isinstance(via, dict):
             found.setdefault(via["url"].rsplit("/", 1)[-1], set()).add(name)
+        elif via not in vulnerabilities:
+            # A string via names another vulnerable package, which must have
+            # its own entry; otherwise the report is incomplete.
+            print(f"npm audit: {name} via {via} without own entry")
+            sys.exit(2)
 for advisory in sorted(ignored - set(found)):
     print(f"note: {advisory} is no longer reported, remove it from NPM_IGNORED")
 open_ids = sorted(set(found) - ignored)
