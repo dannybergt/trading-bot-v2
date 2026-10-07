@@ -9,6 +9,8 @@ requirements-alpaca.txt when the code moves to alpaca-py.
 """
 import json
 import re
+import subprocess
+import sys
 import threading
 from datetime import datetime, timezone
 import unittest
@@ -41,6 +43,29 @@ class InstalledVersionsTests(unittest.TestCase):
         nodeps = text.find("--no-deps -r requirements-alpaca.txt")
         self.assertGreater(main, -1)
         self.assertGreater(nodeps, main)
+
+
+# The only two conflicts --no-deps is allowed to leave behind. --no-deps also
+# hides every other SDK bound from the resolver (websockets<11, PyYAML==6.0.1,
+# deprecation==2.1.0, aiohttp<4, websocket-client<2); a Dependabot bump past
+# one of them would install fine and break the SDK only at runtime.
+ALLOWED_CONFLICT = re.compile(r"^alpaca-trade-api \S+ has requirement (urllib3|msgpack)[^A-Za-z0-9_.-]")
+
+
+class PipCheckTests(unittest.TestCase):
+    def test_pip_check_reports_only_the_two_intended_conflicts(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "check"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        unexpected = [line for line in lines if not ALLOWED_CONFLICT.match(line)]
+        self.assertEqual(unexpected, [], result.stdout + result.stderr)
+        # Guard against a pip check that silently stopped reporting: with the
+        # SDK installed the two intended conflicts must be there.
+        self.assertEqual(len(lines), 2, result.stdout + result.stderr)
 
 
 class SdkDoesNotUseUrllib3Tests(unittest.TestCase):
