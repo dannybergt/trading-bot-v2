@@ -41,7 +41,9 @@ NPM_IGNORED=(
   # at build time; the patterns it expands are the `content` globs in our own
   # tailwind.config — no outside input, nothing of it ships in the nginx
   # image. Ends with tailwindcss 4 (ROADMAP, ADR 2026-10-06).
-  GHSA-vfj7-8cjw-p6xm
+  # Format ID:YYYY-MM-DD. After that day the audit fails again, so the
+  # exception is re-decided instead of living on (security-reviewer PR #60).
+  GHSA-vfj7-8cjw-p6xm:2026-10-20
 )
 
 echo "npm audit against src/frontend/package-lock.json"
@@ -52,11 +54,31 @@ trap 'rm -f "${npm_json}"' EXIT
 (cd "${PROJECT_ROOT}/src/frontend" && npm audit --json > "${npm_json}") || true
 (cd "${PROJECT_ROOT}/src/frontend" && npm audit --audit-level=low) || true
 python3 - "${npm_json}" "${NPM_IGNORED[@]}" <<'PY'
+import datetime
 import json
 import sys
 
-report = json.load(open(sys.argv[1]))
-ignored = set(sys.argv[2:])
+try:
+    report = json.load(open(sys.argv[1]))
+except json.JSONDecodeError:
+    # npm crashed without (valid) output: same as no report.
+    print("npm audit returned no readable JSON")
+    sys.exit(2)
+ignored = set()
+expired = []
+for entry in sys.argv[2:]:
+    advisory, _, until = entry.partition(":")
+    try:
+        valid = datetime.date.fromisoformat(until) >= datetime.date.today()
+    except ValueError:
+        valid = False
+    if not valid:
+        expired.append(entry)
+    ignored.add(advisory)
+if expired:
+    for entry in expired:
+        print(f"EXPIRED or undated npm ignore: {entry} (decide again: fix, or a new date with reason)")
+    sys.exit(1)
 if "vulnerabilities" not in report:
     # Registry/network failure: never read as "nothing found".
     print("npm audit returned no report:", report.get("error", report))
