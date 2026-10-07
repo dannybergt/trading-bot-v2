@@ -52,6 +52,7 @@
 18. **nginx nimmt nur 1 MB, Backend 50 MB** (verifier N-2, Regel K): Restore eines Backups > 1 MB scheitert ueber die UI mit 413 — `client_max_body_size` in `frontend.nginx.conf`; zusammen mit Thread 16.
 19. **Restore uebernimmt `created_at` nicht** (verifier N-4) fuer users/watchlists/items/tags/alert_settings.
 20. `Invalid language tag: en-US@posix` auf `/analysis` bei C/POSIX-Locale (verifier N-3, Vorbestand, COULD).
+21. **braces-Ausnahme neu entscheiden — Zieldatum 2026-10-20** (MUST, Tor R W1 zu PR #60 auf `20a33d4`): `GHSA-vfj7-8cjw-p6xm:2026-10-20` in `ops/automation/deps-audit.sh` laeuft ab; ab 2026-10-21 ist der CI-Audit-Schritt jedes PR und von `main` rot. Ausloeser: Kalender. Entweder tailwindcss 3 -> 4 (ROADMAP, beendet Ausnahme und postcss-selector-parser-Override) oder neues Datum mit Begruendung (Advisory weiter ohne Fix, Reichweite weiter nur Build-Zeit). Fertig: CI-Audit gruen nach dem 2026-10-20.
 
 **Nicht hier loesbar (Betreiber):** **VAPID-Schluessel aus der Historie** (security-reviewer #2) — **geschlossen 2026-10-07** (Instanz ohne VAPID, 0 Abos, s. Session 2026-10-07): Commit `93cc39c` (2026-03-23, oeffentliches Repo) trug einen hartkodierten Default fuer `VAPID_PRIVATE_KEY`; bei HEAD steht kein Default mehr (leer => Push aus). Pruefen, ob die Instanz je ohne eigenes `VAPID_PRIVATE_KEY` lief; beim Einrichten von Push (STATE 09-16: VAPID leer) ein **neues** Paar erzeugen, nie diesen Wert. PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
 

@@ -20,4 +20,4 @@
 | Idee | Klasse | Nutzen | Aufwand | Risiko |
 |---|---|---|---|---|
 | `alpaca-trade-api` -> `alpaca-py` (Thread 10) | SHOULD | beendet den `--no-deps`-Deckel aus ADR 2026-10-06, SDK wird gepflegt | mittel (REST + Stream, Antwortformen `/api/alpaca/*`) | Orderpfad; braucht Alpaca-Paper-Konto zum Nachweis |
-| tailwindcss 3 -> 4 | SHOULD | beendet die braces-Ausnahme (GHSA-vfj7-8cjw-p6xm) und den postcss-selector-parser-Override | mittel (Config-Migration, UI optisch pruefen) | Darstellung; verifier mit Optik |
+| tailwindcss 3 -> 4 (Entscheidung bis 2026-10-20, Thread 21: dann laeuft die braces-Ausnahme ab und der CI-Audit wird rot) | SHOULD | beendet die braces-Ausnahme (GHSA-vfj7-8cjw-p6xm) und den postcss-selector-parser-Override | mittel (Config-Migration, UI optisch pruefen) | Darstellung; verifier mit Optik |
