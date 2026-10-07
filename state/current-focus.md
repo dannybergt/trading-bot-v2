@@ -1,5 +1,21 @@
 # Current Focus
 
+## SESSION 2026-10-07: VAPID-Historie geprueft, Auflagen zu PR #60 erledigt
+
+**VAPID (security-reviewer #5 / 09-29 #2) — geschlossen.** Der Default-Schluessel stand nur in `93cc39c` (Initial import, 2026-03-23) und wurde in `21b970a` (2026-05-07) entfernt (`git log --all -S` auf den Wert: genau diese zwei Commits); Repo ist **oeffentlich**. Auf BC-KI01 nur lesend per Fingerabdruck (sha256, erste 8 Zeichen, Werte nie ausgegeben): `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` im laufenden `trading-bot-v2-backend-1` (Image von `1e55a89`) und in `/data/trading-bot-v2/.env` **leer** (Laenge 0), `REQUIRE_VAPID_SECRETS=false`, `push_subscriptions` = **0 Zeilen**. Ergebnis: **verschieden** — die Instanz nutzt den Historien-Schluessel nicht, Push ist aus, kein Abo haengt am alten Schluessel; keine Rotation noetig. Kein Default im Code: `push_service` liest nur ENV, `tests/test_push_service.py::test_missing_vapid_keys_leave_push_unconfigured_for_local_runs` ist rot, wenn ein Default zurueckkommt. Beim Einrichten von Push weiter: **neues** Paar erzeugen, nie den Historien-Wert.
+
+**Auflagen PR #60 (Tor R/S vom 2026-10-06 auf `c8e809f`):**
+- S#1 braces-Ausnahme mit Ablauf: `NPM_IGNORED` traegt `ID:Datum` (`GHSA-vfj7-8cjw-p6xm:2026-10-20`); abgelaufen/undatiert/ungueltig = Exit 1. Dazu R-N1: unlesbares npm-JSON = Exit 2. Auswerter mit 8 Faellen nachgefahren (gueltig 0, abgelaufen 1, undatiert 1, Muell-Datum 1, ohne Ausnahme 1, sauber 0, leer 2, `{error}` 2).
+- S#2 Pflicht-Claims: `decode_token` verlangt `exp`/`sub`/`type`, `sub` ASCII-Ziffern; sonst `None` -> 401 (vorher `sub="abc"` = 500, Token ohne `exp` unbegrenzt). 4 neue Tests, gegen die Vorfassung 10 rot.
+- R-W1 pip check: `PipCheckTests` laesst nur die zwei gewollten Konflikte (urllib3, msgpack) zu und verlangt genau zwei; Negativkontrolle `websockets==11.0.3` nachinstalliert = rot. Dependabot-`ignore` fuer websockets >=11, PyYAML >6.0.1, deprecation >2.1.0, aiohttp >=4, websocket-client >=2.
+- Nicht umgesetzt: R-N2 (doppelte Betreffzeile, gepushte Commits ohne amend; bei Squash egal), R-N3/N4, S#3/#4/#6 (Vorbestand, Threads 14/15).
+
+**Nachweise:** Image `tbv2-jose2-backend:cand` (eigener Tag, `:local` nicht ueberschrieben); gezielte Suiten 28 OK; volle Unit-Suite s. PR #60.
+
+**Tore offen:** R (Delta der Auflagen), S (Auth-Delta), V (Login/Refresh/abgelaufenes Token und Token ohne `exp` am laufenden Stack). Merge auf main = Produktiv-Deploy (publish.yml + Watchtower) — nur nach `FREIGABE`.
+
+**Allokierte Ports/Ressourcen:** keine Ports. Image `tbv2-jose2-backend:cand`.
+
 ## SESSION 2026-10-06: main-CI Audit rot — PR `security/jose-urllib3-1006`
 
 **Stand:** Branch `security/jose-urllib3-1006` von `main` `1e55a89`. Behebt den roten Audit-Schritt (python-jose CVE-2026-85394, urllib3 PYSEC-2026-4175/-4177) und leert die Ausnahmeliste (ADR 2026-10-06).
@@ -37,7 +53,7 @@
 19. **Restore uebernimmt `created_at` nicht** (verifier N-4) fuer users/watchlists/items/tags/alert_settings.
 20. `Invalid language tag: en-US@posix` auf `/analysis` bei C/POSIX-Locale (verifier N-3, Vorbestand, COULD).
 
-**Nicht hier loesbar (Betreiber):** **VAPID-Schluessel aus der Historie** (security-reviewer #2): Commit `93cc39c` (2026-03-23, oeffentliches Repo) trug einen hartkodierten Default fuer `VAPID_PRIVATE_KEY`; bei HEAD steht kein Default mehr (leer => Push aus). Pruefen, ob die Instanz je ohne eigenes `VAPID_PRIVATE_KEY` lief; beim Einrichten von Push (STATE 09-16: VAPID leer) ein **neues** Paar erzeugen, nie diesen Wert. PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
+**Nicht hier loesbar (Betreiber):** **VAPID-Schluessel aus der Historie** (security-reviewer #2) — **geschlossen 2026-10-07** (Instanz ohne VAPID, 0 Abos, s. Session 2026-10-07): Commit `93cc39c` (2026-03-23, oeffentliches Repo) trug einen hartkodierten Default fuer `VAPID_PRIVATE_KEY`; bei HEAD steht kein Default mehr (leer => Push aus). Pruefen, ob die Instanz je ohne eigenes `VAPID_PRIVATE_KEY` lief; beim Einrichten von Push (STATE 09-16: VAPID leer) ein **neues** Paar erzeugen, nie diesen Wert. PR mergen nur nach `FREIGABE`; danach `publish.yml` und Watchtower-Rollout auf BC-KI01 beobachten (FastAPI-/Starlette-Major).
 
 **Allokierte Ports/Ressourcen:** keine Ports. Images `tbv2-deps-backend:cand`/`:cand2` (eigene Tags, `trading-bot-v2-backend:local` bewusst nicht ueberschrieben). Scratchpad-Worktree `wt-trading-bot`.
 
