@@ -85,13 +85,24 @@ def create_refresh_token(user_id: int) -> str:
 
 def decode_token(token: str) -> Optional[dict]:
     # PyJWT checks the signature against the one allowed algorithm (so
-    # alg=none and RS/HS confusion are rejected), exp/nbf/iat when present,
-    # and that `sub` is a string. InvalidTokenError is the base of every
-    # validation and decode failure.
+    # alg=none and RS/HS confusion are rejected), exp/nbf/iat, and that `sub`
+    # is a string. exp, sub and type are required: a token without exp would
+    # never expire. `sub` must be a user id, because callers do int(sub) and
+    # a non-numeric one would end as 500 instead of 401. InvalidTokenError is
+    # the base of every validation and decode failure.
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "sub", "type"]},
+        )
     except jwt.InvalidTokenError:
         return None
+    subject = payload["sub"]
+    if not (subject.isascii() and subject.isdigit()):
+        return None
+    return payload
 
 
 def encrypt_secret(secret: str) -> str:

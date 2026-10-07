@@ -3,7 +3,8 @@
 The forged tokens are built by hand (base64url + HMAC), not with the JWT
 library under test, so each case still holds when the library is swapped
 (python-jose -> PyJWT, ADR 2026-10-06) and turns red if a check is lost:
-signature, algorithm allow-list (incl. alg=none), expiry, token type.
+signature, algorithm allow-list (incl. alg=none), expiry, token type,
+required claims (exp, sub, type) and a numeric subject.
 """
 import base64
 import hashlib
@@ -93,6 +94,20 @@ class DecodeTokenTests(unittest.TestCase):
     def test_non_string_subject_is_rejected(self):
         self.assertIsNone(auth.decode_token(_forge(_claims(sub=1))))
 
+    def test_required_claims_are_enforced(self):
+        # A token without exp would never expire; without sub or type the
+        # callers could not tell whose token or which kind it is.
+        for claim in ("exp", "sub", "type"):
+            with self.subTest(missing=claim):
+                claims = _claims()
+                del claims[claim]
+                self.assertIsNone(auth.decode_token(_forge(claims)))
+
+    def test_non_numeric_subject_is_rejected(self):
+        for sub in ("abc", "", "1.5", "-1", " 1"):
+            with self.subTest(sub=sub):
+                self.assertIsNone(auth.decode_token(_forge(_claims(sub=sub))))
+
     def test_garbage_is_rejected(self):
         for token in ("", "abc", "a.b.c", "....", _forge(_claims())[:-4]):
             with self.subTest(token=token):
@@ -135,6 +150,14 @@ class GetCurrentUserTests(unittest.TestCase):
 
     def test_alg_none_is_401(self):
         self._assert_401(_forge(_claims(sub=str(self.user.id)), alg="none"))
+
+    def test_token_without_exp_is_401(self):
+        claims = _claims(sub=str(self.user.id))
+        del claims["exp"]
+        self._assert_401(_forge(claims))
+
+    def test_non_numeric_subject_is_401_not_500(self):
+        self._assert_401(_forge(_claims(sub="abc")))
 
 
 if __name__ == "__main__":
