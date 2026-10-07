@@ -40,6 +40,14 @@ docker compose restart <dienst>
   `ops/automation/deps-audit.sh` eintragen und die Entscheidung in `state/decisions.md` festhalten.
   Ein Ausfall von PyPI/OSV/npm zeigt sich als Installations- oder Netzfehler, nicht als Fund —
   dann den Lauf wiederholen.
+  npm-Ausnahmen stehen als `ID:YYYY-MM-DD` und verfallen absichtlich: ab dem Folgetag ist der
+  Schritt rot (`EXPIRED or undated npm ignore`), bis neu entschieden ist (Fix oder neues Datum mit Grund).
+- **Dependabot-PR macht `tests/test_alpaca_dependency_override.py` rot** (meist `pip check`): der
+  Bump verletzt eine Grenze von `alpaca-trade-api` (installiert `--no-deps`, ADR 2026-10-06). Bump
+  ablehnen und die Grenze als `ignore` in `.github/dependabot.yml` eintragen; den Test nie lockern.
+- **Rueckweg nach einem schlechten Deploy** (Watchtower rollt nicht zurueck): auf BC-KI01 in
+  `/data/trading-bot-v2/.env` `IMAGE_TAG=sha-<vorheriger Commit, 12 Zeichen>` setzen, dann
+  `docker compose up -d backend` (bzw. `frontend`). Fertig: Container `healthy`, `/api/health` 200.
 
 ## Not-Aus
 
