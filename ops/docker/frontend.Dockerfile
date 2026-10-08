@@ -4,7 +4,7 @@
 # The legacy `src/frontend-dist/` bundle path is no longer referenced — the
 # frontend is now produced by `npm run build` inside the build stage.
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # Install dependencies first (cacheable layer keyed on package files).
