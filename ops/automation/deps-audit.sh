@@ -12,28 +12,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BACKEND_IMAGE="${BACKEND_IMAGE:-trading-bot-v2-backend:local}"
 PIP_AUDIT_VERSION="2.10.1"
 
-IGNORED=(
-  # ecdsa: pulled by python-jose; no fixed release exists. The Minerva timing
-  # attack needs ECDSA signing — JWTs here are HS256 only (auth.py) and jose
-  # uses the cryptography backend.
-  PYSEC-2026-1325
-  # msgpack 1.0.3: pinned by alpaca-trade-api 3.2.0 (latest). Unpacker crash
-  # after an error on untrusted input; only the Alpaca market-data stream
-  # feeds it (TLS to Alpaca).
-  PYSEC-2026-3625
-  # urllib3 <2: pinned by alpaca-trade-api 3.2.0. Decompression-chain,
-  # streaming-decompression and redirect-header advisories. Outbound calls go
-  # to fixed provider hosts, except Web-Push: those endpoints come from the
-  # user, and are held to the browser push services by
-  # push_service.is_allowed_push_endpoint (subscribe and send). requests
-  # handles redirects itself (strips Authorization across hosts). Ends with
-  # the move to alpaca-py.
-  PYSEC-2026-1999
-  PYSEC-2026-1998
-  PYSEC-2026-1994
-  PYSEC-2026-1996
-  PYSEC-2026-141
-)
+# pip: empty since 2026-10-06:python-jose (and its ecdsa) replaced by PyJWT,
+# alpaca-trade-api installed --no-deps so urllib3/msgpack are no longer held
+# back (ADR 2026-10-06). A new entry needs the pinning package, why the code
+# path is not reachable, and the condition that removes it.
+IGNORED=()
 
 ignore_args=()
 for id in "${IGNORED[@]}"; do
@@ -52,5 +35,79 @@ docker run --rm -e PIP_AUDIT_VERSION="${PIP_AUDIT_VERSION}" "${BACKEND_IMAGE}" s
   /tmp/pip-audit/bin/pip-audit --progress-spinner off --path "${site}" "$@"
 ' sh "${ignore_args[@]}"
 
+NPM_IGNORED=(
+  # braces: every release is affected, no fix exists (2026-10-06). Pulled
+  # only by tailwindcss 3 (devDependency, via chokidar/micromatch/fast-glob)
+  # at build time; the patterns it expands are the `content` globs in our own
+  # tailwind.config — no outside input, nothing of it ships in the nginx
+  # image. Ends with tailwindcss 4 (ROADMAP, ADR 2026-10-06).
+  # Format ID:YYYY-MM-DD. After that day the audit fails again, so the
+  # exception is re-decided instead of living on (security-reviewer PR #60).
+  GHSA-vfj7-8cjw-p6xm:2026-10-20
+)
+
 echo "npm audit against src/frontend/package-lock.json"
-(cd "${PROJECT_ROOT}/src/frontend" && npm audit --audit-level=low)
+npm_json="$(mktemp)"
+trap 'rm -f "${npm_json}"' EXIT
+# Exit code is non-zero whenever anything is found; the decision is made on
+# the JSON below. The readable report is printed for the log.
+(cd "${PROJECT_ROOT}/src/frontend" && npm audit --json > "${npm_json}") || true
+(cd "${PROJECT_ROOT}/src/frontend" && npm audit --audit-level=low) || true
+python3 - "${npm_json}" "${NPM_IGNORED[@]}" <<'PY'
+import datetime
+import json
+import sys
+
+try:
+    report = json.load(open(sys.argv[1]))
+except json.JSONDecodeError:
+    # npm crashed without (valid) output: same as no report.
+    print("npm audit returned no readable JSON")
+    sys.exit(2)
+if not isinstance(report, dict):
+    # Valid JSON but not a report object ([] / null / a string): no report.
+    print(f"npm audit returned JSON that is not a report object ({type(report).__name__})")
+    sys.exit(2)
+ignored = set()
+expired = []
+for entry in sys.argv[2:]:
+    advisory, _, until = entry.partition(":")
+    try:
+        valid = datetime.date.fromisoformat(until) >= datetime.date.today()
+    except ValueError:
+        valid = False
+    if not valid:
+        expired.append(entry)
+    ignored.add(advisory)
+if expired:
+    for entry in expired:
+        print(f"EXPIRED or undated npm ignore: {entry} (decide again: fix, or a new date with reason)")
+    sys.exit(1)
+if "error" in report or not isinstance(report.get("vulnerabilities"), dict):
+    # Registry/network failure or a shape npm 10 does not write: never read
+    # as "nothing found".
+    print("npm audit returned no report:", report.get("error", "no vulnerabilities object"))
+    sys.exit(2)
+vulnerabilities = report["vulnerabilities"]
+found = {}
+for name, vuln in vulnerabilities.items():
+    via_list = vuln.get("via") if isinstance(vuln, dict) else None
+    if not isinstance(via_list, list):
+        print(f"npm audit: unexpected via for {name}")
+        sys.exit(2)
+    for via in via_list:
+        if isinstance(via, dict):
+            found.setdefault(via["url"].rsplit("/", 1)[-1], set()).add(name)
+        elif via not in vulnerabilities:
+            # A string via names another vulnerable package, which must have
+            # its own entry; otherwise the report is incomplete.
+            print(f"npm audit: {name} via {via} without own entry")
+            sys.exit(2)
+for advisory in sorted(ignored - set(found)):
+    print(f"note: {advisory} is no longer reported, remove it from NPM_IGNORED")
+open_ids = sorted(set(found) - ignored)
+for advisory in open_ids:
+    print(f"OPEN {advisory} in {', '.join(sorted(found[advisory]))}")
+print(f"npm audit: {len(found)} advisories, {len(open_ids)} open, {len(set(found) & ignored)} ignored")
+sys.exit(1 if open_ids else 0)
+PY

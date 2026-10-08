@@ -9,6 +9,22 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # alpaca-trade-api is installed --no-deps (ADR 2026-10-06), so pip no
+    # longer enforces its bounds; a bump past them would install and break the
+    # SDK only at runtime. tests/test_alpaca_dependency_override.py (pip check)
+    # catches it, these keep the PRs from being opened. Remove with the move
+    # to alpaca-py (ROADMAP).
+    ignore:
+      - dependency-name: "websockets"
+        versions: [">=11"]
+      - dependency-name: "PyYAML"
+        versions: [">6.0.1"]
+      - dependency-name: "deprecation"
+        versions: [">2.1.0"]
+      - dependency-name: "aiohttp"
+        versions: [">=4"]
+      - dependency-name: "websocket-client"
+        versions: [">=2"]
   - package-ecosystem: "npm"
     directory: "/src/frontend"
     schedule:

@@ -1,0 +1,12 @@
+# Installed with `pip install --no-deps` AFTER requirements.txt.
+#
+# Workaround (Deckel, ADR 2026-10-06 in state/decisions.md): alpaca-trade-api
+# 3.2.0 is the last release (2024-01, deprecated upstream) and declares
+# urllib3<2 and msgpack==1.0.3 — both carry advisories with fixes only in
+# urllib3>=2.8.0 and msgpack>=1.2.1. The SDK never imports urllib3 (it goes
+# through requests) and calls only msgpack.packb/unpackb plus Timestamp
+# .seconds/.nanoseconds, which are unchanged in msgpack 1.2. Its runtime
+# dependencies are pinned in requirements.txt instead;
+# tests/test_alpaca_dependency_override.py holds the assumptions.
+# Remove this file with the move to alpaca-py (ROADMAP).
+alpaca-trade-api==3.2.0

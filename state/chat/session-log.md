@@ -869,3 +869,9 @@
   Beobachtung, die einen offenen Punkt bestaetigt: der Abschlussbanner von `verify-branch.sh` meldete `@ faeab1c`, den Commit von `main`, obwohl der **Arbeitsbaum** geprueft wurde — genau der seit dem 2026-08-05 offene Punkt "`build.sh` stempelt das Repo statt des gebauten Baums", diesmal im eigenen Lauf sichtbar.
   Nachtrag Sessionende (2026-08-06T18:15Z): `ci` fuer `93ed1e8` ist **gruen durchgelaufen**, `publish` und `codeql` standen noch auf `queued`. Damit ist die Einschaetzung aus Runde (4) zu praezisieren: die Laeufe werden erzeugt und stehen lange in der Warteschlange (`gh run list` zeigte sie nicht, die API schon); der vorherige Fehlschlag lag an der Runner-Zuteilung (`job was not acquired by Runner of type hosted`), nicht an einem Workflow-Schritt.
   Offen: die GitHub-CI bleibt in der Zuteilung unzuverlaessig (Kontingent/Budget pruefen — beim Nutzer), die stillen Handelsschwellen-Defaults (§13), Stufe 3 (Test-Account, VAPID, `FMP_API_KEY` auf BC-KI01), der `build.sh`-Stempel, 43+ Harnisch-Schritte ohne Zielzeile, Display-Currency-Rollout ausserhalb der AnalysisPage. Nicht angefasst: der `try`/`catch` um `ui_admin`, der echte Fehler bis heute als `best_effort_skipped` meldet.
+
+- Datum: 2026-10-06
+  Kontext: main-CI `validate` rot im Audit-Schritt (python-jose CVE-2026-85394 ohne Fix, urllib3 1.26.20 PYSEC-2026-4175/-4177, Fix 2.8.0).
+  Erledigt: Ursache urllib3-Pin = `alpaca-trade-api` 3.2.0 (`urllib3<2,>1.24`, `msgpack==1.0.3`, `pip show`/Metadaten im Image). SDK mit `--no-deps` installiert, Laufzeit-Pins selbst gefuehrt (urllib3 2.8.0, msgpack 1.2.3). python-jose -> PyJWT 2.15.1. Ausnahmeliste leer. ADR 2026-10-06.
+  Verifikation: pip-audit 0 auf `tbv2-sec-backend:new`; Unit 530 OK; api-regression gruen; Auth-Tests gruen auf altem jose-Image, rot bei drei Mutationen.
+  Offen: Tore S/R/V; `alpaca-py` (Thread 10, SHOULD).

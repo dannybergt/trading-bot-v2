@@ -27,6 +27,7 @@ docker run --rm \
   -v "${PROJECT_ROOT}/ops/docker/backend.Dockerfile:/app/ops/docker/backend.Dockerfile:ro,z" \
   -v "${PROJECT_ROOT}/ops/automation/version.sh:/app/ops/automation/version.sh:ro,z" \
   -v "${PROJECT_ROOT}/ops/automation/build.sh:/app/ops/automation/build.sh:ro,z" \
+  -v "${PROJECT_ROOT}/ops/automation/deps-audit.sh:/app/ops/automation/deps-audit.sh:ro,z" \
   -v "${PROJECT_ROOT}/docker-compose.yml:/app/docker-compose.yml:ro,z" \
   -v "${PROJECT_ROOT}/.env.example:/app/.env.example:ro,z" \
   -v "${PROJECT_ROOT}/.github/workflows:/app/.github/workflows:ro,z" \

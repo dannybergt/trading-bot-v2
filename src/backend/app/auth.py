@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 import pyotp
@@ -83,11 +83,40 @@ def create_refresh_token(user_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(token: str) -> dict:
+# users.id is INTEGER (int4 on Postgres): models.User.id, alembic
+# 0001_initial_schema. Raise together with a BIGINT migration.
+_MAX_USER_ID = 2**31 - 1
+
+
+def decode_token(token: str) -> Optional[dict]:
+    # PyJWT checks the signature against the one allowed algorithm (so
+    # alg=none and RS/HS confusion are rejected), exp/nbf/iat, and that `sub`
+    # is a string. exp, sub and type are required: a token without exp would
+    # never expire. `sub` must be a user id in canonical form (what
+    # create_*_token writes), because callers do int(sub) and query users.id:
+    # non-numeric -> ValueError, over 4300 digits -> ValueError, above
+    # _MAX_USER_ID -> Postgres "integer out of range"; each would be a 500
+    # instead of 401. The length check runs before int(). InvalidTokenError
+    # is the base of every validation and decode failure.
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "sub", "type"]},
+        )
+    except jwt.InvalidTokenError:
         return None
+    subject = payload["sub"]
+    if not (
+        subject.isascii()
+        and subject.isdigit()
+        and len(subject) <= 10
+        and int(subject) <= _MAX_USER_ID
+        and subject == str(int(subject))
+    ):
+        return None
+    return payload
 
 
 def encrypt_secret(secret: str) -> str:

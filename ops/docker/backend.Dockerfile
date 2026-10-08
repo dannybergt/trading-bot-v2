@@ -11,12 +11,15 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/backend/requirements.txt ./requirements.txt
+COPY src/backend/requirements.txt src/backend/requirements-alpaca.txt ./
 # The base image ships pip 24.0 and setuptools 79 — both carry advisories
 # (pip-audit, 2026-09). They stay in the runtime image, so pin fixed versions
 # before the dependency install rather than trusting whatever the tag brings.
+# requirements-alpaca.txt goes in --no-deps: the SDK's urllib3<2/msgpack pins
+# are overridden there (reason in that file).
 RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.0.0 \
- && pip install --no-cache-dir -r requirements.txt
+ && pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir --no-deps -r requirements-alpaca.txt
 
 COPY src/backend/ /app/
 # In-app help/doc markdown sources — read by docs_service at request time.
