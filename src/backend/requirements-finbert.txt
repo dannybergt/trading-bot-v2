@@ -7,5 +7,5 @@
 # Default deployments do NOT pull this file — keep the standard image
 # slim. Build a separate finbert variant by adding
 # `RUN pip install -r requirements-finbert.txt` to a downstream stage.
-transformers==4.46.3
+transformers==5.10.1
 torch==2.5.1
