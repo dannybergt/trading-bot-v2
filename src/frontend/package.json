@@ -12,7 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
     "i18next": "^26.0.10",
-    "lightweight-charts": "^5.2.0",
+    "lightweight-charts": "^5.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.7",
