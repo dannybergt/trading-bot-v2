@@ -37,15 +37,6 @@ updates:
     open-pull-requests-limit: 5
 
   # --- ergaenzt von tools/cve-rollout/rollout.py ---
-  - package-ecosystem: docker
-    directory: "/src/backend"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      docker-src-backend-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
