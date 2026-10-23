@@ -43,7 +43,10 @@ NPM_IGNORED=(
   # image. Ends with tailwindcss 4 (ROADMAP, ADR 2026-10-06).
   # Format ID:YYYY-MM-DD. After that day the audit fails again, so the
   # exception is re-decided instead of living on (security-reviewer PR #60).
-  GHSA-vfj7-8cjw-p6xm:2026-10-20
+  # Re-decided 2026-10-23: still no patched braces release (advisory: <= 3.0.3,
+  # first_patched none); reasoning above unchanged; the way out is the
+  # tailwindcss 4 bump (Dependabot PR #54). Next decision by 2026-11-06.
+  GHSA-vfj7-8cjw-p6xm:2026-11-06
 )
 
 echo "npm audit against src/frontend/package-lock.json"
