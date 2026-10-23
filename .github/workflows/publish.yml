@@ -63,6 +63,9 @@ jobs:
           fi
 
       - name: Prepare env
+        env:
+          # Secrets ueber env statt im Skripttext (kein Interpolieren in run:)
+          DH_NAMESPACE: ${{ secrets.DOCKERHUB_NAMESPACE }}
         run: |
           cp .env.example .env
           {
@@ -70,8 +73,8 @@ jobs:
             echo "FRONTEND_IMAGE_NAME=trading-bot-frontend"
             echo "IMAGE_TAG=${PRIMARY_IMAGE_TAG}"
           } >> .env
-          if [[ -n "${{ secrets.DOCKERHUB_NAMESPACE }}" ]]; then
-            echo "DOCKERHUB_NAMESPACE=${{ secrets.DOCKERHUB_NAMESPACE }}" >> .env
+          if [[ -n "${DH_NAMESPACE}" ]]; then
+            echo "DOCKERHUB_NAMESPACE=${DH_NAMESPACE}" >> .env
           fi
 
       - name: Run build hook
@@ -131,12 +134,15 @@ jobs:
 
       - name: Validate Docker Hub secrets
         if: env.PUBLISH_DRY_RUN != '1'
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           missing=()
-          if [[ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]]; then
+          if [[ -z "${DH_USER}" ]]; then
             missing+=("DOCKERHUB_USERNAME")
           fi
-          if [[ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]]; then
+          if [[ -z "${DH_TOKEN}" ]]; then
             missing+=("DOCKERHUB_TOKEN")
           fi
           if (( ${#missing[@]} > 0 )); then
