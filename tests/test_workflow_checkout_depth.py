@@ -23,7 +23,8 @@ WORKFLOW_DIR = PROJECT_ROOT / ".github" / "workflows"
 BUILDING_WORKFLOWS = ("ci.yml", "publish.yml")
 
 CHECKOUT_STEP = re.compile(
-    r"uses:\s*actions/checkout@[^\s]+\s*\n"
+    # optional trailing version comment after a SHA pin, e.g. "@<sha> # v6.1.0"
+    r"uses:\s*actions/checkout@\S+[^\S\n]*(?:#[^\n]*)?\n"
     r"(?P<body>(?:\s+.*\n)*?)"
     r"(?=\s*- name:|\Z)",
 )
