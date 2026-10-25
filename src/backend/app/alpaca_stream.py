@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from alpaca_trade_api.stream import Stream
 from .websocket_manager import manager
@@ -39,7 +40,8 @@ class AlpacaStreamService:
         self.stream = None
         self.symbols_to_track = ["SPY", "QQQ", "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"] # We can make this dynamic later
         self.loop = None
-        
+        self._thread = None
+
     async def start(self):
         """Initialize and start the Alpaca WebSocket stream."""
         if not self.api_key or not self.secret_key:
@@ -62,10 +64,27 @@ class AlpacaStreamService:
             
             logger.info("alpaca_stream_started symbols=%s", ",".join(self.symbols_to_track))
             
-            # This is a blocking call, so we must run it in an executor in the background
+            # `stream.run` blocks until the SDK ends it. It runs on its own
+            # daemon thread, not in the loop's default executor: that executor
+            # is joined at interpreter exit, and the SDK does not always end
+            # its websocket loops on `stop()` (reconnect loop, pending close
+            # handshakes). A non-daemon thread then held the process after
+            # SIGTERM until `docker stop` sent SIGKILL (exit 137, ~10 s).
             self.loop = asyncio.get_running_loop()
-            await self.loop.run_in_executor(None, self.stream.run)
+            self._thread = threading.Thread(
+                target=self._run_stream, name="alpaca-stream", daemon=True
+            )
+            self._thread.start()
             
+        except Exception:
+            logger.exception("alpaca_stream_start_failed")
+
+    def _run_stream(self):
+        """Thread target: an exception that ends `stream.run` is logged in
+        the same structured form as a failed start. Without the wrapper it
+        would reach `threading.excepthook` and stderr as plain text."""
+        try:
+            self.stream.run()
         except Exception:
             logger.exception("alpaca_stream_start_failed")
 
