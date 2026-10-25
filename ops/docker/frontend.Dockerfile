@@ -16,7 +16,7 @@ COPY src/frontend/ ./
 RUN npm run build
 
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 
 # Version metadata for nexainer/`docker inspect` visibility (the UI itself
 # reads the running version from the backend's /api/version).
