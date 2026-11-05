@@ -31,7 +31,7 @@ Jedes Projekt führt diese Dateien im Repo-Root oder unter `docs/`:
 
 **Session-Ritual am Ende** jeder substantiellen Session — das ist der eine Ort für die STATE- und ADR-Pflichten, andere Abschnitte verweisen hierher:
 
-1. `STATE.md` aktualisieren: was wurde geändert, was läuft, was ist offen, was ist der nächste sinnvolle Schritt, welche Ports/Ressourcen sind gerade allokiert, welche Annahmen gelten (§2.4).
+1. `STATE.md` aktualisieren: was wurde geändert, was läuft, was ist offen, was ist der nächste sinnvolle Schritt, welche Ports/Ressourcen sind gerade allokiert, welche Annahmen gelten (§2.4), Ziel „fertig nutzbar“ und Prozentzeile (§2.8).
 2. ADR schreiben, falls eine nicht-triviale Entscheidung getroffen wurde.
 3. Kurzer Statussatz im PR oder in der Antwort mit Verweis auf `STATE.md`.
 
@@ -117,6 +117,41 @@ sauber dokumentierter Rest. Deshalb:
   läuft im Container oder im Projektverzeichnis.
 - Eine Session endet mit §18 und dem nächsten Schritt, nicht mit einer Auswahlfrage. Was der
   Betreiber selbst tun muss, steht als eine konkrete Rückfrage am Ende, nicht als Menü.
+
+### 2.8 Nutzbar zuerst, ausliefern, Fortschritt in Prozent
+
+Betreiber 2026-11-05. Warum: Bei nex-rbergt standen nach Wochen 46 % gemergt, aber nur 32 %
+produktiv und 22 % nachgewiesen; Prüfrunden für Kleinstbefunde (ein Messwerkzeug brauchte acht
+Runden, drei davon für Unicode-Randfälle) kosteten Tage, während fertige Arbeit nicht ausgerollt
+wurde.
+
+- **Ziel „fertig nutzbar“ je Projekt:** `STATE.md` nennt im Kopf den kleinsten Stand, den der
+  Betreiber tatsächlich benutzt (Golden Path Ende-zu-Ende, §12 Frage 4). Bis er erreicht ist,
+  ruhen Nebenstränge; parallel laufen nur Pflichtstränge (Security, Datenverlust, Audit-Pflicht)
+  und was den Golden Path direkt trägt. Ein ruhender Strang gilt im Sinne von §2.7 als
+  umgewidmet (Auslöser: „Ziel erreicht“, ersetzt das Zieldatum). *Fertig:* jeder offene Strang in `STATE.md` ist als
+  „trägt Ziel“, „Pflicht“ oder „ruht“ markiert.
+- **Merge-Schwelle:** Vor dem Merge gibt es eine Fix-Runde nur für Blocker und Befunde ab
+  **MITTEL**. Zuordnung der Tor-Stufen: „ab MITTEL“ = 🔴/🟡 beim `reviewer`, KRITISCH/MAJOR beim
+  `critic`, KRITISCH/HOCH/MITTEL bei `security-`, `ops-` und `migration-reviewer`; „NIEDRIG“ =
+  🔵, MINOR, NIEDRIG und Hinweise. NIEDRIG geht gesammelt als `[auto:p3]` mit Auslöser („nächste
+  Änderung an der Datei“; dieser Auslöser ersetzt das Zieldatum aus §2.7) nach `STATE.md` und
+  wird im nächsten PR an derselben Stelle erledigt. **Ausnahme, immer vor dem Merge:** jeder
+  Befund zu Auth/Rechten, Secrets, Datenverlust, Audit-Log oder einem falschen Grün in
+  Überwachung/Gesundheitsanzeige, gleich welcher Schwere. Fragen (❓) werden beantwortet;
+  `verifier`-Lücken folgen weiter §4 Phase 4 (behoben oder im PR als bewusst offen benannt).
+  Die Tore selbst laufen unverändert (§4, §5); die Schwelle bestimmt nur, was eine weitere Runde
+  auslöst.
+- **Ausliefern statt sammeln:** Gemergte Arbeit, die erst mit Tag, Image oder Deploy wirkt, wird
+  spätestens am Ende der Session, in der sie gemergt wurde, als `FREIGABE`-Rückfrage vorgelegt
+  (§14) — nicht hinter den nächsten PR gestellt.
+- **Fortschritt in Prozent:** Jede Antwort, die einen Projektstand berichtet (`/status`,
+  Abschluss nach §18, Antwort auf „wo stehen wir“), nennt je betroffenem Projekt drei Zahlen:
+  **gemergt** (in `main`), **produktiv** (wirkt beim Betreiber), **nachgewiesen** (am laufenden
+  System belegt). Rechenregel ist die der Skill `status` (Punkte der Plan-Karte gleich gewichtet,
+  in Arbeit zählt 0, Bruchzahl daneben), je Spalte angewandt; wo die Basis dünn ist, steht das
+  dabei. Die Zahlen stehen auch im Kopf von `STATE.md` mit Datum. *Fertig:* die Prozentzeile ist
+  in der Antwort und in `STATE.md` gleich.
 
 ---
 
@@ -652,3 +687,4 @@ Am Ende jeder substantiellen Aufgabe (Begriffe oben) liefere diese Punkte; ein P
 11. Welche Risiken bleiben?
 12. Was ist der nächste sinnvolle Schritt?
 13. Alternativen & Ergänzungen (§12).
+14. Fortschritt je betroffenem Projekt in Prozent: gemergt · produktiv · nachgewiesen, mit Rechenregel (§2.8).
