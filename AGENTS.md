@@ -142,6 +142,20 @@ wurde.
   `verifier`-Lücken folgen weiter §4 Phase 4 (behoben oder im PR als bewusst offen benannt).
   Die Tore selbst laufen unverändert (§4, §5); die Schwelle bestimmt nur, was eine weitere Runde
   auslöst.
+- **Delta-Tor nach einer Fix-Runde:** Das zweite Tor S prüft nur die behobenen Befunde und fährt
+  sein festes Protokoll aus §4 Phase 5 (Secret-Scan, Dependency-Audit) auf dem Fix-Diff, nicht auf
+  dem ganzen PR. *Fertig:* Der Delta-Bericht nennt je behobenem Befund „trägt“ oder „trägt nicht“
+  und das Protokoll-Ergebnis auf dem Fix-Diff. Warum: Bei nex-rbergt #114 liefen am 2026-11-11 drei
+  volle Runden an einem Tag, während der Betreiber den Chat nicht benutzen konnte.
+- **Randfälle in Bereinigungsroutinen** (Regex, Unicode, Trenner, Normalisierung) unter MITTEL
+  lösen keine weitere Runde aus. Sie gehen gesammelt nach `[auto:p3]`. Ausnahme: Routinen an einer
+  Vertrauensgrenze (Sanitizer vor Ausgabe oder Speicherung, Auth, Injection-Schutz). Dort gilt die
+  Schwere des Befunds, und ein Bypass ist ein Injection-Befund.
+- **Keine Terminversprechen:** Eine Zeitangabe zu einer Lieferung („heute Abend“, „bis morgen“)
+  steht nur zusammen mit dem konkreten verbleibenden Schritt und dem Vermerk „live: ja/nein“.
+  Ohne bekannten Schritt steht statt eines Termins „nächster Schritt: … · live: nein“. *Fertig:*
+  Jede Antwort mit Zeitangabe zu einer Lieferung nennt beides. Warum: Am 10./11.11. wurden Termine
+  genannt, ohne dass der Weg dorthin feststand, und keiner davon wurde gehalten.
 - **Ausliefern statt sammeln:** Gemergte Arbeit, die erst mit Tag, Image oder Deploy wirkt, wird
   spätestens am Ende der Session, in der sie gemergt wurde, als `FREIGABE`-Rückfrage vorgelegt
   (§14) — nicht hinter den nächsten PR gestellt.
@@ -152,6 +166,33 @@ wurde.
   in Arbeit zählt 0, Bruchzahl daneben), je Spalte angewandt; wo die Basis dünn ist, steht das
   dabei. Die Zahlen stehen auch im Kopf von `STATE.md` mit Datum. *Fertig:* die Prozentzeile ist
   in der Antwort und in `STATE.md` gleich.
+
+### 2.9 Sicherungspunkt nach jedem Block
+
+Betreiber 2026-09-30 und 2026-11-11. Warum: Am 10./11.11. lagen über 24 h ohne Übergabe, obwohl
+in der Zeit drei PRs gemergt und ausgerollt wurden. Ein Absturz hätte den Stand der Session
+verloren, und der Betreiber hätte `/pause` selbst eingeben müssen. Das muss er nie.
+
+- **Block** heißt: Merge, Release-Tag, Deploy oder ein fertiges Tor-Ergebnis (K, R, S, V, ops, mig).
+- Nach jedem Block, spätestens am Ende des Turns, setzt der **Hauptlauf** selbst einen
+  Sicherungspunkt. Mehrere Blöcke in einem Turn brauchen einen.
+  1. Stand committet und auf dem eigenen Branch gepusht (§14), soweit die Push-Grenze das erlaubt.
+  2. Übergabe zusammenführen und schreiben: `fleet ablage lesen pause`, die eigenen Projekte
+     ersetzen, fremde Einträge behalten, `seit` = jetzt in UTC (Suffix `Z` nur für echtes UTC),
+     `grund` neu formulieren und mit der Session-Kurz-ID `<s8>` beginnen,
+     `fleet ablage schreiben pause`. Zusätzlich `aufgehoben` = `seit` setzen, damit der Leitstand
+     nicht „Pausiert“ zeigt. Ausnahme: Die gelesene Übergabe ist eine aktive Pause (`seit` ohne
+     `aufgehoben`). Dann bleibt `aufgehoben` weg, sonst würde die Pause einer anderen Session
+     verschwinden. Ein Repo ohne fleet-Eintrag (z. B. agent-baseline) steht nicht in
+     `projekte[]`; die eigenen fleet-Projekte stehen dort immer.
+  3. `laeufe` fortschreiben (gestartete Agents in `aktiv`, fertige in `heute`).
+  4. Den Leitstand neu veröffentlichen (Memory `portfolio-uebersicht`, `tools/leitstand/bau.py`).
+- *Fertig:* `fleet ablage lesen pause` zeigt ein `seit`, das jünger ist als der letzte Block der
+  Session und nicht in der Zukunft liegt, und `grund` nennt die eigene `<s8>`. Ein `projekte[]`-
+  Eintrag allein beweist nichts: Andere Sessions behalten ihn beim Zusammenführen.
+- **Durchgesetzt** vom Hook `sicherungspunkt.sh` (ADR-0020). Er erinnert nach dem Block und
+  schickt den Turn einmal zurück, wenn das Fertig-Kriterium fehlt. Er prüft nur die Übergabe;
+  `laeufe` und Leitstand bleiben Pflicht nach dieser Regel, ohne Hook.
 
 ---
 
@@ -164,7 +205,7 @@ In Multi-Session-, Multi-Container- und Multi-Agent-Umgebungen gilt ohne Ausnahm
 - **Geteilter Docker-Daemon:** Container-Namen mit Projekt-Präfix (`<project>-<service>`), eigene Networks, keine globalen Volumes überschreiben. Kein `docker … prune` für irgendein Objekt (z. B. `system`, `image`, `container`, `volume`, `network`, `builder`, `buildx`); Platz schafft der wöchentliche root-Timer `platzpflege` (ADR-0019), eigene Probe-Objekte räumt der Agent nach dem nächsten Punkt ab. Warum: Ein `prune` trifft alle Sessions auf dem geteilten Daemon (Vorfall Nexura #115); der Guard sperrt es (#73).
 - **Probe-Stacks räumt der Agent selbst ab, samt Volumes:** Projektname aus `wegwerf-volumes name <basis>`, `wegwerf-volumes anmelden <p>` vor dem ersten `docker compose -p <p> up`, am Ende `wegwerf-volumes entfernen <p>` statt `down`. Fertig: `wegwerf-volumes liste` zeigt keine eigene Marke mehr. Warum: Der Guard sperrt `volume rm` und `down -v` für alle (ADR-0016); das Skript löscht nur, was die eigene Session nach der Anmeldung angelegt hat (ADR-0018). Ohne Persistenz-Probe reicht `tmpfs` statt eines benannten Volumes.
 - **Keine globalen Mutationen** ohne Freigabe: keine system-weiten Pakete, keine globale Git-Config, keine Cron-Jobs außerhalb des Projekts, keine system-weiten Python/Node-Installs.
-- **Dateisystem:** bleibe innerhalb des Projektverzeichnisses; keine Pfade unter `~/`, `/etc`, `/usr`, `/var` ohne Freigabe. Ohne Freigabe erlaubt sind außerdem der Scratchpad der Session, unter `~/.claude` das Memory- und das Plugin-Verzeichnis, `~/.local/state/agent-baseline/` (Audit von `wegwerf-volumes`, ADR-0018), und der Code-Root der eigenen Repos (auf dev-claude `/claude`), dort nur für Worktrees, Tor-Ergebnisse (`<code-root>/.wt/.tore/`, §4 Phase 4) und `sync-agents`.
+- **Dateisystem:** bleibe innerhalb des Projektverzeichnisses; keine Pfade unter `~/`, `/etc`, `/usr`, `/var` ohne Freigabe. Ohne Freigabe erlaubt sind außerdem der Scratchpad der Session, unter `~/.claude` das Memory- und das Plugin-Verzeichnis, `~/.local/state/agent-baseline/` (Audit von `wegwerf-volumes`, ADR-0018; Zustand des Hooks `sicherungspunkt`, ADR-0020), und der Code-Root der eigenen Repos (auf dev-claude `/claude`), dort nur für Worktrees, Tor-Ergebnisse (`<code-root>/.wt/.tore/`, §4 Phase 4) und `sync-agents`.
 - **Worktrees liegen auf der Platte und tragen eine Besitzmarke.** Warum: Das Scratchpad liegt unter `/tmp`, und `/tmp` ist auf dev-claude tmpfs — ein VM-Absturz löscht dort jeden nicht committeten Stand (2026-10-01); Commits im `.git` unter dem Code-Root überleben ihn.
   - Ort für Projekt-Repos: `<code-root>/.wt/<projekt>-<kurz>-<s8>`, `<s8>` = die ersten 8 Zeichen der Session-ID (aus dem Scratchpad-Pfad). Ort in agent-baseline: `<baseline>/.claude/worktrees/<kurz>-<s8>`, weil die Guard-Ausnahme nur im Repo gilt. Das Scratchpad bleibt für Wegwerfdateien.
   - Direkt nach `worktree add` folgt `<baseline>/bin/wt-lock <pfad> <session-id>`; der Lock-Grund nennt Session, Prozess und Boot. Fertig: `git worktree list` zeigt den Pfad als `locked`.
@@ -211,6 +252,19 @@ ihn nicht selbst — aus demselben Grund, aus dem der `verifier` nicht der Autor
   Gegen einen VM-Absturz reicht die Platte, aber nur mit fsync — ohne kann ein Commit kurz vor dem
   Absturz als leeres Objekt mit geschriebenem Ref enden und das gemeinsame `.git` beschädigen.
   `executor`, `test-engineer` und `docs-writer` committen nicht; ihren Stand sichert der Hauptlauf.
+- **Drossel: höchstens 2 Agents gleichzeitig je Session.** Es zählt jeder Subagent, also Bau-Agents,
+  `executor` und Tor-Agents. Laufen schon 2, startet der nächste erst, wenn einer fertig ist.
+  Reihenfolge der Tore nach einem Slice:
+  - Welle 1: S und ein fälliger Unterprüfer (ops, mig). Ohne Unterprüfer laufen R und S.
+  - Ein zweiter Unterprüfer startet, sobald ein Platz frei ist.
+  - R startet, wenn alle Unterprüfer-Berichte vorliegen.
+  - V läuft danach und nur auf dem mergefertigen Endstand. Mergefertig heißt: R und S ohne offene
+    Fix-Runde nach §2.8. V läuft nie parallel zu R oder S.
+
+  *Fertig:* `laeufe.aktiv` zeigt für die Session nie mehr als 2 Einträge. Der Hook
+  `sicherungspunkt.sh` meldet am Turn-Ende mehr als 2 laufende Agents. Warum: Am 2026-09-30
+  verbrauchten parallele opus-Läufe ein Wochenbudget in Stunden. Am 2026-11-11 liefen trotzdem R, S
+  und V gleichzeitig auf einem Zwischenstand, den die Fix-Runde danach wieder änderte.
 - Auf einen Subagent wird nicht mit `TaskOutput` gewartet (das liefert das Rohtranskript statt
   des Berichts); sein Bericht kommt als Nachricht, die Zwischenzeit füllt unabhängige Arbeit.
 
@@ -257,6 +311,8 @@ CI-Actions) oder KI-Funktionen berührt.** Sein festes Protokoll: Secret-Scan ü
 `cargo audit`, `govulncheck`, `trivy` — notfalls im Container, nie übersprungen),
 OWASP-Top-10-Matrix mit Urteil je Kategorie, Priorisierung nach Schwere × Ausnutzbarkeit ×
 Wirkradius, Fix mit Code-Beispiel. Ein Audit, das nicht lief, ist im PR eine Lücke, kein Freispruch.
+Nach einer Fix-Runde läuft dasselbe Protokoll als Delta-Tor auf dem Fix-Diff (§2.8); das erste Tor S
+deckt den ganzen PR ab, keines der beiden lässt einen Schritt weg.
 
 Exponierte Secrets sind **unverzüglich** zu **rotieren**, auch wenn sie bei HEAD schon entfernt
 sind (die Historie reicht). Noch in derselben Session: die Abhängigen desselben Credentials
@@ -401,8 +457,8 @@ Jeder neue Service / jede Änderung an existierenden Services berücksichtigt:
 - **Health-** und **Readiness-Endpunkte** (`/healthz`, `/readyz`).
 - **Metriken** für kritische Pfade (Latency, Error-Rate, Throughput) im Prometheus-Format oder vergleichbar — sobald ein Scraper sie abholt; ohne Scraper keine Metrik-Endpunkte auf Vorrat (§2.5).
 - **Trace-IDs** über Service-Grenzen weiterreichen.
-- **Den Nachweis führt der `ops-reviewer`** — Unterprüfer zu Tor R, vom Hauptlauf parallel zum
-  `reviewer` gestartet, sobald ein Diff `Dockerfile`, `docker-compose*.yml`, Healthchecks,
+- **Den Nachweis führt der `ops-reviewer`** — Unterprüfer zu Tor R, vom Hauptlauf vor dem
+  `reviewer` gestartet (Wellen nach §4 Phase 3), sobald ein Diff `Dockerfile`, `docker-compose*.yml`, Healthchecks,
   Logging/Metriken, systemd-Units oder `OPERATIONS.md` berührt: die Punkte oben,
   Compose-Hygiene (§3 Prefix/Ports, Healthcheck, Restart, Log-Limits), **Image-Pins, Digests,
   Non-Root** (§10), Runbook. Sein Bericht geht an den `reviewer` (*Unterprüfer*-Zeile).
@@ -418,7 +474,7 @@ Jeder neue Service / jede Änderung an existierenden Services berücksichtigt:
 - **Keine destruktiven Operationen** (`DROP COLUMN`, `DROP TABLE`, `ALTER COLUMN ... NOT NULL` ohne Default) im selben Deploy wie der Code, der die Spalte zuletzt nutzt; eine destruktive Änderung an bestehender Struktur braucht außerdem die Freigabe nach §13.
 - Daten in produktiven Datenbanken ändern sich nur über versionierte, reviewte Migrationen oder Skripte — niemals ad hoc.
 - **Den Nachweis führt der `migration-reviewer`** — Unterprüfer zu Tor R, vom Hauptlauf
-  parallel zum `reviewer` gestartet, sobald ein Diff `migrations/`, `alembic/`, Schema-
+  vor dem `reviewer` gestartet (Wellen nach §4 Phase 3), sobald ein Diff `migrations/`, `alembic/`, Schema-
   Definitionen oder Daten-/Seed-Skripte berührt: die Punkte oben. Sein Bericht geht an den
   `reviewer` (*Unterprüfer*-Zeile); fällig ohne Bericht heißt dort „FEHLT", und das ist ein
   Blocker.
@@ -650,7 +706,7 @@ Index der harten Leitplanken, je Zeile das Zielverhalten; Regel und Warum stehen
 
 - Secrets nur in Env/Secret-Manager (§6.3).
 - Roter Test → Code-Fix; Tests bleiben (§2.6).
-- Sicherheitsprüfungen laufen vollständig (§4 Phase 5).
+- Sicherheitsprüfungen laufen vollständig, nach einer Fix-Runde als Delta auf dem Fix-Diff (§4 Phase 5, §2.8).
 - Produktiv-Deploy nur mit expliziter Freigabe (`FREIGABE`, §14; nicht reversibel, §13); Merge von Deploy-Trigger-Dateien in `active`-Projekten ist Deploy (§14).
 - Commit und Push auf den eigenen Branch frei; Registry-Push, Merge und Release-Tag nur auf `FREIGABE` (§14).
 - Destruktive DB-Änderung nur mit Freigabe (§9, §13).
@@ -667,6 +723,8 @@ Index der harten Leitplanken, je Zeile das Zielverhalten; Regel und Warum stehen
 - Force-Push nur `--force-with-lease` auf eigenen Branches (§14).
 - Stagen nach `git status`, nie blind `git add -A` (§14).
 - Gepushte Commits ohne `--amend` (§14).
+- Nach jedem Block selbst einen Sicherungspunkt setzen, nie auf `/pause` warten (§2.9).
+- Höchstens 2 Agents gleichzeitig je Session, `verifier` nur auf dem mergefertigen Endstand (§4 Phase 3).
 
 ---
 
