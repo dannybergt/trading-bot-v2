@@ -36,17 +36,19 @@ docker run --rm -e PIP_AUDIT_VERSION="${PIP_AUDIT_VERSION}" "${BACKEND_IMAGE}" s
 ' sh "${ignore_args[@]}"
 
 NPM_IGNORED=(
-  # braces: every release is affected, no fix exists (2026-10-06). Pulled
-  # only by tailwindcss 3 (devDependency, via chokidar/micromatch/fast-glob)
-  # at build time; the patterns it expands are the `content` globs in our own
-  # tailwind.config — no outside input, nothing of it ships in the nginx
-  # image. Ends with tailwindcss 4 (ROADMAP, ADR 2026-10-06).
   # Format ID:YYYY-MM-DD. After that day the audit fails again, so the
   # exception is re-decided instead of living on (security-reviewer PR #60).
-  # Re-decided 2026-10-23: still no patched braces release (advisory: <= 3.0.3,
-  # first_patched none); reasoning above unchanged; the way out is the
-  # tailwindcss 4 bump (Dependabot PR #54). Next decision by 2026-11-06.
-  GHSA-vfj7-8cjw-p6xm:2026-11-06
+  # braces (GHSA-vfj7-8cjw-p6xm, until 2026-11-06) is no longer reported
+  # (2026-11-20) and was removed.
+  # glob GHSA-3g3m-2fjr-6pw4 and minimatch GHSA-g3hv-75wg-m249 (moderate,
+  # 2026-11-20): pulled only by workbox-build 7.4.1 (vite-plugin-pwa,
+  # devDependency) at build time; the patterns are the globPatterns of our own
+  # vite config, no outside input, nothing of it ships in the nginx image
+  # (dist/ holds only the generated sw.js). Fixed releases are majors
+  # (glob 14, minimatch 11) that workbox-build does not accept. Way out: a
+  # workbox-build release on the fixed majors. Next decision by 2026-12-04.
+  GHSA-3g3m-2fjr-6pw4:2026-12-04
+  GHSA-g3hv-75wg-m249:2026-12-04
 )
 
 echo "npm audit against src/frontend/package-lock.json"
