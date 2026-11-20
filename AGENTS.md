@@ -104,7 +104,7 @@ sauber dokumentierter Rest. Deshalb:
 
 - Nach dem Session-Ritual (§0) wird **nicht gefragt, womit es weitergehen soll**: der nächste
   sinnvolle Schritt aus `STATE.md` wird abgearbeitet, danach der nächste. Nachgefragt wird nur
-  an den Schwellen aus §13 und für Merge und Release-Tag (`FREIGABE`, §14).
+  an den Schwellen aus §13 und für Deploys, Tags und Registry-Pushes (gebündelt, `FREIGABE`, §14).
 - Ein offener Thread wird **geschlossen oder umgewidmet**, nie nur mitgeschleppt. Was auf
   diesem Host nicht lösbar ist (anderer Host, Betreiber-Hand, fehlende Freigabe), steht in
   `STATE.md` als **„nicht hier lösbar"** mit konkretem Handgriff und Ort. „Offen" heißt: hier,
@@ -157,8 +157,8 @@ wurde.
   Jede Antwort mit Zeitangabe zu einer Lieferung nennt beides. Warum: Am 10./11.11. wurden Termine
   genannt, ohne dass der Weg dorthin feststand, und keiner davon wurde gehalten.
 - **Ausliefern statt sammeln:** Gemergte Arbeit, die erst mit Tag, Image oder Deploy wirkt, wird
-  spätestens am Ende der Session, in der sie gemergt wurde, als `FREIGABE`-Rückfrage vorgelegt
-  (§14) — nicht hinter den nächsten PR gestellt.
+  spätestens am Ende der Session, in der sie gemergt wurde, in der gebündelten `FREIGABE`-Rückfrage
+  vorgelegt (§14) — nicht hinter den nächsten PR gestellt.
 - **Fortschritt in Prozent:** Jede Antwort, die einen Projektstand berichtet (`/status`,
   Abschluss nach §18, Antwort auf „wo stehen wir“), nennt je betroffenem Projekt drei Zahlen:
   **gemergt** (in `main`), **produktiv** (wirkt beim Betreiber), **nachgewiesen** (am laufenden
@@ -583,27 +583,45 @@ Bei unklaren Anforderungen: sichere Defaults, Annahmen dokumentieren (§2.4), ni
 
 Niemals direkt auf `main`/`master` arbeiten.
 
-**Merge und Release nur auf das Codewort `FREIGABE`.** Ein PR wird gemergt und ein
-Release-Tag gesetzt, wenn CI grün, `reviewer` ohne Blocker und `verifier` ohne offene Lücke
-sind **und** der Mensch auf eine konkrete Rückfrage (PR-Nummern, Tag, was der Tag auslöst)
-wörtlich mit `FREIGABE` antwortet. Das ist die Form der „expliziten Freigabe" aus §17 —
-„ja"/„ok" reicht nicht, das Wort gilt nur für das Gefragte. Verfahren: Skill `ship-pr`, Schritt 5.
+**Merge ohne Rückfrage, Deploy gebündelt mit `FREIGABE`** (Betreiber 2026-11-20). Warum: Einzel-
+Rückfragen für jeden Merge ohne Wirkung hielten fertige Arbeit stundenlang auf, während Deploys,
+also das, was wirklich zählt, liegen blieben. Verfahren: Skill `ship-pr`, Schritt 5.
+
+- **Merge ohne Rückfrage**, wenn alles zutrifft:
+  - CI grün auf dem Kopf-Commit;
+  - die Tore nach §4/§2.8 ohne offene Fix-Runde, `verifier` ohne offene Lücke (bewusst offene im PR benannt), bei Doku-only-PRs (`STATE.md`, ADR, Doku) entfallen die Tore;
+  - der Merge hat **keine Deploy-Wirkung** (unten);
+  - nichts Irreversibles nach §13 (destruktive Migration, Löschen, Force-Push), kein fremdes Repo.
+  Ausnahme bei CI: Ein reiner Sync-PR (`sync-agents`, ändert nur AGENTS.md bzw. §0-Skelette) darf
+  trotz roter Checks gemergt werden, wenn derselbe Check auf `main` genauso rot ist.
+  Nach dem Merge ein PR-Kommentar als Audit: „Merge ohne Rückfrage nach AGENTS.md §14“ und je Tor
+  das Urteil mit Commit. In der Antwort steht der Merge mit SHA.
+- **Deploy-Wirkung** hat ein Merge, wenn ein Workflow auf `push` nach `main` publiziert oder
+  deployt (Registry, Pages-Production, Watchtower `latest`), wenn ein Node ihn per git-sync
+  ausrollt (unten) oder wenn er Deploy-Trigger-Dateien ändert. Das Gleiche gilt für jeden
+  Release-Tag und jeden Registry-Push. Quelle je Projekt: `STATE.md`/`docs/RELEASE_RULE.md`.
+- **Alles mit Deploy-Wirkung nur auf `FREIGABE`, gebündelt:** Fertige Deploys sammeln und
+  höchstens einmal je Arbeitsblock in **einer** Rückfrage vorlegen: je Eintrag Projekt, PR/Tag,
+  was ausrollt, Rollback. `FREIGABE` deckt die ganze Liste, `FREIGABE <Einträge>` nur die
+  genannten. „ja"/„ok" reicht nicht; das Wort gilt nur für das Gefragte und verfällt, wenn sich
+  danach ein Kopf-Commit oder Check ändert.
+- **Irreversibles** (§13) bleibt Einzelfrage, auch inmitten einer Sammelliste.
 
 **Push-Grenze:** Commit und Push auf den eigenen Branch sind frei, **wenn kein Workflow des Repos
 bei diesem Push publiziert oder deployt** — vor dem ersten Push `.github/workflows/*` darauf
 prüfen, ob ein Workflow, dessen `on: push` diesen Branch einschließt (kein Filter, ein
 `branches`-Muster trifft ihn, `branches-ignore` schließt ihn nicht aus), publiziert oder deployt. Preview-Umgebungen ohne Produktionswirkung zählen nicht als
 Deploy (Stand 2026-09-30 einziger Fall: Cloudflare-Pages-Previews von landingpage-blueprint;
-Build-Push läuft sonst nur bei `main` bzw. Tags). Registry-Push, Merge und Tag nur mit
-`FREIGABE`. „Eigener Branch" heißt: in dieser Session angelegt oder vom Betreiber bzw. Hauptlauf
+Build-Push läuft sonst nur bei `main` bzw. Tags). Registry-Push und Tag nur mit `FREIGABE`, Merge
+nach den Bedingungen oben. „Eigener Branch" heißt: in dieser Session angelegt oder vom Betreiber bzw. Hauptlauf
 ausdrücklich zugewiesen (Executor-Worktree, Resume des eigenen Plans), im eigenen Repo — nie
 `main`/`master`, nie in fremden Repos (§3), nie lokale Branches des Betreibers. Ein Branch, auf
 dem eine andere Session arbeitet, ist geteilt (Force-Push-Regel unten).
 
 **Merge ist Deploy, wo ein Node ausrollt:** In Projekten, die ein Node per git-sync ausrollt
 (Nexainer-Status `active`), rollt ein Merge, der Deploy-Trigger-Dateien ändert
-(`docker-compose*`, `.env.example`, `Makefile`), binnen Minuten produktiv aus. Die
-FREIGABE-Rückfrage nennt das ausdrücklich als Produktiv-Deploy.
+(`docker-compose*`, `.env.example`, `Makefile`), binnen Minuten produktiv aus. Ein solcher Merge
+hat Deploy-Wirkung und geht in die gebündelte `FREIGABE`-Rückfrage, dort als Produktiv-Deploy benannt.
 
 **Branch-Schema:**
 
@@ -708,7 +726,7 @@ Index der harten Leitplanken, je Zeile das Zielverhalten; Regel und Warum stehen
 - Roter Test → Code-Fix; Tests bleiben (§2.6).
 - Sicherheitsprüfungen laufen vollständig, nach einer Fix-Runde als Delta auf dem Fix-Diff (§4 Phase 5, §2.8).
 - Produktiv-Deploy nur mit expliziter Freigabe (`FREIGABE`, §14; nicht reversibel, §13); Merge von Deploy-Trigger-Dateien in `active`-Projekten ist Deploy (§14).
-- Commit und Push auf den eigenen Branch frei; Registry-Push, Merge und Release-Tag nur auf `FREIGABE` (§14).
+- Commit und Push auf den eigenen Branch frei; Merge ohne Deploy-Wirkung frei bei grünen Toren; Deploy, Registry-Push und Release-Tag nur auf gebündelte `FREIGABE` (§14).
 - Destruktive DB-Änderung nur mit Freigabe (§9, §13).
 - Produktive Daten nur per versionierter Migration oder Skript (§9).
 - Personenbezogene Daten nur, wenn nötig (§6).
