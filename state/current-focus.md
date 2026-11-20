@@ -1,5 +1,11 @@
 # Current Focus
 
+## SESSION 2026-11-20: Security-PR #80 (setuptools, OS-Updates, Digest-Pins), FREIGABE offen
+
+**PR #80 `security/setuptools-8421`** behebt das rote `validate` auf main (setuptools 84.0.0) und die Trivy-Funde beider Images: setuptools 84.2.1, pip 26.3 (vendort certifi/msgpack/urllib3 aktuell), Index-Digest-Pins fuer python:3.11-slim, node:22-alpine, nginx:1.29-alpine, `apt-get upgrade`/`apk upgrade` als Deckel (Abloesung bis 2026-12-18), zod entfernt (nie importiert), npm-Ausnahmen neu bewertet (braces raus, glob/minimatch bis 2026-12-04). Tore: S + Delta-S NIEDRIG, ops + Delta BETREIBBAR, R ohne Blocker; verifier und FREIGABE offen.
+**Merge = Produktiv-Deploy** (publish.yml -> latest -> Watchtower BC-KI01). Rueckweg: `IMAGE_TAG=sha-41594887ab9e` (nicht Revert: ein Revert baut ein neues `latest` aus dem alten, verwundbaren Stand). Nach dem Deploy auf BC-KI01 pruefen: beide Container laufen/healthy, `/api/health` 200 mit Merge-Commit, `/` und `/sw.js` 200.
+**Danach Pflicht:** `/api/readyz` mit DB-Ping (falsches Gruen von `/api/health` bei gestoppter DB), Zieldatum 2026-11-27, siehe `state/project-status.md`.
+
 ## SESSION 2026-10-07: VAPID-Historie geprueft, Auflagen zu PR #60 erledigt
 
 **VAPID (security-reviewer #5 / 09-29 #2) — geschlossen.** Der Default-Schluessel stand nur in `93cc39c` (Initial import, 2026-03-23) und wurde in `21b970a` (2026-05-07) entfernt (`git log --all -S` auf den Wert: genau diese zwei Commits); Repo ist **oeffentlich**. Auf BC-KI01 nur lesend per Fingerabdruck (sha256, erste 8 Zeichen, Werte nie ausgegeben): `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` im laufenden `trading-bot-v2-backend-1` (Image von `1e55a89`) und in `/data/trading-bot-v2/.env` **leer** (Laenge 0), `REQUIRE_VAPID_SECRETS=false`, `push_subscriptions` = **0 Zeilen**. Ergebnis: **verschieden** — die Instanz nutzt den Historien-Schluessel nicht, Push ist aus, kein Abo haengt am alten Schluessel; keine Rotation noetig. Kein Default im Code: `push_service` liest nur ENV, `tests/test_push_service.py::test_missing_vapid_keys_leave_push_unconfigured_for_local_runs` ist rot, wenn ein Default zurueckkommt. Beim Einrichten von Push weiter: **neues** Paar erzeugen, nie den Historien-Wert.
