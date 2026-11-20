@@ -1,8 +1,15 @@
-FROM python:3.11-slim
+# Base pinned by index digest (Dependabot docker /ops/docker keeps tag + digest).
+FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+# `upgrade`: Debian security fixes the pinned base digest does not carry yet
+# (2026-11-20: zlib1g CVE-2026-85091). Drop once Dependabot brings a digest that
+# already has them (trivy shows no fixable OS finding without this line);
+# thread in state/project-status.md "Offene Punkte".
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold upgrade -y \
+ && apt-get install -y \
     gcc \
     g++ \
     make \
@@ -17,7 +24,7 @@ COPY src/backend/requirements.txt src/backend/requirements-alpaca.txt ./
 # before the dependency install rather than trusting whatever the tag brings.
 # requirements-alpaca.txt goes in --no-deps: the SDK's urllib3<2/msgpack pins
 # are overridden there (reason in that file).
-RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.0.0 \
+RUN pip install --no-cache-dir --upgrade pip==26.3 setuptools==84.2.1 \
  && pip install --no-cache-dir -r requirements.txt \
  && pip install --no-cache-dir --no-deps -r requirements-alpaca.txt
 
