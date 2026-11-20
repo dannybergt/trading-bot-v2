@@ -875,3 +875,9 @@
   Erledigt: Ursache urllib3-Pin = `alpaca-trade-api` 3.2.0 (`urllib3<2,>1.24`, `msgpack==1.0.3`, `pip show`/Metadaten im Image). SDK mit `--no-deps` installiert, Laufzeit-Pins selbst gefuehrt (urllib3 2.8.0, msgpack 1.2.3). python-jose -> PyJWT 2.15.1. Ausnahmeliste leer. ADR 2026-10-06.
   Verifikation: pip-audit 0 auf `tbv2-sec-backend:new`; Unit 530 OK; api-regression gruen; Auth-Tests gruen auf altem jose-Image, rot bei drei Mutationen.
   Offen: Tore S/R/V; `alpaca-py` (Thread 10, SHOULD).
+
+- Datum: 2026-11-20
+  Kontext: main-CI `validate` rot im Audit-Schritt (setuptools 84.0.0 GHSA-xmj3-9gf7-h52w); Trivy (nicht blockierend) meldete brotli-libs CRITICAL, c-ares/curl/libcrypto3 HIGH (Frontend) und zlib1g HIGH (Backend). Nach dem pip-Fix wurde das npm-Gate sichtbar: zod HIGH, mehrere moderate, abgelaufene braces-Ausnahme.
+  Erledigt: PR #80. setuptools 84.2.1; `apt-get upgrade` (Backend) und `apk upgrade` (nginx-Stufe) als markierte Deckel bis zum Digest-Pin; zod entfernt (seit dem Scaffold nie importiert); `npm audit fix --before=2026-11-06` (fast-uri, serialize-javascript); braces-Ausnahme entfernt (nicht mehr gemeldet); glob/minimatch (workbox-build, nur Build) befristet bis 2026-12-04 in NPM_IGNORED.
+  Verifikation: npm-Gate-Logik lokal `2 advisories, 0 open, 2 ignored`; `vite build` ok; CI auf dem PR (pip-audit 0 im ersten Lauf).
+  Offen: Tore S/ops/R/V; Digest-Pin der Basis-Images; FREIGABE (Merge = publish -> Watchtower).
