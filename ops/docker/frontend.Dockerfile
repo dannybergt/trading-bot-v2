@@ -28,5 +28,10 @@ LABEL org.opencontainers.image.revision=$GIT_SHA \
       org.opencontainers.image.created=$BUILD_TIME \
       org.opencontainers.image.source=https://github.com/dannybergt/trading-bot-v2
 
+# Alpine security fixes the base tag does not carry yet (2026-11-20: brotli-libs
+# CVE-2026-111497 CRITICAL, c-ares, curl, libcrypto3 HIGH). Drop once the base is
+# digest-pinned and current.
+RUN apk upgrade --no-cache
+
 COPY ops/docker/frontend.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/ /usr/share/nginx/html/

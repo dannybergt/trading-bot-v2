@@ -2,7 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+# `upgrade`: Debian security fixes the unpinned base tag may not carry yet
+# (2026-11-20: zlib1g CVE-2026-85091). Drop once the base is digest-pinned and current.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     gcc \
     g++ \
     make \
@@ -17,7 +19,7 @@ COPY src/backend/requirements.txt src/backend/requirements-alpaca.txt ./
 # before the dependency install rather than trusting whatever the tag brings.
 # requirements-alpaca.txt goes in --no-deps: the SDK's urllib3<2/msgpack pins
 # are overridden there (reason in that file).
-RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.0.0 \
+RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.2.1 \
  && pip install --no-cache-dir -r requirements.txt \
  && pip install --no-cache-dir --no-deps -r requirements-alpaca.txt
 
