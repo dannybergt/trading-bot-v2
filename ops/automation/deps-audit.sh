@@ -41,8 +41,8 @@ NPM_IGNORED=(
   # braces (GHSA-vfj7-8cjw-p6xm, until 2026-11-06) is no longer reported
   # (2026-11-20) and was removed.
   # glob GHSA-3g3m-2fjr-6pw4 and minimatch GHSA-g3hv-75wg-m249 (moderate,
-  # 2026-11-20): pulled only by workbox-build 7.4.1 (vite-plugin-pwa,
-  # devDependency) at build time; the patterns are the globPatterns of our own
+  # 2026-11-20): pulled only by workbox-build 7.4.1 (vite-plugin-pwa, listed
+  # under dependencies but used only by the vite build) at build time; the patterns are the globPatterns of our own
   # vite config, no outside input, nothing of it ships in the nginx image
   # (dist/ holds only the generated sw.js). Fixed releases are majors
   # (glob 14, minimatch 11) that workbox-build does not accept. Way out: a
