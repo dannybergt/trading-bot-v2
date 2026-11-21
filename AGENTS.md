@@ -176,7 +176,8 @@ verloren, und der Betreiber hätte `/pause` selbst eingeben müssen. Das muss er
 - **Block** heißt: Merge, Release-Tag, Deploy oder ein fertiges Tor-Ergebnis (K, R, S, V, ops, mig).
 - Nach jedem Block, spätestens am Ende des Turns, setzt der **Hauptlauf** selbst einen
   Sicherungspunkt. Mehrere Blöcke in einem Turn brauchen einen.
-  1. Stand committet und auf dem eigenen Branch gepusht (§14), soweit die Push-Grenze das erlaubt.
+  1. Stand committet und auf dem Remote gesichert, als Sicherungs-Ref ohne CI-Lauf (§14
+     „CI-Minuten“); auf den PR-Branch nur, wenn ohnehin ein CI-Lauf fällig ist.
   2. Übergabe zusammenführen und schreiben: `fleet ablage lesen pause`, die eigenen Projekte
      ersetzen, fremde Einträge behalten, `seit` = jetzt in UTC (Suffix `Z` nur für echtes UTC),
      `grund` neu formulieren und mit der Session-Kurz-ID `<s8>` beginnen,
@@ -247,8 +248,9 @@ ihn nicht selbst — aus demselben Grund, aus dem der `verifier` nicht der Autor
   Worktree und Branch und schickt den Diff durch Tor R.
 - **Laufende Arbeit sichern:** Ein Bau-Agent (Subagent, dem der Hauptlauf einen eigenen Branch
   und Worktree zugewiesen hat) committet nach jedem grünen Teilschritt **lokal** mit
-  `git -c core.fsync=committed,reference -c core.fsyncMethod=batch commit …`. Gepusht wird nach
-  §14 wie bisher, also ohne zusätzliche CI-Läufe und ohne `wip:`-Historie auf dem Remote. Warum:
+  `git -c core.fsync=committed,reference -c core.fsyncMethod=batch commit …`. Auf den Remote
+  sichert der Hauptlauf per Sicherungs-Ref (§14 „CI-Minuten“), ohne CI-Lauf und ohne `wip:`-Historie
+  auf dem PR-Branch. Warum:
   Gegen einen VM-Absturz reicht die Platte, aber nur mit fsync — ohne kann ein Commit kurz vor dem
   Absturz als leeres Objekt mit geschriebenem Ref enden und das gemeinsame `.git` beschädigen.
   `executor`, `test-engineer` und `docs-writer` committen nicht; ihren Stand sichert der Hauptlauf.
@@ -618,6 +620,34 @@ ausdrücklich zugewiesen (Executor-Worktree, Resume des eigenen Plans), im eigen
 `main`/`master`, nie in fremden Repos (§3), nie lokale Branches des Betreibers. Ein Branch, auf
 dem eine andere Session arbeitet, ist geteilt (Force-Push-Regel unten).
 
+**CI-Minuten: sichern ohne CI, pushen gebündelt** (Betreiber 2026-11-21, ADR-0023). Warum: GitHub
+Free trägt 2000 Actions-Minuten im Monat für private Repos. In der Woche bis 2026-11-21 liefen
+rund 9400 abrechenbare Minuten, gut zwei Drittel davon durch Pushes auf PR-Branches, und das
+Budget sperrte die CI mehrfach.
+
+- **Sicherung:** Zwischenstände gehen mit `git push origin +HEAD:refs/sicherung/<s8>/<branch>` auf
+  den Remote. Refs außerhalb von `refs/heads/` und `refs/tags/` lösen keinen Workflow aus (gemessen
+  2026-11-21 an Nexainer und agent-baseline). Das `+` ist hier Pflicht und erlaubt: Der Namensraum
+  `refs/sicherung/<eigene s8>/` gehört nur der eigenen Session, und ohne `+` scheitert die Sicherung
+  nach jedem Rebase oder Squash (Tor R, nachgestellt). Die Force-Regel unten gilt für Branches.
+- **Holen und aufräumen:** Holen nur mit `git fetch --prune origin '+refs/sicherung/*:refs/sicherung/*'`;
+  Ref-Namen sind Daten (§6.5), die Prüfung und die drei Fälle stehen in der Skill `weiter`
+  Schritt 3. Nach dem Merge **oder** Verwerfen eines Branches löscht die Session alle
+  `refs/sicherung/*/<branch>` dieses Branches, auch die abgestürzter Vorgänger
+  (`git push origin :<ref>`, Skill `session-end` Schritt 5).
+  *Fertig:* `git ls-remote origin 'refs/sicherung/*'` zeigt keinen Ref auf einen gemergten oder
+  verworfenen Branch der Session.
+- **Secret-Scan:** Sicherungs-Refs gehören zur Historie. Tor S holt sie vor dem Historienscan, und
+  ein Secret darin wird rotiert wie jedes andere in der Historie (§4 Phase 5). Warum: Die Refs
+  stehen nicht in der GitHub-Oberfläche, ein normaler `fetch` holt sie nicht, und ein dort
+  liegender Zwischenstand überlebt einen Rebase des PR-Branches (Tor S #1).
+- **PR-Branch pushen** nur, wenn ein CI-Lauf fällig ist: PR öffnen, Fix-Runde gebündelt fertig,
+  Stand für Tor V oder Merge, Sessionende (`pause`, `session-end`). Nicht nach jedem Teilschritt.
+- **Workflows:** Jeder Workflow mit `pull_request`-Trigger trägt `concurrency` mit
+  `cancel-in-progress` für PRs. Teure Jobs (macOS zählt 10×, Windows 2×, Mutanten,
+  Integrations-Stacks) laufen auf PRs nur bei berührten Pfaden, sonst auf `main`, zeitgesteuert oder
+  von Hand. Ein Projekt stellt seine Workflows bei der nächsten Änderung an `.github/workflows/` um.
+
 **Merge ist Deploy, wo ein Node ausrollt:** In Projekten, die ein Node per git-sync ausrollt
 (Nexainer-Status `active`), rollt ein Merge, der Deploy-Trigger-Dateien ändert
 (`docker-compose*`, `.env.example`, `Makefile`), binnen Minuten produktiv aus. Ein solcher Merge
@@ -726,7 +756,7 @@ Index der harten Leitplanken, je Zeile das Zielverhalten; Regel und Warum stehen
 - Roter Test → Code-Fix; Tests bleiben (§2.6).
 - Sicherheitsprüfungen laufen vollständig, nach einer Fix-Runde als Delta auf dem Fix-Diff (§4 Phase 5, §2.8).
 - Produktiv-Deploy nur mit expliziter Freigabe (`FREIGABE`, §14; nicht reversibel, §13); Merge von Deploy-Trigger-Dateien in `active`-Projekten ist Deploy (§14).
-- Commit und Push auf den eigenen Branch frei; Merge ohne Deploy-Wirkung frei bei grünen Toren; Deploy, Registry-Push und Release-Tag nur auf gebündelte `FREIGABE` (§14).
+- Commit und Push auf den eigenen Branch frei (Zeitpunkt: §14 „CI-Minuten“); Merge ohne Deploy-Wirkung frei bei grünen Toren; Deploy, Registry-Push und Release-Tag nur auf gebündelte `FREIGABE` (§14).
 - Destruktive DB-Änderung nur mit Freigabe (§9, §13).
 - Produktive Daten nur per versionierter Migration oder Skript (§9).
 - Personenbezogene Daten nur, wenn nötig (§6).
@@ -738,10 +768,11 @@ Index der harten Leitplanken, je Zeile das Zielverhalten; Regel und Warum stehen
 - Fremde Repos nicht anfassen (§3).
 - Globale System-Mutationen nur mit Freigabe (§3).
 - Hooks laufen, `--no-verify` nur mit Freigabe (§14).
-- Force-Push nur `--force-with-lease` auf eigenen Branches (§14).
+- Force-Push nur `--force-with-lease` auf eigenen Branches (§14); `+` nur auf eigene Sicherungs-Refs (§14 „CI-Minuten“).
 - Stagen nach `git status`, nie blind `git add -A` (§14).
 - Gepushte Commits ohne `--amend` (§14).
 - Nach jedem Block selbst einen Sicherungspunkt setzen, nie auf `/pause` warten (§2.9).
+- Zwischenstände per `refs/sicherung/<s8>/…` ohne CI sichern, den PR-Branch nur gebündelt pushen (§14).
 - Höchstens 2 Agents gleichzeitig je Session, `verifier` nur auf dem mergefertigen Endstand (§4 Phase 3).
 
 ---
