@@ -594,8 +594,39 @@ also das, was wirklich zählt, liegen blieben. Verfahren: Skill `ship-pr`, Schri
   - die Tore nach §4/§2.8 ohne offene Fix-Runde, `verifier` ohne offene Lücke (bewusst offene im PR benannt), bei Doku-only-PRs (`STATE.md`, ADR, Doku) entfallen die Tore;
   - der Merge hat **keine Deploy-Wirkung** (unten);
   - nichts Irreversibles nach §13 (destruktive Migration, Löschen, Force-Push), kein fremdes Repo.
-  Ausnahme bei CI: Ein reiner Sync-PR (`sync-agents`, ändert nur AGENTS.md bzw. §0-Skelette) darf
-  trotz roter Checks gemergt werden, wenn derselbe Check auf `main` genauso rot ist.
+  Ausnahme bei CI: Ein reiner Sync-PR (`sync-agents`) trägt `[skip ci]` im Commit und läuft ohne CI
+  (ADR-0024). Er wird ohne Checks gemergt, wenn alle vier Bedingungen gelten:
+  0. `gh pr view <n> --json isCrossRepository,headRefName,author` zeigt `false`,
+     `chore/agents-md-sync` und das eigene Konto (Owner des Repos). Warum: Einen Fork-PR mit
+     denselben Merkmalen kann in öffentlichen Repos jeder öffnen (Tor S #3);
+  1. `gh pr diff <n> --name-status` zeigt `M` nur für `AGENTS.md` und `.gitignore` (dort nur die
+     Zeile `.claude/worktrees/` dazu), sonst nur `A` für die Skelette aus `bin/sync-agents`
+     (`ARCHITECTURE.md`, `SECURITY.md`, `TESTING.md`, `OPERATIONS.md`, `ROADMAP.md`, `STATE.md`,
+     `DECISIONS.md`, `docs/verification/zielkatalog.md`);
+  2. `AGENTS.md` am PR-Kopf ist byte-gleich zur Master-Fassung
+     (`gh api repos/<r>/contents/AGENTS.md?ref=<kopf> -H 'Accept: application/vnd.github.raw' | cmp - <baseline>/.claude/AGENTS.md`);
+  3. jeder Commit des PR trägt `Erzeugt per bin/sync-agents` oder `Nachgezogen per bin/sync-agents`.
+  Gemergt wird nur mit `gh pr merge --squash`: Der Squash-Commit übernimmt `[skip ci]` (alle eigenen
+  Repos: `squash_merge_commit_message=COMMIT_MESSAGES`), ein Merge-Commit nicht. *Fertig:*
+  `gh run list -R <r> --commit <merge-sha>` ist leer. Läuft dort doch ein Publish, war es ein
+  Deploy ohne `FREIGABE`: melden. Fehlt eine Bedingung, ist es kein reiner Sync-PR und die normalen
+  Regeln gelten. Warum: Jeder AGENTS.md-Sync startete in rund 24 Repos einen vollen Lauf, bei
+  nex-rbergt ~54 Minuten, für eine Datei, die kein Test liest; die Bedingungen verhindern, dass ein
+  fremder Commit auf dem Sync-Branch ungeprüft mitgeht (Tor R W1).
+  **Skip-Marken** (`[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]`,
+  `skip-checks: true`) stehen nur in sync-agents-Commits. Prüfen: `gh pr view <n> --json commits
+  --jq '.commits[].messageBody, .commits[].messageHeadline'`. Steht eine sonst in einem Commit des
+  PR, merged die Session mit `gh pr merge --squash --subject … --body …` ohne die Marke. Warum: Ein
+  Squash übernimmt die Marke, und auf `main` liefen dann weder CI noch `sync-agents` (Tor S #4).
+  **Ausnahme bei CI (Markdown-PR):** Ein PR, für den wegen `paths-ignore` kein Lauf startet, gilt
+  ohne Checks als grün, wenn alle drei gelten:
+  1. `gh pr view <n> --json isCrossRepository,author` zeigt `false` und das eigene Konto;
+  2. die Dateiliste aus `gh api --paginate repos/<r>/pulls/<n>/files --jq '.[] | .filename,
+     (.previous_filename // empty)'` ist nicht leer und jede Zeile endet auf `.md`
+     (Umbenennungen zählen mit altem Pfad);
+  3. `gitleaks git --log-opts=<basis>..<kopf>` lief lokal ohne Fund.
+  Warum: Der Markdown-PR lässt den PR-Secret-Scan aus, und unter `docs/` liegen in mehreren Repos
+  Skripte und Sonden, die nur eine Bindung an `.md` von der CI fernhält (Tor S #6, #8).
   Nach dem Merge ein PR-Kommentar als Audit: „Merge ohne Rückfrage nach AGENTS.md §14“ und je Tor
   das Urteil mit Commit. In der Antwort steht der Merge mit SHA.
 - **Deploy-Wirkung** hat ein Merge, wenn ein Workflow auf `push` nach `main` publiziert oder
@@ -646,7 +677,18 @@ Budget sperrte die CI mehrfach.
 - **Workflows:** Jeder Workflow mit `pull_request`-Trigger trägt `concurrency` mit
   `cancel-in-progress` für PRs. Teure Jobs (macOS zählt 10×, Windows 2×, Mutanten,
   Integrations-Stacks) laufen auf PRs nur bei berührten Pfaden, sonst auf `main`, zeitgesteuert oder
-  von Hand. Ein Projekt stellt seine Workflows bei der nächsten Änderung an `.github/workflows/` um.
+  von Hand. Mutanten- und Integrations-Jobs laufen nicht auf Dependabot-PRs. Als Dependabot-PR gilt
+  nur, wenn `github.event.pull_request.user.login` und `github.event.sender.login` beide
+  `dependabot[bot]` sind; pusht ein Mensch auf den Branch, läuft alles (Tor S nex-rbergt #2).
+  Ausnahme: Ein Integrationstest, der genau den Pin prüft, den der PR ändert (z. B. das DB-Image
+  in `docker-compose*.yml`), läuft auch dort, und zwar nur dieser Test (nex-rbergt Ausgang `pg`,
+  Tor R W1). Ein Workflow mit diesen Bedingungen braucht einen `schedule`, der die Jobs wöchentlich
+  auf `main` fährt.
+- **Doku-PRs:** Jeder `pull_request`-Workflow trägt `paths-ignore: ["**/*.md"]`, nie `docs/**`
+  (dort liegen Skripte und Sonden). Liest ein Test Markdown (Agenten-Dokumente, OPERATIONS.md,
+  Zielkatalog), wird nur der nicht gelesene Teil ausgenommen, z. B. `docs/**/*.md`.
+- **Umstellung:** Ein Projekt stellt seine Workflows auf die Punkte „Workflows“ und „Doku-PRs“ bei der
+  nächsten Änderung an `.github/workflows/` um.
 
 **Merge ist Deploy, wo ein Node ausrollt:** In Projekten, die ein Node per git-sync ausrollt
 (Nexainer-Status `active`), rollt ein Merge, der Deploy-Trigger-Dateien ändert
