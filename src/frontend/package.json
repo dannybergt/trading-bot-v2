@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
-    "i18next": "^26.0.10",
+    "i18next": "^26.7.2",
     "lightweight-charts": "^5.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
